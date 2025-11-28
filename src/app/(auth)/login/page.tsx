@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Input } from '@/core/components/ui/input';
 import { Button } from '@/core/components/ui/button';
 import { useAuthStore } from '@/core/store/authStore';
@@ -18,6 +19,22 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof LoginInput, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [showRegisterLink, setShowRegisterLink] = useState(false);
+
+  // Fetch auth config to determine if register link should be shown
+  useEffect(() => {
+    fetch('/api/auth/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.registration?.enabled && data.registration?.showOnLoginPage && data.ui?.showRegisterLink) {
+          setShowRegisterLink(true);
+        }
+      })
+      .catch(() => {
+        // Default to showing register link if config fetch fails
+        setShowRegisterLink(true);
+      });
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -98,6 +115,14 @@ export default function LoginPage() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
           </h2>
+          {showRegisterLink && (
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Don't have an account?{' '}
+              <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
+                Sign up
+              </Link>
+            </p>
+          )}
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px space-y-4">
