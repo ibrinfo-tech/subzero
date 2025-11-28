@@ -1,0 +1,67 @@
+{
+  "id": "notes",
+  "name": "Notes",
+  "version": "1.0.0",
+  "description": "Personal notes management module",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/notes",
+      "component": "index",
+      "title": "My Notes"
+    },
+    {
+      "path": "/notes/new",
+      "component": "new",
+      "title": "Create Note"
+    }
+  ],
+  "api": {
+    "basePath": "/api/notes",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "",
+        "handler": "list",
+        "requiresAuth": true
+      },
+      {
+        "method": "POST",
+        "path": "",
+        "handler": "create",
+        "requiresAuth": true
+      },
+      {
+        "method": "GET",
+        "path": "/:id",
+        "handler": "getById",
+        "requiresAuth": true
+      },
+      {
+        "method": "PATCH",
+        "path": "/:id",
+        "handler": "update",
+        "requiresAuth": true
+      },
+      {
+        "method": "DELETE",
+        "path": "/:id",
+        "handler": "delete",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "navigation": {
+    "label": "Notes",
+    "icon": "FileText",
+    "path": "/notes",
+    "order": 2
+  },
+  "permissions": {
+    "create": "notes:create",
+    "read": "notes:read",
+    "update": "notes:update",
+    "delete": "notes:delete"
+  }
+}
+

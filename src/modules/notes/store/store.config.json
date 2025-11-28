@@ -1,0 +1,6 @@
+{
+  "name": "notes-storage",
+  "persist": true,
+  "devtools": true
+}
+

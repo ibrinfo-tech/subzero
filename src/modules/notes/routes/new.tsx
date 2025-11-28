@@ -1,0 +1,68 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import { NoteForm } from '../components/NoteForm';
+import { useAuthStore } from '@/core/store/authStore';
+import { useNotesStore } from '../store/notesStore';
+import { type CreateNoteInput } from '../schemas/notesValidation';
+
+export default function NewNotePage() {
+  const router = useRouter();
+  const { token } = useAuthStore();
+  const { addNote } = useNotesStore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreate = async (data: CreateNoteInput) => {
+    if (!token) {
+      alert('You must be logged in to create notes');
+      router.push('/login');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/notes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create note');
+      }
+
+      addNote(result.data);
+      router.push('/notes');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to create note');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto py-6 px-4 max-w-2xl">
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Note</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <NoteForm
+            onSubmit={handleCreate}
+            onCancel={() => router.push('/notes')}
+            isLoading={isSubmitting}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
