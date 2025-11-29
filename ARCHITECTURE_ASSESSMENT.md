@@ -292,16 +292,16 @@ export const moduleHooks = {
 
 ## 📊 Scalability Scorecard
 
-| Aspect | Current | Target | Gap |
-|--------|---------|--------|-----|
-| **Module Isolation** | ✅ 9/10 | 10/10 | Low |
-| **Configuration** | ⚠️ 6/10 | 10/10 | Medium |
-| **Dependencies** | ❌ 3/10 | 10/10 | High |
-| **Multi-Tenancy** | ❌ 0/10 | 10/10 | Critical |
-| **Performance** | ⚠️ 5/10 | 10/10 | Medium |
-| **Testing** | ❌ 2/10 | 10/10 | High |
-| **Extensibility** | ⚠️ 6/10 | 10/10 | Medium |
-| **Developer Experience** | ✅ 8/10 | 10/10 | Low |
+|   Aspect                  | Current | Target |     Gap   |
+|---------------------------|---------|--------|-----------|
+| **Module Isolation**      | ✅ 9/10 | 10/10 | Low       |
+| **Configuration**         | ⚠️ 6/10 | 10/10 | Medium    |
+| **Dependencies**          | ❌ 3/10 | 10/10 | High      |
+| **Multi-Tenancy**         | ❌ 0/10 | 10/10 | Critical  |
+| **Performance**           | ⚠️ 5/10 | 10/10 | Medium    |
+| **Testing**               | ❌ 2/10 | 10/10 | High      |
+| **Extensibility**         | ⚠️ 6/10 | 10/10 | Medium    |
+| **Developer Experience**  | ✅ 8/10 | 10/10 | Low       |
 
 **Overall Scalability**: 5.4/10 → Needs improvement for enterprise
 
