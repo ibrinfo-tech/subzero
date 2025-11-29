@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
 import { users } from '@/core/lib/db/baseSchema';
 import { loginSchema } from '@/core/lib/validations/auth';
-import { verifyPassword, hashPassword } from '@/core/lib/utils';
+import { verifyPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
+import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -30,7 +31,14 @@ export async function POST(request: NextRequest) {
     
     // Find user by email
     const userResult = await db
-      .select()
+      .select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        fullName: users.fullName,
+        isEmailVerified: users.isEmailVerified,
+        tenantId: users.tenantId,
+      })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
@@ -44,8 +52,16 @@ export async function POST(request: NextRequest) {
     
     const user = userResult[0];
     
+    // Check if user has a password (might be OAuth-only user)
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+    
     // Verify password
-    const isPasswordValid = await verifyPassword(password, user.password);
+    const isPasswordValid = await verifyPassword(password, user.passwordHash);
     
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -54,29 +70,42 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generate simple token (user ID as token for demo)
-    // In production, use JWT or session tokens
-    const token = user.id.toString();
+    // Generate access and refresh tokens
+    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(user.id);
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(user.id);
     
-    // Create response with user data (without password) and token
+    // Create response with user data (without password) and tokens
     const response = NextResponse.json(
       {
         success: true,
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
+          fullName: user.fullName,
+          isEmailVerified: user.isEmailVerified,
+          tenantId: user.tenantId,
         },
-        token,
+        accessToken,
+        refreshToken,
+        expiresAt: accessExpiresAt.toISOString(),
       },
       { status: 200 }
     );
     
-    // Set token in HTTP-only cookie for middleware access
-    response.cookies.set('auth-token', token, {
+    // Set tokens in HTTP-only cookies
+    response.cookies.set('access-token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 15, // 15 minutes
+    });
+    
+    response.cookies.set('refresh-token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
     

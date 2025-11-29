@@ -84,11 +84,11 @@ export default function RegisterPage() {
         return;
       }
 
-      // Store user and token in Zustand store
-      setUser(data.user, data.token);
+      // Store user and tokens in Zustand store
+      setUser(data.user, data.accessToken, data.refreshToken);
       
-      // Token is also set in cookie by the API response
-      // No need to manually set it here as it's HTTP-only
+      // Tokens are also set in cookies by the API response
+      // No need to manually set them here as they're HTTP-only
 
       // Redirect to dashboard
       router.push('/dashboard');

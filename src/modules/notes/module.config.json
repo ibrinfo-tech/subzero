@@ -8,12 +8,14 @@
     {
       "path": "/notes",
       "component": "index",
-      "title": "My Notes"
+      "title": "My Notes",
+      "requiresAuth": true
     },
     {
       "path": "/notes/new",
       "component": "new",
-      "title": "Create Note"
+      "title": "Create Note",
+      "requiresAuth": true
     }
   ],
   "api": {

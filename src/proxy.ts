@@ -1,16 +1,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { isRegistrationEnabled } from '@/core/config/authConfig';
+import { isProtectedRoute } from '@/core/config/protectedRoutes';
 
 /**
- * Next.js middleware for route protection
- * Protects dashboard routes and redirects unauthenticated users to login
+ * Next.js proxy for route protection
+ * Protects routes based on module configuration and redirects unauthenticated users to login
+ * 
+ * NOTE: This runs in Edge Runtime, so we use a static protectedRoutes config file
+ * instead of dynamically reading from moduleRegistry (which uses Node.js APIs)
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Get token from cookies (set by login)
-  const token = request.cookies.get('auth-token')?.value;
+  const token = request.cookies.get('access-token')?.value;
   
   // Check if registration is enabled
   const registrationEnabled = isRegistrationEnabled();
@@ -28,8 +32,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
   
+  // Check if current path is protected (using Edge Runtime compatible config)
+  const routeIsProtected = isProtectedRoute(pathname);
+  
   // If accessing a protected route without token, redirect to login
-  if (!isPublicRoute && !token && pathname.startsWith('/dashboard')) {
+  if (!isPublicRoute && !token && routeIsProtected) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);

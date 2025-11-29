@@ -15,21 +15,37 @@ export default async function DynamicModulePage({ params }: PageProps) {
   const { slug } = await params;
   const routePath = '/' + slug.join('/');
 
+  // Force re-initialization to ensure routes are loaded
+  moduleRegistry.initialize(true);
+
   // Get all registered routes
   const allRoutes = moduleRegistry.getAllRoutes();
+  
+  // Debug logging
+  console.log(`[DynamicRoute] Looking for route: ${routePath}`);
+  console.log(`[DynamicRoute] Available routes:`, allRoutes.map(r => ({ moduleId: r.moduleId, path: r.route.path })));
 
   // Find matching route
   const matchedRoute = allRoutes.find(({ route }) => {
     // Exact match
-    if (route.path === routePath) return true;
+    if (route.path === routePath) {
+      console.log(`[DynamicRoute] Exact match found: ${route.path}`);
+      return true;
+    }
     
     // Pattern match (e.g., /notes/:id)
     const routePattern = route.path.replace(/:[^/]+/g, '[^/]+');
     const regex = new RegExp(`^${routePattern}$`);
-    return regex.test(routePath);
+    const matches = regex.test(routePath);
+    if (matches) {
+      console.log(`[DynamicRoute] Pattern match found: ${route.path} matches ${routePath}`);
+    }
+    return matches;
   });
 
   if (!matchedRoute) {
+    console.error(`[DynamicRoute] No route found for: ${routePath}`);
+    console.error(`[DynamicRoute] Available routes were:`, allRoutes.map(r => r.route.path));
     notFound();
   }
 

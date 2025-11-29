@@ -1,0 +1,370 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useAuthStore } from '@/core/store/authStore';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/core/components/ui/table';
+import { Button } from '@/core/components/ui/button';
+import { Input } from '@/core/components/ui/input';
+import { Select } from '@/core/components/ui/select';
+import { Edit, Trash2, Search, ShieldPlus, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import type { Role } from '@/core/lib/db/baseSchema';
+import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
+
+interface ModulePermission {
+  moduleId: string;
+  moduleName: string;
+  moduleCode: string;
+  hasAccess: boolean;
+  dataAccess: 'none' | 'own' | 'team' | 'all';
+  permissions: Array<{
+    permissionId: string;
+    permissionName: string;
+    permissionCode: string;
+    granted: boolean;
+  }>;
+}
+
+interface ExpandableRoleTableProps {
+  roles: Array<Role & { userCount?: number }>;
+  isLoading?: boolean;
+  onEdit?: (role: Role) => void;
+  onDelete?: (role: Role) => void;
+  onCreate?: () => void;
+  onSearch?: (search: string) => void;
+  onStatusFilter?: (status: string) => void;
+  onConfigurePermissions?: (roleId: string, moduleId: string) => void;
+}
+
+export function ExpandableRoleTable({
+  roles,
+  isLoading = false,
+  onEdit,
+  onDelete,
+  onCreate,
+  onSearch,
+  onStatusFilter,
+  onConfigurePermissions,
+}: ExpandableRoleTableProps) {
+  const { token } = useAuthStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [expandedRoles, setExpandedRoles] = useState<Set<string>>(new Set());
+  const [rolePermissions, setRolePermissions] = useState<Record<string, ModulePermission[]>>({});
+  const [loadingPermissions, setLoadingPermissions] = useState<Set<string>>(new Set());
+
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    onSearch?.(value);
+  };
+
+  const handleStatusFilter = (value: string) => {
+    setSelectedStatus(value);
+    onStatusFilter?.(value);
+  };
+
+  const toggleRoleExpansion = async (roleId: string) => {
+    const newExpanded = new Set(expandedRoles);
+    if (newExpanded.has(roleId)) {
+      newExpanded.delete(roleId);
+    } else {
+      newExpanded.add(roleId);
+      // Load permissions if not already loaded
+      if (!rolePermissions[roleId] && token) {
+        await loadRolePermissions(roleId);
+      }
+    }
+    setExpandedRoles(newExpanded);
+  };
+
+  const loadRolePermissions = async (roleId: string) => {
+    if (!token) return;
+
+    setLoadingPermissions((prev) => new Set(prev).add(roleId));
+
+    try {
+      const response = await fetch(`/api/roles/${roleId}/permissions`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.data) {
+        setRolePermissions((prev) => ({
+          ...prev,
+          [roleId]: data.data.modules || [],
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to load role permissions:', err);
+    } finally {
+      setLoadingPermissions((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(roleId);
+        return newSet;
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const colors = {
+      active: 'bg-green-100 text-green-800',
+      inactive: 'bg-gray-100 text-gray-800',
+    };
+    return (
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+          colors[status as keyof typeof colors] || colors.inactive
+        }`}
+      >
+        {status.charAt(0).toUpperCase() + status.slice(1)}
+      </span>
+    );
+  };
+
+  const getTypeBadge = (isSystem: boolean) => {
+    if (isSystem) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          Default
+        </span>
+      );
+    }
+    return null;
+  };
+
+  const getDataAccessBadge = (dataAccess: string) => {
+    if (dataAccess === 'all') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          All Data
+        </span>
+      );
+    }
+    if (dataAccess === 'team') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+          Team Data
+        </span>
+      );
+    }
+    if (dataAccess === 'own') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+          Own Data
+        </span>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-1 gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search roles..."
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select
+            value={selectedStatus}
+            onChange={(e) => handleStatusFilter(e.target.value)}
+            options={[
+              { value: '', label: 'All Status' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+            ]}
+            className="w-40"
+          />
+        </div>
+        {onCreate && (
+          <Button onClick={onCreate} className="w-full sm:w-auto">
+            <ShieldPlus className="h-4 w-4 mr-2" />
+            Create New Role
+          </Button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12"></TableHead>
+              <TableHead>Role Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Users</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8">
+                  Loading roles...
+                </TableCell>
+              </TableRow>
+            ) : roles.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  No roles found
+                </TableCell>
+              </TableRow>
+            ) : (
+              roles.map((role) => {
+                const isExpanded = expandedRoles.has(role.id);
+                const modules = rolePermissions[role.id] || [];
+                const isLoadingPerms = loadingPermissions.has(role.id);
+
+                return (
+                  <>
+                    <TableRow key={role.id}>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleRoleExpansion(role.id)}
+                          className="p-0 h-6 w-6"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-gray-900">{role.name}</div>
+                        <div className="text-sm text-gray-500">{role.code}</div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-gray-700">
+                          {role.description || '-'}
+                        </span>
+                      </TableCell>
+                      <TableCell>{getTypeBadge(role.isSystem)}</TableCell>
+                      <TableCell>
+                        <span className="text-sm text-gray-700">
+                          {role.userCount ?? 0}
+                        </span>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(role.status)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          {onEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onEdit(role)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {onDelete && !role.isSystem && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onDelete(role)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="bg-gray-50 p-4">
+                          {isLoadingPerms ? (
+                            <div className="flex justify-center py-4">
+                              <LoadingSpinner />
+                            </div>
+                          ) : modules.length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-4">
+                              No module permissions configured
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {modules.map((module) => (
+                                <Card key={module.moduleId} className="bg-white">
+                                  <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                      <CardTitle className="text-sm font-medium">
+                                        {module.moduleName}
+                                      </CardTitle>
+                                      {onConfigurePermissions && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() =>
+                                            onConfigurePermissions(role.id, module.moduleId)
+                                          }
+                                          className="h-6 px-2 text-xs"
+                                        >
+                                          <Settings className="h-3 w-3 mr-1" />
+                                          Configure
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </CardHeader>
+                                  <CardContent className="pt-0 space-y-2">
+                                    {!module.hasAccess ? (
+                                      <p className="text-xs text-gray-500">
+                                        This module is not enabled
+                                      </p>
+                                    ) : (
+                                      <>
+                                        {getDataAccessBadge(module.dataAccess)}
+                                        {module.permissions.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-2">
+                                            {module.permissions
+                                              .filter((p) => p.granted)
+                                              .map((perm) => (
+                                                <span
+                                                  key={perm.permissionId}
+                                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                                >
+                                                  {perm.permissionName}
+                                                </span>
+                                              ))}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+

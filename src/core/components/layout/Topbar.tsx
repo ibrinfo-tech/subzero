@@ -21,7 +21,7 @@ export function Topbar() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            Welcome, {user?.name || user?.email || 'User'}
+            Welcome, {user?.fullName || user?.email || 'User'}
           </h2>
         </div>
         <div className="flex items-center gap-4">

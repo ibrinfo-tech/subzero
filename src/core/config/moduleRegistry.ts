@@ -10,14 +10,23 @@ class ModuleRegistry {
   /**
    * Initialize the registry by loading all modules
    */
-  initialize(): void {
-    if (this.initialized) {
+  initialize(force = false): void {
+    if (this.initialized && !force) {
       return;
     }
 
+    // Clear existing modules if forcing re-initialization
+    if (force) {
+      this.modules.clear();
+      this.initialized = false;
+    }
+
     const loadedModules = loadAllModules();
+    console.log(`[ModuleRegistry] Discovered ${loadedModules.length} module(s):`, loadedModules.map(m => m.id));
+    
     for (const module of loadedModules) {
       this.modules.set(module.id, module);
+      console.log(`[ModuleRegistry] Registered module: ${module.id} (enabled: ${module.config.enabled !== false}, hasNavigation: ${!!module.config.navigation})`);
     }
 
     this.initialized = true;

@@ -8,8 +8,18 @@ import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 interface UserProfile {
   id: number;
   email: string;
-  name: string | null;
+  fullName: string | null;
+  isEmailVerified: boolean;
+  tenantId: number | null;
   createdAt: Date | string;
+  updatedAt: Date | string;
+  roles?: Array<{ id: number; name: string; code: string }>;
+  permissions?: Array<{
+    permissionCode: string;
+    permissionName: string;
+    moduleCode: string;
+    moduleName: string;
+  }>;
 }
 
 export default function ProfilePage() {
@@ -79,12 +89,32 @@ export default function ProfilePage() {
               {profile?.email || storeUser?.email}
             </p>
           </div>
-          {profile?.name && (
+          {profile?.fullName && (
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Name
+                Full Name
               </label>
-              <p className="mt-1 text-sm text-gray-900">{profile.name}</p>
+              <p className="mt-1 text-sm text-gray-900">{profile.fullName}</p>
+            </div>
+          )}
+          {profile?.isEmailVerified !== undefined && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Email Verified
+              </label>
+              <p className="mt-1 text-sm text-gray-900">
+                {profile.isEmailVerified ? 'Yes' : 'No'}
+              </p>
+            </div>
+          )}
+          {profile?.roles && profile.roles.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Roles
+              </label>
+              <p className="mt-1 text-sm text-gray-900">
+                {profile.roles.map((r) => r.name).join(', ')}
+              </p>
             </div>
           )}
           <div>

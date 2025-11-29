@@ -8,7 +8,7 @@ import { Trash2, Edit } from 'lucide-react';
 interface NoteCardProps {
   note: Note;
   onEdit?: (note: Note) => void;
-  onDelete?: (id: number) => void;
+  onDelete?: (id: string) => void;
 }
 
 export function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {

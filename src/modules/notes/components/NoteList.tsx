@@ -50,7 +50,7 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
     fetchNotes();
   }, [token]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!token || !confirm('Are you sure you want to delete this note?')) {
       return;
     }

@@ -10,7 +10,7 @@ export type { CreateNoteInput, UpdateNoteInput };
 // Extended note type with user info (if needed)
 export interface NoteWithUser extends Note {
   user?: {
-    id: number;
+    id: string;
     name: string | null;
     email: string;
   };

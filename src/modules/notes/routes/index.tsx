@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NoteList } from '../components/NoteList';
 import { NoteForm } from '../components/NoteForm';
@@ -12,10 +12,22 @@ import type { Note } from '../types';
 
 export default function NotesPage() {
   const router = useRouter();
-  const { token } = useAuthStore();
+  const { token, isAuthenticated } = useAuthStore();
   const { addNote, setLoading } = useNotesStore();
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, token, router]);
+
+  // Don't render if not authenticated
+  if (!isAuthenticated || !token) {
+    return null;
+  }
 
   const handleCreate = async (data: CreateNoteInput) => {
     if (!token) {

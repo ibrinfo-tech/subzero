@@ -1,0 +1,288 @@
+import { db } from '@/core/lib/db';
+import { 
+  roleModuleAccess, 
+  roleModulePermissions, 
+  moduleFields, 
+  roleFieldPermissions 
+} from '@/core/lib/db/permissionSchema';
+import { roles, modules, permissions } from '@/core/lib/db/baseSchema';
+import { eq, and, isNull } from 'drizzle-orm';
+
+export type DataAccessLevel = 'none' | 'own' | 'team' | 'all';
+
+export interface ModulePermission {
+  moduleId: string;
+  moduleName: string;
+  moduleCode: string;
+  hasAccess: boolean;
+  dataAccess: DataAccessLevel;
+  permissions: Array<{
+    permissionId: string;
+    permissionName: string;
+    permissionCode: string;
+    granted: boolean;
+  }>;
+  fields: Array<{
+    fieldId: string;
+    fieldName: string;
+    fieldCode: string;
+    fieldLabel: string;
+    isVisible: boolean;
+    isEditable: boolean;
+  }>;
+}
+
+export interface RolePermissionsData {
+  roleId: string;
+  modules: ModulePermission[];
+}
+
+/**
+ * Get all permissions for a role, organized by module
+ */
+export async function getRolePermissions(roleId: string): Promise<RolePermissionsData> {
+  // Get all modules
+  const allModules = await db
+    .select()
+    .from(modules)
+    .where(eq(modules.isActive, true))
+    .orderBy(modules.sortOrder);
+
+  // Get module access for this role
+  const moduleAccess = await db
+    .select()
+    .from(roleModuleAccess)
+    .where(eq(roleModuleAccess.roleId, roleId));
+
+  // Get module permissions for this role
+  const modulePermissions = await db
+    .select({
+      roleModulePermission: roleModulePermissions,
+      permission: permissions,
+    })
+    .from(roleModulePermissions)
+    .innerJoin(permissions, eq(roleModulePermissions.permissionId, permissions.id))
+    .where(eq(roleModulePermissions.roleId, roleId));
+
+  // Get module fields
+  const allFields = await db
+    .select()
+    .from(moduleFields)
+    .where(eq(moduleFields.isActive, true))
+    .orderBy(moduleFields.sortOrder);
+
+  // Get field permissions for this role
+  const fieldPermissions = await db
+    .select()
+    .from(roleFieldPermissions)
+    .where(eq(roleFieldPermissions.roleId, roleId));
+
+  // Build the result structure
+  const modulesData: ModulePermission[] = allModules.map((module) => {
+    const access = moduleAccess.find((ma) => ma.moduleId === module.id);
+    const modulePerms = modulePermissions.filter((mp) => mp.roleModulePermission.moduleId === module.id);
+    const moduleFieldsList = allFields.filter((f) => f.moduleId === module.id);
+    const fieldPerms = fieldPermissions.filter((fp) => fp.moduleId === module.id);
+
+    return {
+      moduleId: module.id,
+      moduleName: module.name,
+      moduleCode: module.code,
+      hasAccess: access?.hasAccess || false,
+      dataAccess: (access?.dataAccess as DataAccessLevel) || 'none',
+      permissions: modulePerms.map((mp) => ({
+        permissionId: mp.permission.id,
+        permissionName: mp.permission.name,
+        permissionCode: mp.permission.code,
+        granted: mp.roleModulePermission.granted,
+      })),
+      fields: moduleFieldsList.map((field) => {
+        const fieldPerm = fieldPerms.find((fp) => fp.fieldId === field.id);
+        return {
+          fieldId: field.id,
+          fieldName: field.name,
+          fieldCode: field.code,
+          fieldLabel: field.label || field.name,
+          isVisible: fieldPerm?.isVisible || false,
+          isEditable: fieldPerm?.isEditable || false,
+        };
+      }),
+    };
+  });
+
+  return {
+    roleId,
+    modules: modulesData,
+  };
+}
+
+/**
+ * Get permissions for a specific role and module
+ */
+export async function getRoleModulePermissions(
+  roleId: string,
+  moduleId: string
+): Promise<ModulePermission | null> {
+  const rolePerms = await getRolePermissions(roleId);
+  return rolePerms.modules.find((m) => m.moduleId === moduleId) || null;
+}
+
+/**
+ * Update role module access and permissions
+ */
+export async function updateRoleModulePermissions(
+  roleId: string,
+  moduleId: string,
+  data: {
+    hasAccess: boolean;
+    dataAccess: DataAccessLevel;
+    permissions: Array<{
+      permissionId: string;
+      granted: boolean;
+    }>;
+    fields: Array<{
+      fieldId: string;
+      isVisible: boolean;
+      isEditable: boolean;
+    }>;
+  },
+  updatedBy: string
+): Promise<void> {
+  // Update or create module access
+  const existingAccess = await db
+    .select()
+    .from(roleModuleAccess)
+    .where(and(
+      eq(roleModuleAccess.roleId, roleId),
+      eq(roleModuleAccess.moduleId, moduleId)
+    ))
+    .limit(1);
+
+  if (existingAccess.length > 0) {
+    await db
+      .update(roleModuleAccess)
+      .set({
+        hasAccess: data.hasAccess,
+        dataAccess: data.dataAccess,
+        updatedAt: new Date(),
+        updatedBy,
+      })
+      .where(and(
+        eq(roleModuleAccess.roleId, roleId),
+        eq(roleModuleAccess.moduleId, moduleId)
+      ));
+  } else {
+    await db.insert(roleModuleAccess).values({
+      roleId,
+      moduleId,
+      hasAccess: data.hasAccess,
+      dataAccess: data.dataAccess,
+      createdBy: updatedBy,
+      updatedBy,
+    });
+  }
+
+  // Update permissions
+  for (const perm of data.permissions) {
+    const existing = await db
+      .select()
+      .from(roleModulePermissions)
+      .where(and(
+        eq(roleModulePermissions.roleId, roleId),
+        eq(roleModulePermissions.moduleId, moduleId),
+        eq(roleModulePermissions.permissionId, perm.permissionId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(roleModulePermissions)
+        .set({
+          granted: perm.granted,
+          updatedAt: new Date(),
+          updatedBy,
+        })
+        .where(and(
+          eq(roleModulePermissions.roleId, roleId),
+          eq(roleModulePermissions.moduleId, moduleId),
+          eq(roleModulePermissions.permissionId, perm.permissionId)
+        ));
+    } else {
+      await db.insert(roleModulePermissions).values({
+        roleId,
+        moduleId,
+        permissionId: perm.permissionId,
+        granted: perm.granted,
+        createdBy: updatedBy,
+        updatedBy,
+      });
+    }
+  }
+
+  // Update field permissions
+  for (const field of data.fields) {
+    const existing = await db
+      .select()
+      .from(roleFieldPermissions)
+      .where(and(
+        eq(roleFieldPermissions.roleId, roleId),
+        eq(roleFieldPermissions.moduleId, moduleId),
+        eq(roleFieldPermissions.fieldId, field.fieldId)
+      ))
+      .limit(1);
+
+    if (existing.length > 0) {
+      await db
+        .update(roleFieldPermissions)
+        .set({
+          isVisible: field.isVisible,
+          isEditable: field.isEditable,
+          updatedAt: new Date(),
+          updatedBy,
+        })
+        .where(and(
+          eq(roleFieldPermissions.roleId, roleId),
+          eq(roleFieldPermissions.moduleId, moduleId),
+          eq(roleFieldPermissions.fieldId, field.fieldId)
+        ));
+    } else {
+      await db.insert(roleFieldPermissions).values({
+        roleId,
+        moduleId,
+        fieldId: field.fieldId,
+        isVisible: field.isVisible,
+        isEditable: field.isEditable,
+        createdBy: updatedBy,
+        updatedBy,
+      });
+    }
+  }
+}
+
+/**
+ * Get all permissions for a module
+ */
+export async function getModulePermissions(moduleId: string) {
+  return await db
+    .select()
+    .from(permissions)
+    .where(and(
+      eq(permissions.moduleId, moduleId),
+      eq(permissions.isActive, true)
+    ));
+}
+
+/**
+ * Get all fields for a module
+ */
+export async function getModuleFields(moduleId: string) {
+  return await db
+    .select()
+    .from(moduleFields)
+    .where(and(
+      eq(moduleFields.moduleId, moduleId),
+      eq(moduleFields.isActive, true)
+    ))
+    .orderBy(moduleFields.sortOrder);
+}
+

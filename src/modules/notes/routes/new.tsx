@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
 import { NoteForm } from '../components/NoteForm';
@@ -10,9 +10,21 @@ import { type CreateNoteInput } from '../schemas/notesValidation';
 
 export default function NewNotePage() {
   const router = useRouter();
-  const { token } = useAuthStore();
+  const { token, isAuthenticated } = useAuthStore();
   const { addNote } = useNotesStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !token) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, token, router]);
+
+  // Don't render if not authenticated
+  if (!isAuthenticated || !token) {
+    return null;
+  }
 
   const handleCreate = async (data: CreateNoteInput) => {
     if (!token) {

@@ -22,11 +22,13 @@ export async function PATCH(
     }
     
     const userId = authResult;
-    const noteId = parseInt(params.id, 10);
+    const noteId = params.id;
     
-    if (isNaN(noteId)) {
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(noteId)) {
       return NextResponse.json(
-        { error: 'Invalid note ID' },
+        { error: 'Invalid note ID format' },
         { status: 400 }
       );
     }

@@ -21,9 +21,9 @@ export default function DashboardPage() {
             <p>
               <span className="font-medium">Email:</span> {user?.email}
             </p>
-            {user?.name && (
+            {user?.fullName && (
               <p>
-                <span className="font-medium">Name:</span> {user.name}
+                <span className="font-medium">Name:</span> {user.fullName}
               </p>
             )}
             <p>

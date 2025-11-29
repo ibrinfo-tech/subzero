@@ -15,8 +15,10 @@ interface NavItem {
 
 // Static navigation items (always shown)
 const staticNavItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard' },
-  { label: 'Profile', href: '/dashboard/profile' },
+  { label: 'Dashboard', href: '/dashboard', icon: <LucideIcons.LayoutDashboard className="w-5 h-5" /> },
+  { label: 'Profile', href: '/profile', icon: <LucideIcons.User className="w-5 h-5" /> },
+  { label: 'User Management', href: '/users', icon: <LucideIcons.Users className="w-5 h-5" /> },
+  { label: 'Role Management', href: '/roles', icon: <LucideIcons.Shield className="w-5 h-5" /> },
 ];
 
 // Helper to get icon component from string name
@@ -43,17 +45,21 @@ export function Sidebar() {
     fetch('/api/modules/navigation')
       .then((res) => res.json())
       .then((data) => {
+        console.log('[Sidebar] Navigation API response:', data);
         if (data.success && data.navigation) {
           const items: NavItem[] = data.navigation.map((nav: ModuleNavigation) => ({
             label: nav.label,
             href: nav.path,
             icon: getIconComponent(nav.icon),
           }));
+          console.log('[Sidebar] Setting navigation items:', items);
           setModuleNavItems(items);
+        } else {
+          console.warn('[Sidebar] Navigation API returned no navigation items:', data);
         }
       })
       .catch((err) => {
-        console.error('Failed to load module navigation:', err);
+        console.error('[Sidebar] Failed to load module navigation:', err);
       });
   }, []);
 

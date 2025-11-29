@@ -8,8 +8,8 @@ interface NotesState {
   error: string | null;
   setNotes: (notes: Note[]) => void;
   addNote: (note: Note) => void;
-  updateNote: (id: number, note: Partial<Note>) => void;
-  removeNote: (id: number) => void;
+  updateNote: (id: string, note: Partial<Note>) => void;
+  removeNote: (id: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearNotes: () => void;

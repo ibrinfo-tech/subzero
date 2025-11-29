@@ -6,7 +6,7 @@ import type { NewNote, Note } from '../types';
 /**
  * Get all notes for a specific user
  */
-export async function getNotesByUserId(userId: number): Promise<Note[]> {
+export async function getNotesByUserId(userId: string): Promise<Note[]> {
   const result = await db
     .select()
     .from(notes)
@@ -19,7 +19,7 @@ export async function getNotesByUserId(userId: number): Promise<Note[]> {
 /**
  * Get a single note by ID (with user ownership check)
  */
-export async function getNoteById(id: number, userId: number): Promise<Note | null> {
+export async function getNoteById(id: string, userId: string): Promise<Note | null> {
   const result = await db
     .select()
     .from(notes)
@@ -53,7 +53,7 @@ export async function createNote(data: NewNote): Promise<Note> {
 /**
  * Update a note
  */
-export async function updateNote(id: number, userId: number, data: Partial<NewNote>): Promise<Note | null> {
+export async function updateNote(id: string, userId: string, data: Partial<NewNote>): Promise<Note | null> {
   // First verify ownership
   const existing = await getNoteById(id, userId);
   if (!existing) {
@@ -72,7 +72,7 @@ export async function updateNote(id: number, userId: number, data: Partial<NewNo
 /**
  * Delete a note
  */
-export async function deleteNote(id: number, userId: number): Promise<boolean> {
+export async function deleteNote(id: string, userId: string): Promise<boolean> {
   // First verify ownership
   const existing = await getNoteById(id, userId);
   if (!existing) {

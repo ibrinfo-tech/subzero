@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
-import { users } from '@/core/lib/db/baseSchema';
+import { users, authProviders } from '@/core/lib/db/baseSchema';
 import { registerSchema } from '@/core/lib/validations/auth';
 import { hashPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
 import { isRegistrationEnabled } from '@/core/config/authConfig';
+import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
+import { getDefaultUserRole } from '@/core/lib/roles';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -54,41 +56,75 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(password);
     
-    // Create new user
+    // Get default "User" role for new registrations
+    const defaultRoleId = await getDefaultUserRole();
+    
+    if (!defaultRoleId) {
+      console.error('Default "USER" role not found. Please run seed script.');
+      return NextResponse.json(
+        { error: 'System configuration error. Please contact administrator.' },
+        { status: 500 }
+      );
+    }
+    
+    // Create new user with default "User" role
     const newUser = await db
       .insert(users)
       .values({
         email,
-        password: hashedPassword,
-        name: name || null,
+        passwordHash: hashedPassword,
+        fullName: name || null,
+        isEmailVerified: false,
+        roleId: defaultRoleId,
+        roleAssignedAt: new Date(),
+        status: 'active',
       })
       .returning();
     
     const user = newUser[0];
     
-    // Generate token (user ID as token for demo)
-    // In production, use JWT or session tokens
-    const token = user.id.toString();
+    // Create auth provider entry for password authentication
+    await db.insert(authProviders).values({
+      userId: user.id,
+      provider: 'password',
+    });
     
-    // Create response with user data (without password) and token
+    // Generate access and refresh tokens
+    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(user.id);
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(user.id);
+    
+    // Create response with user data (without password) and tokens
     const response = NextResponse.json(
       {
         success: true,
         user: {
           id: user.id,
           email: user.email,
-          name: user.name,
+          fullName: user.fullName,
+          isEmailVerified: user.isEmailVerified,
+          tenantId: user.tenantId,
         },
-        token,
+        accessToken,
+        refreshToken,
+        expiresAt: accessExpiresAt.toISOString(),
       },
       { status: 201 }
     );
     
-    // Set token in HTTP-only cookie for middleware access
-    response.cookies.set('auth-token', token, {
+    // Set tokens in HTTP-only cookies
+    response.cookies.set('access-token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 15, // 15 minutes
+    });
+    
+    response.cookies.set('refresh-token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
     
