@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
 import { Button } from '@/core/components/ui/button';
+import { User as UserIcon, Mail, Lock, Shield, Activity } from 'lucide-react';
 import {
   createUserSchema,
   updateUserSchema,
@@ -91,107 +92,169 @@ export function UserForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Personal Information Section */}
       <div className="space-y-4">
-        <Input
-          id="email"
-          name="email"
-          label="Email"
-          type="email"
-          required
-          value={formData.email}
-          onChange={handleChange}
-          error={errors.email}
-          placeholder="user@example.com"
-        />
-
-        <Input
-          id="fullName"
-          name="fullName"
-          label="Full Name"
-          required
-          value={formData.fullName}
-          onChange={handleChange}
-          error={errors.fullName}
-          placeholder="John Doe"
-        />
-
-        {!initialData && (
-          <Input
-            id="password"
-            name="password"
-            label="Password"
-            type="password"
-            required
-            value={(formData as CreateUserInput).password || ''}
-            onChange={handleChange}
-            error={errors.password}
-            placeholder="Minimum 6 characters"
-          />
-        )}
-
-        {initialData && (
-          <Input
-            id="password"
-            name="password"
-            label="New Password (leave empty to keep current)"
-            type="password"
-            value={(formData as UpdateUserInput).password || ''}
-            onChange={handleChange}
-            error={errors.password}
-            placeholder="Minimum 6 characters"
-          />
-        )}
-
-        <Select
-          id="roleId"
-          name="roleId"
-          label="Role"
-          value={formData.roleId || ''}
-          onChange={handleChange}
-          error={errors.roleId}
-          options={[
-            { value: '', label: 'Select a role' },
-            ...roles.map((role) => ({
-              value: role.id,
-              label: role.name,
-            })),
-          ]}
-        />
-
-        <Select
-          id="status"
-          name="status"
-          label="Status"
-          value={formData.status || 'active'}
-          onChange={handleChange}
-          error={errors.status}
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-            { value: 'suspended', label: 'Suspended' },
-          ]}
-        />
+        <div className="flex items-center gap-2 pb-2">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <UserIcon className="h-4 w-4 text-primary" />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Personal Information</h3>
+        </div>
+        
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <div className="relative">
+              <Mail className="absolute left-3 top-[2.6rem] h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                id="email"
+                name="email"
+                label="Email Address"
+                type="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                error={errors.email}
+                placeholder="user@example.com"
+                className="pl-10"
+              />
+            </div>
+          </div>
+          
+          <div className="sm:col-span-2">
+            <div className="relative">
+              <UserIcon className="absolute left-3 top-[2.6rem] h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                id="fullName"
+                name="fullName"
+                label="Full Name"
+                required
+                value={formData.fullName}
+                onChange={handleChange}
+                error={errors.fullName}
+                placeholder="John Doe"
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-4 border-t border-border">
+      {/* Security Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-2">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Lock className="h-4 w-4 text-primary" />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Security</h3>
+        </div>
+
+        <div className="relative">
+          <Lock className="absolute left-3 top-[2.6rem] h-4 w-4 text-muted-foreground pointer-events-none" />
+          {!initialData ? (
+            <Input
+              id="password"
+              name="password"
+              label="Password"
+              type="password"
+              required
+              value={(formData as CreateUserInput).password || ''}
+              onChange={handleChange}
+              error={errors.password}
+              placeholder="Minimum 6 characters"
+              helperText="Choose a strong password with at least 6 characters"
+              className="pl-10"
+            />
+          ) : (
+            <Input
+              id="password"
+              name="password"
+              label="New Password"
+              type="password"
+              value={(formData as UpdateUserInput).password || ''}
+              onChange={handleChange}
+              error={errors.password}
+              placeholder="Leave empty to keep current password"
+              helperText="Only fill this if you want to change the password"
+              className="pl-10"
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Role & Status Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 pb-2">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Shield className="h-4 w-4 text-primary" />
+          </div>
+          <h3 className="text-sm font-semibold text-foreground">Permissions & Status</h3>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            id="roleId"
+            name="roleId"
+            label="Role"
+            value={formData.roleId || ''}
+            onChange={handleChange}
+            error={errors.roleId}
+            options={[
+              { value: '', label: 'Select a role' },
+              ...roles.map((role) => ({
+                value: role.id,
+                label: role.name,
+              })),
+            ]}
+          />
+
+          <Select
+            id="status"
+            name="status"
+            label="Account Status"
+            value={formData.status || 'active'}
+            onChange={handleChange}
+            error={errors.status}
+            options={[
+              { value: 'active', label: '✓ Active' },
+              { value: 'inactive', label: '○ Inactive' },
+              { value: 'suspended', label: '⊘ Suspended' },
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end pt-6 border-t border-border">
         {onCancel && (
           <Button
             type="button"
             variant="outline"
             onClick={onCancel}
             disabled={isLoading}
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto min-w-[100px]"
           >
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-          {isLoading
-            ? 'Saving...'
-            : initialData
-            ? 'Update User'
-            : 'Create User'}
+        <Button 
+          type="submit" 
+          disabled={isLoading} 
+          className="w-full sm:w-auto min-w-[140px] font-medium"
+        >
+          {isLoading ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Saving...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              {initialData ? '✓ Update User' : '+ Create User'}
+            </span>
+          )}
         </Button>
       </div>
     </form>

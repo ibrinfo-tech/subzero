@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserList } from '@/core/components/users/UserList';
 import { UserForm } from '@/core/components/users/UserForm';
-import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import { FormDialog } from '@/core/components/common/FormDialog';
+import { Card, CardContent } from '@/core/components/ui/card';
 import { PageHeader } from '@/core/components/common/PageHeader';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { usePermissionProps } from '@/core/components/common/PermissionGate';
@@ -23,6 +24,7 @@ function UsersPageContent() {
   const [roles, setRoles] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isLoadingUser, setIsLoadingUser] = useState(false);
 
   // Fetch roles for the form
   useEffect(() => {
@@ -58,7 +60,10 @@ function UsersPageContent() {
     if (action === 'create') {
       setShowForm(true);
       setEditingUser(null);
+      setIsLoadingUser(false);
     } else if (action === 'edit' && userId) {
+      setShowForm(true);
+      setIsLoadingUser(true);
       // Fetch user details for editing
       fetch(`/api/users/${userId}`, {
         headers: {
@@ -73,16 +78,24 @@ function UsersPageContent() {
               roleId: data.data.roles?.[0]?.id || undefined,
             };
             setEditingUser(userWithRoleId);
-            setShowForm(true);
+          } else {
+            toast.error('Failed to load user details');
+            router.push('/users');
           }
         })
-        .catch(err => console.error('Failed to load user:', err));
+        .catch(err => {
+          console.error('Failed to load user:', err);
+          toast.error('Failed to load user details');
+          router.push('/users');
+        })
+        .finally(() => setIsLoadingUser(false));
     } else {
       // No action in URL, show list
       setShowForm(false);
       setEditingUser(null);
+      setIsLoadingUser(false);
     }
-  }, [searchParams, token]);
+  }, [searchParams, token, router]);
 
   const handleCreate = async (data: CreateUserInput | UpdateUserInput) => {
     if (!token) {
@@ -148,43 +161,22 @@ function UsersPageContent() {
     router.push('/users');
   };
 
-  if (showForm) {
-    return (
-      <ProtectedPage
-        permission="users:read"
-        title="User Management"
-        description="Manage users, roles, and permissions"
-      >
-        <div className="w-full max-w-2xl mx-auto">
-          <Card>
-            <CardHeader className="p-4 sm:p-6">
-              <CardTitle className="text-lg sm:text-xl">{editingUser ? 'Edit User' : 'Create New User'}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              <UserForm
-                initialData={editingUser || undefined}
-                roles={roles}
-                onSubmit={handleCreate}
-                onCancel={handleCancel}
-                isLoading={isSubmitting}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </ProtectedPage>
-    );
-  }
+  const handleCloseDialog = (open: boolean) => {
+    if (!open && !isSubmitting) {
+      router.push('/users');
+    }
+  };
 
   return (
     <ProtectedPage
       permission="users:read"
       title="User Management"
-      description="Manage users, roles, and permissions"
+      description="Manage users"
     >
       <div className="w-full">
         <PageHeader
           title="User Management"
-          description="Manage users, roles, and permissions"
+          description="Manage users"
         />
         <UserList
           onCreateClick={canCreate ? () => router.push('/users?action=create') : undefined}
@@ -192,6 +184,24 @@ function UsersPageContent() {
           onDeleteClick={canDelete ? (user: User) => user : undefined}
           refreshTrigger={refreshTrigger}
         />
+
+        {/* Form Dialog */}
+        <FormDialog
+          open={showForm}
+          onOpenChange={handleCloseDialog}
+          title={editingUser ? 'Edit User' : 'Create New User'}
+          description={editingUser ? 'Update user information and permissions' : 'Add a new user to the system'}
+          maxWidth="2xl"
+          isLoading={isLoadingUser}
+        >
+          <UserForm
+            initialData={editingUser || undefined}
+            roles={roles}
+            onSubmit={handleCreate}
+            onCancel={handleCancel}
+            isLoading={isSubmitting}
+          />
+        </FormDialog>
       </div>
     </ProtectedPage>
   );
@@ -203,7 +213,7 @@ export default function UsersPage() {
       <ProtectedPage
         permission="users:read"
         title="User Management"
-        description="Manage users, roles, and permissions"
+        description="Manage users"
       >
         <div className="w-full">
           <Card>
