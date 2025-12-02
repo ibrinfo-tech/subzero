@@ -107,8 +107,8 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
 
   if (error) {
     return (
-      <div className="rounded-md bg-red-50 p-4">
-        <p className="text-sm text-red-800">{error}</p>
+      <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+        <p className="text-sm text-red-800 dark:text-red-400">{error}</p>
         <Button
           variant="outline"
           size="sm"
@@ -126,7 +126,7 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
       <div>
         {onCreateClick && (
           <div className="mb-4 flex justify-end">
-            <Button onClick={onCreateClick}>
+            <Button onClick={onCreateClick} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Create Note
             </Button>
@@ -146,13 +146,13 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
       <div>
         {onCreateClick && (
           <div className="mb-4 flex justify-end">
-            <Button onClick={onCreateClick}>
+            <Button onClick={onCreateClick} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Create Note
             </Button>
           </div>
         )}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {notes.map((note) => (
             <NoteCard
               key={note.id}

@@ -333,11 +333,10 @@ export function EnhancedPermissionAssignment({
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back
           </Button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Permission Assignment</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-2xl font-bold text-foreground">Permission Assignment</h2>
+            <p className="text-sm text-muted-foreground">
               Role: <span className="font-medium">{roleName || 'Loading...'}</span>
               {selectedModuleData && (
                 <> • Module: <span className="font-medium">{selectedModuleData.moduleName}</span></>
@@ -356,7 +355,7 @@ export function EnhancedPermissionAssignment({
       </div>
 
       {/* Module Tabs - Compact Navigation */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-border">
         <nav className="flex gap-2 overflow-x-auto">
           {modulePermissions.map((module) => (
             <button
@@ -364,15 +363,15 @@ export function EnhancedPermissionAssignment({
               onClick={() => handleModuleSelect(module.moduleId)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                 selectedModule === module.moduleId
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
               }`}
             >
               {module.moduleName}
               <span className={`ml-2 text-xs ${
                 moduleConfigs[module.moduleId]?.enabled 
-                  ? 'text-green-600' 
-                  : 'text-gray-400'
+                  ? 'text-green-600 dark:text-green-400' 
+                  : 'text-muted-foreground'
               }`}>
                 {moduleConfigs[module.moduleId]?.enabled ? '●' : '○'}
               </span>
@@ -386,7 +385,7 @@ export function EnhancedPermissionAssignment({
           {/* Module Permissions */}
           <Card>
             <CardHeader
-              className="cursor-pointer hover:bg-gray-50"
+              className="cursor-pointer hover:bg-muted/50"
               onClick={() => toggleSection('modulePermissions')}
             >
               <div className="flex items-center justify-between">
@@ -406,60 +405,60 @@ export function EnhancedPermissionAssignment({
                     type="checkbox"
                     checked={selectedConfig.enabled}
                     onChange={() => toggleModuleEnabled(selectedModule)}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                   />
-                  <label className="font-medium text-gray-900">Enable Access</label>
+                  <label className="font-medium text-foreground">Enable Access</label>
                 </div>
 
                 {/* Granular Permissions */}
                 {selectedConfig.enabled && (
                   <div>
-                    <p className="text-sm text-gray-600 mb-3">Granular Permissions:</p>
+                    <p className="text-sm text-muted-foreground mb-3">Granular Permissions:</p>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.view}
                           onChange={() => togglePermission(selectedModule, 'view')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
-                        <span className="text-sm">View</span>
+                        <span className="text-sm text-foreground">View</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.create}
                           onChange={() => togglePermission(selectedModule, 'create')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
-                        <span className="text-sm">Create</span>
+                        <span className="text-sm text-foreground">Create</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.update}
                           onChange={() => togglePermission(selectedModule, 'update')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
-                        <span className="text-sm">Edit</span>
+                        <span className="text-sm text-foreground">Edit</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.delete}
                           onChange={() => togglePermission(selectedModule, 'delete')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
-                        <span className="text-sm">Delete</span>
+                        <span className="text-sm text-foreground">Delete</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.manage}
                           onChange={() => togglePermission(selectedModule, 'manage')}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
-                        <span className="text-sm">Manage All</span>
+                        <span className="text-sm text-foreground">Manage All</span>
                       </label>
                     </div>
                   </div>
@@ -472,7 +471,7 @@ export function EnhancedPermissionAssignment({
           {selectedConfig.enabled && (
             <Card>
               <CardHeader
-                className="cursor-pointer hover:bg-gray-50"
+                className="cursor-pointer hover:bg-muted/50"
                 onClick={() => toggleSection('dataPermission')}
               >
                 <div className="flex items-center justify-between">
@@ -491,12 +490,12 @@ export function EnhancedPermissionAssignment({
                       onClick={() => setDataAccess(selectedModule, 'own')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'own'
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
                       }`}
                     >
-                      <div className="font-medium text-gray-900">Own Data</div>
-                      <div className="text-sm text-gray-500 mt-1">
+                      <div className="font-medium text-foreground">Own Data</div>
+                      <div className="text-sm text-muted-foreground mt-1">
                         Access own data within the module.
                       </div>
                     </button>
@@ -504,12 +503,12 @@ export function EnhancedPermissionAssignment({
                       onClick={() => setDataAccess(selectedModule, 'team')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'team'
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
                       }`}
                     >
-                      <div className="font-medium text-gray-900">Team Data</div>
-                      <div className="text-sm text-gray-500 mt-1">
+                      <div className="font-medium text-foreground">Team Data</div>
+                      <div className="text-sm text-muted-foreground mt-1">
                         Access team data within the module.
                       </div>
                     </button>
@@ -517,12 +516,12 @@ export function EnhancedPermissionAssignment({
                       onClick={() => setDataAccess(selectedModule, 'all')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'all'
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
                       }`}
                     >
-                      <div className="font-medium text-gray-900">All Data</div>
-                      <div className="text-sm text-gray-500 mt-1">
+                      <div className="font-medium text-foreground">All Data</div>
+                      <div className="text-sm text-muted-foreground mt-1">
                         Access all data within the module.
                       </div>
                     </button>
@@ -536,7 +535,7 @@ export function EnhancedPermissionAssignment({
           {selectedConfig.enabled && (
             <Card>
               <CardHeader
-                className="cursor-pointer hover:bg-gray-50"
+                className="cursor-pointer hover:bg-muted/50"
                 onClick={() => toggleSection('fieldPermission')}
               >
                 <div className="flex items-center justify-between">
@@ -551,21 +550,21 @@ export function EnhancedPermissionAssignment({
               {expandedSections.fieldPermission && (
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-border">
+                      <thead className="bg-muted/50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             Field Name
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             Visibility
                           </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             Editability
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
+                      <tbody className="bg-card divide-y divide-border">
                         {sampleFields.map((field) => {
                           const fieldPerm = selectedConfig.fieldPermissions[field.name] || {
                             visible: false,
@@ -573,7 +572,7 @@ export function EnhancedPermissionAssignment({
                           };
                           return (
                             <tr key={field.name}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
                                 {field.label}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -581,7 +580,7 @@ export function EnhancedPermissionAssignment({
                                   type="checkbox"
                                   checked={fieldPerm.visible}
                                   onChange={() => toggleFieldPermission(selectedModule, field.name, 'visible')}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                  className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                                 />
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -590,7 +589,7 @@ export function EnhancedPermissionAssignment({
                                   checked={fieldPerm.editable}
                                   onChange={() => toggleFieldPermission(selectedModule, field.name, 'editable')}
                                   disabled={!fieldPerm.visible}
-                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                                  className="w-4 h-4 text-primary border-border rounded focus:ring-primary disabled:opacity-50"
                                 />
                               </td>
                             </tr>

@@ -23,17 +23,20 @@ export function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <CardTitle className="text-lg font-semibold">{note.title}</CardTitle>
-          <div className="flex gap-2">
+    <Card className="hover:shadow-md transition-shadow h-full flex flex-col">
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-base sm:text-lg font-semibold break-words flex-1 min-w-0">
+            {note.title}
+          </CardTitle>
+          <div className="flex gap-1 sm:gap-2 flex-shrink-0">
             {onEdit && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => onEdit(note)}
                 className="h-8 w-8 p-0"
+                aria-label="Edit note"
               >
                 <Edit className="h-4 w-4" />
               </Button>
@@ -43,7 +46,8 @@ export function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
                 variant="ghost"
                 size="sm"
                 onClick={() => onDelete(note.id)}
-                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                aria-label="Delete note"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -51,9 +55,11 @@ export function NoteCard({ note, onEdit, onDelete }: NoteCardProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <p className="text-gray-700 whitespace-pre-wrap mb-4">{note.content}</p>
-        <p className="text-xs text-gray-500">
+      <CardContent className="p-4 sm:p-6 pt-0 flex-1 flex flex-col">
+        <p className="text-foreground whitespace-pre-wrap mb-4 text-sm sm:text-base break-words flex-1">
+          {note.content}
+        </p>
+        <p className="text-xs text-muted-foreground">
           {formatDate(note.createdAt)}
         </p>
       </CardContent>

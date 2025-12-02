@@ -155,12 +155,12 @@ export default function UsersPage() {
         title="User Management"
         description="Manage users, roles, and permissions"
       >
-        <div className="container mx-auto py-6 px-4 max-w-2xl">
+        <div className="w-full max-w-2xl mx-auto">
           <Card>
-            <CardHeader>
-              <CardTitle>{editingUser ? 'Edit User' : 'Create New User'}</CardTitle>
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-lg sm:text-xl">{editingUser ? 'Edit User' : 'Create New User'}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6">
               <UserForm
                 initialData={editingUser || undefined}
                 roles={roles}
@@ -181,7 +181,7 @@ export default function UsersPage() {
       title="User Management"
       description="Manage users, roles, and permissions"
     >
-      <div className="container mx-auto py-6 px-4">
+      <div className="w-full">
         <PageHeader
           title="User Management"
           description="Manage users, roles, and permissions"

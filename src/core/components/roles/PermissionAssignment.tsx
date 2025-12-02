@@ -168,21 +168,22 @@ export function PermissionAssignment({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Button
             variant="ghost"
             size="sm"
             onClick={onBack}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 flex-shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Permission Assignment</h2>
-            <p className="text-sm text-gray-500">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">Permission Assignment</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">
               Role: <span className="font-medium">{roleName}</span>
             </p>
           </div>
@@ -190,7 +191,7 @@ export function PermissionAssignment({
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 w-full sm:w-auto"
         >
           <Save className="h-4 w-4" />
           {saving ? 'Saving...' : 'Update Changes'}
@@ -198,7 +199,7 @@ export function PermissionAssignment({
       </div>
 
       {/* Module Permissions */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {modulePermissions.map((module) => {
           const isExpanded = expandedModules.has(module.moduleId);
           const selectedCount = module.permissions.filter(p => selectedPermissions.has(p.id)).length;
@@ -208,22 +209,24 @@ export function PermissionAssignment({
           return (
             <Card key={module.moduleId}>
               <CardHeader
-                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                className="cursor-pointer hover:bg-muted/50 transition-colors p-4 sm:p-6"
                 onClick={() => toggleModule(module.moduleId)}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                     {isExpanded ? (
-                      <ChevronUp className="h-5 w-5 text-gray-500" />
+                      <ChevronUp className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                      <ChevronDown className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                     )}
-                    <CardTitle className="text-lg font-semibold">
-                      {module.moduleName}
-                    </CardTitle>
-                    <span className="text-sm text-gray-500">
-                      ({selectedCount}/{totalCount} selected)
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-base sm:text-lg font-semibold truncate">
+                        {module.moduleName}
+                      </CardTitle>
+                      <span className="text-xs sm:text-sm text-muted-foreground">
+                        ({selectedCount}/{totalCount} selected)
+                      </span>
+                    </div>
                   </div>
                   <Button
                     variant="outline"
@@ -232,6 +235,7 @@ export function PermissionAssignment({
                       e.stopPropagation();
                       toggleAllModulePermissions(module.moduleId, module.permissions);
                     }}
+                    className="w-full sm:w-auto"
                   >
                     {allSelected ? 'Deselect All' : 'Select All'}
                   </Button>
@@ -239,40 +243,40 @@ export function PermissionAssignment({
               </CardHeader>
 
               {isExpanded && (
-                <CardContent>
+                <CardContent className="p-3 sm:p-6">
                   <div className="space-y-2">
                     {module.permissions.map((permission) => (
                       <div
                         key={permission.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                        className="flex items-start gap-2 sm:gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={selectedPermissions.has(permission.id)}
                           onChange={() => togglePermission(permission.id)}
-                          className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="mt-1 w-4 h-4 text-primary border-border rounded focus:ring-primary flex-shrink-0"
                         />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-foreground text-sm sm:text-base">
                               {permission.name}
                             </span>
-                            <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                            <code className="text-xs bg-muted px-2 py-1 rounded">
                               {permission.code}
                             </code>
                             {permission.isDangerous && (
-                              <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                              <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-1 rounded">
                                 Dangerous
                               </span>
                             )}
                             {permission.requiresMfa && (
-                              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
+                              <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 px-2 py-1 rounded">
                                 Requires MFA
                               </span>
                             )}
                           </div>
                           {permission.description && (
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                               {permission.description}
                             </p>
                           )}
@@ -290,7 +294,7 @@ export function PermissionAssignment({
       {modulePermissions.length === 0 && (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-gray-500">No permissions available</p>
+            <p className="text-muted-foreground">No permissions available</p>
           </CardContent>
         </Card>
       )}

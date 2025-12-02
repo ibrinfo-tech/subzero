@@ -89,9 +89,9 @@ export function UserTable({
   return (
     <div className="space-y-4">
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex flex-1 gap-2 w-full sm:w-auto">
-          <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search by name, email..."
@@ -100,40 +100,42 @@ export function UserTable({
               className="pl-10"
             />
           </div>
-          <Select
-            value={selectedRole}
-            onChange={(e) => handleRoleFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All Roles' },
-              ...roles.map((role) => ({
-                value: role.id,
-                label: role.name,
-              })),
-            ]}
-            className="w-40"
-          />
-          <Select
-            value={selectedStatus}
-            onChange={(e) => handleStatusFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All Status' },
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' },
-              { value: 'suspended', label: 'Suspended' },
-            ]}
-            className="w-40"
-          />
+          <div className="flex gap-2">
+            <Select
+              value={selectedRole}
+              onChange={(e) => handleRoleFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Roles' },
+                ...roles.map((role) => ({
+                  value: role.id,
+                  label: role.name,
+                })),
+              ]}
+              className="flex-1 sm:w-40"
+            />
+            <Select
+              value={selectedStatus}
+              onChange={(e) => handleStatusFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'suspended', label: 'Suspended' },
+              ]}
+              className="flex-1 sm:w-40"
+            />
+          </div>
         </div>
         {onCreate && (
-          <Button onClick={onCreate} className="w-full sm:w-auto">
+          <Button onClick={onCreate} className="w-full sm:w-auto sm:self-end">
             <UserPlus className="h-4 w-4 mr-2" />
             Add User
           </Button>
         )}
       </div>
 
-      {/* Table */}
-      <div className="border border-border rounded-lg overflow-hidden bg-card">
+      {/* Desktop Table View - Hidden on mobile */}
+      <div className="hidden md:block border border-border rounded-lg overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -159,9 +161,8 @@ export function UserTable({
               </TableRow>
             ) : (
               users.map((user) => {
-                // Get user's roles from the roles array (many-to-many relationship)
                 const userRoles = (user as any).roles || [];
-                const primaryRole = userRoles[0]; // Display first role
+                const primaryRole = userRoles[0];
                 const initials = getInitials(user.fullName, user.email);
                 const dateAdded = user.createdAt
                   ? new Date(user.createdAt).toLocaleDateString('en-US', {
@@ -233,6 +234,92 @@ export function UserTable({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card View - Shown only on mobile */}
+      <div className="md:hidden space-y-3">
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">No users found</div>
+        ) : (
+          users.map((user) => {
+            const userRoles = (user as any).roles || [];
+            const primaryRole = userRoles[0];
+            const initials = getInitials(user.fullName, user.email);
+            const dateAdded = user.createdAt
+              ? new Date(user.createdAt).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })
+              : '-';
+
+            return (
+              <div
+                key={user.id}
+                className="bg-card border border-border rounded-lg p-4 space-y-3"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground flex-shrink-0">
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-foreground truncate">
+                        {user.fullName || 'No name'}
+                      </div>
+                      <div className="text-sm text-muted-foreground truncate">{user.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex-shrink-0 ml-2">
+                    {getStatusBadge(user.status)}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Role: </span>
+                    {userRoles.length > 0 ? (
+                      <span className="text-foreground">
+                        {primaryRole.name}
+                        {userRoles.length > 1 && ` +${userRoles.length - 1}`}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">No role</span>
+                    )}
+                  </div>
+                  <div className="text-muted-foreground text-xs">{dateAdded}</div>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-border">
+                  {onEdit && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onEdit(user)}
+                      className="flex-1"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
+                  {onDelete && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDelete(user)}
+                      className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

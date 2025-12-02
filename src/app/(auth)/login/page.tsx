@@ -109,10 +109,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-6 sm:space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-foreground">
+          <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-extrabold text-foreground">
             Sign in to your account
           </h2>
           {showRegisterLink && (
@@ -124,8 +124,8 @@ export default function LoginPage() {
             </p>
           )}
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px space-y-4">
+        <form className="mt-6 sm:mt-8 space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md space-y-4">
             <Input
               id="email"
               name="email"
@@ -153,8 +153,8 @@ export default function LoginPage() {
           </div>
 
           {apiError && (
-            <div className="rounded-md bg-red-50 p-4">
-              <p className="text-sm text-red-800">{apiError}</p>
+            <div className="rounded-md bg-red-50 dark:bg-red-900/30 p-4">
+              <p className="text-sm text-red-800 dark:text-red-400">{apiError}</p>
             </div>
           )}
 

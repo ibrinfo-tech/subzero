@@ -143,8 +143,8 @@ export function ExpandableRoleTable({
 
   const getStatusBadge = (status: string) => {
     const colors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-gray-100 text-gray-800',
+      active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      inactive: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
     };
     return (
       <span
@@ -160,7 +160,7 @@ export function ExpandableRoleTable({
   const getTypeBadge = (isSystem: boolean) => {
     if (isSystem) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
           Default
         </span>
       );
@@ -171,21 +171,21 @@ export function ExpandableRoleTable({
   const getDataAccessBadge = (dataAccess: string) => {
     if (dataAccess === 'all') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
           All Data
         </span>
       );
     }
     if (dataAccess === 'team') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
           Team Data
         </span>
       );
     }
     if (dataAccess === 'own') {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
           Own Data
         </span>
       );
@@ -199,7 +199,7 @@ export function ExpandableRoleTable({
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-1 gap-2 w-full sm:w-auto">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search roles..."
               value={searchTerm}
@@ -249,7 +249,7 @@ export function ExpandableRoleTable({
               </TableRow>
             ) : roles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                   No roles found
                 </TableCell>
               </TableRow>
@@ -278,17 +278,17 @@ export function ExpandableRoleTable({
                         </Button>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium text-gray-900">{role.name}</div>
-                        <div className="text-sm text-gray-500">{role.code}</div>
+                        <div className="font-medium text-foreground">{role.name}</div>
+                        <div className="text-sm text-muted-foreground">{role.code}</div>
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-700">
+                        <span className="text-sm text-foreground">
                           {role.description || '-'}
                         </span>
                       </TableCell>
                       <TableCell>{getTypeBadge(role.isSystem)}</TableCell>
                       <TableCell>
-                        <span className="text-sm text-gray-700">
+                        <span className="text-sm text-foreground">
                           {role.userCount ?? 0}
                         </span>
                       </TableCell>
@@ -318,7 +318,7 @@ export function ExpandableRoleTable({
                               variant="outline"
                               size="sm"
                               onClick={() => onDelete(role)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -328,16 +328,16 @@ export function ExpandableRoleTable({
                     </TableRow>
                     {isExpanded && (
                       <TableRow className="animate-in fade-in slide-in-from-top-2 duration-300">
-                        <TableCell colSpan={7} className="bg-gray-50 p-4">
+                        <TableCell colSpan={7} className="bg-muted/50 dark:bg-muted/30 p-4">
                           {isLoadingPerms ? (
                             <div className="flex justify-center py-8 animate-in fade-in duration-200">
                               <div className="flex flex-col items-center gap-3">
                                 <LoadingSpinner />
-                                <p className="text-sm text-gray-500">Loading permissions...</p>
+                                <p className="text-sm text-muted-foreground">Loading permissions...</p>
                               </div>
                             </div>
                           ) : modules.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-4 animate-in fade-in duration-200">
+                            <p className="text-sm text-muted-foreground text-center py-4 animate-in fade-in duration-200">
                               No module permissions configured
                             </p>
                           ) : (
@@ -345,7 +345,7 @@ export function ExpandableRoleTable({
                               {modules.map((module, index) => (
                                 <Card 
                                   key={module.moduleId} 
-                                  className="bg-white animate-in fade-in slide-in-from-bottom-2 duration-300"
+                                  className="bg-card animate-in fade-in slide-in-from-bottom-2 duration-300"
                                   style={{ animationDelay: `${index * 50}ms` }}
                                 >
                                   <CardHeader className="pb-3">
@@ -353,19 +353,19 @@ export function ExpandableRoleTable({
                                       <CardTitle className="text-sm font-medium">
                                         {module.moduleName}
                                       </CardTitle>
-                                      <span className="text-xs text-gray-500 mt-1">
+                                      <span className="text-xs text-muted-foreground mt-1">
                                         {module.permissions.length} of {module.totalPermissions || module.permissions.length} permissions
                                       </span>
                                     </div>
                                   </CardHeader>
                                   <CardContent className="pt-0 space-y-2">
                                     {!module.hasAccess ? (
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-xs text-muted-foreground">
                                         <p>No permissions granted</p>
                                       </div>
                                     ) : (
                                       <>
-                                        <div className="text-xs text-gray-600 mb-2">
+                                        <div className="text-xs text-foreground mb-2">
                                           {getDataAccessBadge(module.dataAccess)}
                                         </div>
                                         {module.permissions.length > 0 && (
@@ -373,7 +373,7 @@ export function ExpandableRoleTable({
                                             {module.permissions.map((perm) => (
                                               <span
                                                 key={perm.permissionId}
-                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
                                               >
                                                 {perm.permissionName}
                                               </span>

@@ -32,9 +32,11 @@ function getIconComponent(iconName?: string): React.ReactNode {
 
 interface SidebarProps {
   onNavigationLoaded?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
+export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: SidebarProps = {}) {
   const pathname = usePathname();
   const [moduleNavItems, setModuleNavItems] = useState<NavItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,7 +51,10 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
       const hydrationTimeout = setTimeout(() => {
         console.error('[Sidebar] Hydration timeout - forcing load');
         setIsLoading(false);
-        onNavigationLoaded?.();
+        // Small delay to ensure state updates are applied before hiding skeleton
+        setTimeout(() => {
+          onNavigationLoaded?.();
+        }, 50);
       }, 3000);
       return () => clearTimeout(hydrationTimeout);
     }
@@ -58,7 +63,10 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
       console.log('[Sidebar] User not authenticated, skipping navigation load');
       setIsLoading(false);
       setModuleNavItems([]);
-      onNavigationLoaded?.();
+      // Small delay to ensure state updates are applied before hiding skeleton
+      setTimeout(() => {
+        onNavigationLoaded?.();
+      }, 50);
       return;
     }
 
@@ -79,7 +87,10 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
       console.error('[Sidebar] Navigation loading timeout after 10 seconds');
       setModuleNavItems([]);
       setIsLoading(false);
-      onNavigationLoaded?.();
+      // Small delay to ensure state updates are applied before hiding skeleton
+      setTimeout(() => {
+        onNavigationLoaded?.();
+      }, 50);
     }, 10000);
 
     fetch('/api/modules/navigation', {
@@ -111,14 +122,20 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
           setModuleNavItems([]);
         }
         setIsLoading(false);
-        onNavigationLoaded?.();
+        // Small delay to ensure state updates are applied before hiding skeleton
+        setTimeout(() => {
+          onNavigationLoaded?.();
+        }, 50);
       })
       .catch((err) => {
         clearTimeout(timeoutId);
         console.error('[Sidebar] Failed to load module navigation:', err);
         setModuleNavItems([]);
         setIsLoading(false);
-        onNavigationLoaded?.();
+        // Small delay to ensure state updates are applied before hiding skeleton
+        setTimeout(() => {
+          onNavigationLoaded?.();
+        }, 50);
       });
   }, [isAuthenticated, _hasHydrated, token, onNavigationLoaded]);
 
@@ -127,13 +144,38 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
   const allNavItems = moduleNavItems;
 
   return (
-    <aside className="fixed left-0 top-0 w-64 bg-sidebar text-sidebar-foreground h-screen flex flex-col border-r border-sidebar-border">
-      <div className="p-6 flex-shrink-0">
+    <aside 
+      className={cn(
+        "fixed left-0 top-0 w-64 bg-sidebar text-sidebar-foreground h-screen flex flex-col border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out",
+        "lg:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}
+    >
+      <div className="p-6 flex-shrink-0 flex items-center justify-between">
         <h1 className="text-xl font-bold">RAD Framework</h1>
+        {/* Close button for mobile */}
+        <button
+          onClick={onClose}
+          className="lg:hidden p-2 rounded-md hover:bg-sidebar-accent transition-colors"
+          aria-label="Close sidebar"
+        >
+          <LucideIcons.X className="w-5 h-5" />
+        </button>
       </div>
       <nav className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
         {isLoading ? (
-          <div className="text-muted-foreground text-sm py-4">Loading navigation...</div>
+          // Show skeleton placeholders while loading (matches DashboardSkeleton)
+          <>
+            {[...Array(6)].map((_, i) => (
+              <div 
+                key={i} 
+                className="flex items-center gap-3 px-4 py-2 rounded-md"
+              >
+                <div className="w-5 h-5 bg-sidebar-accent/30 rounded animate-pulse"></div>
+                <div className="h-4 bg-sidebar-accent/30 rounded animate-pulse flex-1"></div>
+              </div>
+            ))}
+          </>
         ) : allNavItems.length === 0 ? (
           <div className="text-muted-foreground text-sm py-4">
             No navigation items available.
@@ -146,6 +188,7 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={() => onClose?.()}
               className={cn(
                 'flex items-center gap-3 px-4 py-2 rounded-md transition-colors',
                 isActive

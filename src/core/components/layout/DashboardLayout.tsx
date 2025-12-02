@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
-import { LoadingSpinner } from '../common/LoadingSpinner';
+import { DashboardSkeleton } from '../common/DashboardSkeleton';
 import { Toaster } from '../ui/toaster';
 
 interface DashboardLayoutProps {
@@ -12,6 +12,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [navigationLoaded, setNavigationLoaded] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Fallback: Force load after 5 seconds to prevent infinite loading
   useEffect(() => {
@@ -23,28 +24,43 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => clearTimeout(fallbackTimer);
   }, []);
 
-  // Show full-page loading state until navigation is loaded
-  if (!navigationLoaded) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Toaster />
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="mt-4 text-muted-foreground">Loading application...</p>
-          <p className="mt-2 text-xs text-muted-foreground/70">This should only take a moment...</p>
-        </div>
-      </div>
-    );
-  }
+  // Close sidebar when clicking outside on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(false);
+      }
+    };
 
-  // Once loaded, show the full layout
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Toaster />
-      <Sidebar onNavigationLoaded={() => setNavigationLoaded(true)} />
-      <div className="flex-1 flex flex-col ml-64">
-        <Topbar />
-        <main className="flex-1 p-6 bg-muted/30">
+      
+      {/* Show skeleton overlay while navigation is loading */}
+      {!navigationLoaded && <DashboardSkeleton />}
+      
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      {/* Sidebar is always mounted but hidden behind skeleton until loaded */}
+      <Sidebar 
+        onNavigationLoaded={() => setNavigationLoaded(true)}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+      
+      <div className="flex-1 flex flex-col lg:ml-64 w-full">
+        <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 p-4 sm:p-6 bg-muted/30">
           {children}
         </main>
       </div>

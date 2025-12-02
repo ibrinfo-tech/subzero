@@ -144,12 +144,12 @@ export default function RolesPage() {
 
   if (showForm) {
     return (
-      <div className="container mx-auto py-6 px-4 max-w-2xl">
+      <div className="w-full max-w-2xl mx-auto">
         <Card>
-          <CardHeader>
-            <CardTitle>{editingRole ? 'Edit Role' : 'Create New Role'}</CardTitle>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-lg sm:text-xl">{editingRole ? 'Edit Role' : 'Create New Role'}</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             <RoleForm
               initialData={editingRole || undefined}
               onSubmit={handleCreate}
@@ -177,12 +177,12 @@ export default function RolesPage() {
 
   if (loadingRole) {
     return (
-      <div className="container mx-auto py-6 px-4">
+      <div className="w-full">
         <Card>
-          <CardContent className="py-12">
+          <CardContent className="py-8 sm:py-12">
             <div className="flex flex-col items-center justify-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-              <p className="text-sm text-gray-500">Loading role details...</p>
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
+              <p className="text-sm text-muted-foreground">Loading role details...</p>
             </div>
           </CardContent>
         </Card>
@@ -192,7 +192,7 @@ export default function RolesPage() {
 
   if (showPermissionAssignment && selectedRole) {
     return (
-      <div className="container mx-auto py-6 px-4">
+      <div className="w-full">
         <EnhancedPermissionAssignment
           roleId={selectedRole.id}
           roleName={selectedRole.name}
@@ -203,7 +203,7 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="w-full">
       <PageHeader
         title="Role Management"
         description="Manage roles and their permissions"

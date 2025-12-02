@@ -155,18 +155,19 @@ export function RoleForm({
         ]}
       />
 
-      <div className="flex gap-2 justify-end pt-4">
+      <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-4 border-t border-border">
         {onCancel && (
           <Button
             type="button"
             variant="outline"
             onClick={onCancel}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
           {isLoading
             ? 'Saving...'
             : initialData

@@ -92,98 +92,101 @@ export function UserForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        id="email"
-        name="email"
-        label="Email"
-        type="email"
-        required
-        value={formData.email}
-        onChange={handleChange}
-        error={errors.email}
-        placeholder="user@example.com"
-      />
-
-      <Input
-        id="fullName"
-        name="fullName"
-        label="Full Name"
-        required
-        value={formData.fullName}
-        onChange={handleChange}
-        error={errors.fullName}
-        placeholder="John Doe"
-      />
-
-      {!initialData && (
+      <div className="space-y-4">
         <Input
-          id="password"
-          name="password"
-          label="Password"
-          type="password"
+          id="email"
+          name="email"
+          label="Email"
+          type="email"
           required
-          value={(formData as CreateUserInput).password || ''}
+          value={formData.email}
           onChange={handleChange}
-          error={errors.password}
-          placeholder="Minimum 6 characters"
+          error={errors.email}
+          placeholder="user@example.com"
         />
-      )}
 
-      {initialData && (
         <Input
-          id="password"
-          name="password"
-          label="New Password (leave empty to keep current)"
-          type="password"
-          value={(formData as UpdateUserInput).password || ''}
+          id="fullName"
+          name="fullName"
+          label="Full Name"
+          required
+          value={formData.fullName}
           onChange={handleChange}
-          error={errors.password}
-          placeholder="Minimum 6 characters"
+          error={errors.fullName}
+          placeholder="John Doe"
         />
-      )}
 
-      <Select
-        id="roleId"
-        name="roleId"
-        label="Role"
-        value={formData.roleId || ''}
-        onChange={handleChange}
-        error={errors.roleId}
-        options={[
-          { value: '', label: 'Select a role' },
-          ...roles.map((role) => ({
-            value: role.id,
-            label: role.name,
-          })),
-        ]}
-      />
+        {!initialData && (
+          <Input
+            id="password"
+            name="password"
+            label="Password"
+            type="password"
+            required
+            value={(formData as CreateUserInput).password || ''}
+            onChange={handleChange}
+            error={errors.password}
+            placeholder="Minimum 6 characters"
+          />
+        )}
 
-      <Select
-        id="status"
-        name="status"
-        label="Status"
-        value={formData.status || 'active'}
-        onChange={handleChange}
-        error={errors.status}
-        options={[
-          { value: 'active', label: 'Active' },
-          { value: 'inactive', label: 'Inactive' },
-          { value: 'suspended', label: 'Suspended' },
-        ]}
-      />
+        {initialData && (
+          <Input
+            id="password"
+            name="password"
+            label="New Password (leave empty to keep current)"
+            type="password"
+            value={(formData as UpdateUserInput).password || ''}
+            onChange={handleChange}
+            error={errors.password}
+            placeholder="Minimum 6 characters"
+          />
+        )}
 
-      <div className="flex gap-2 justify-end pt-4">
+        <Select
+          id="roleId"
+          name="roleId"
+          label="Role"
+          value={formData.roleId || ''}
+          onChange={handleChange}
+          error={errors.roleId}
+          options={[
+            { value: '', label: 'Select a role' },
+            ...roles.map((role) => ({
+              value: role.id,
+              label: role.name,
+            })),
+          ]}
+        />
+
+        <Select
+          id="status"
+          name="status"
+          label="Status"
+          value={formData.status || 'active'}
+          onChange={handleChange}
+          error={errors.status}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'suspended', label: 'Suspended' },
+          ]}
+        />
+      </div>
+
+      <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-4 border-t border-border">
         {onCancel && (
           <Button
             type="button"
             variant="outline"
             onClick={onCancel}
             disabled={isLoading}
+            className="w-full sm:w-auto"
           >
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
           {isLoading
             ? 'Saving...'
             : initialData
