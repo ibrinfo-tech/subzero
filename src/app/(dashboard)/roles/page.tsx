@@ -1,54 +1,104 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { RoleList } from '@/core/components/roles/RoleList';
-import { PermissionAssignment } from '@/core/components/roles/PermissionAssignment';
+import { EnhancedPermissionAssignment } from '@/core/components/roles/EnhancedPermissionAssignment';
 import { RoleForm } from '@/core/components/roles/RoleForm';
 import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
 import { PageHeader } from '@/core/components/common/PageHeader';
+import { ProtectedPage } from '@/core/components/common/ProtectedPage';
+import { usePermissionProps } from '@/core/components/common/PermissionGate';
 import { useAuthStore } from '@/core/store/authStore';
 import { type CreateRoleInput, type UpdateRoleInput } from '@/core/lib/validations/roles';
 import type { Role } from '@/core/lib/db/baseSchema';
+import { toast } from 'sonner';
 
 export default function RolesPage() {
   const router = useRouter();
-  const { token, isAuthenticated, _hasHydrated } = useAuthStore();
+  const searchParams = useSearchParams();
+  const { token } = useAuthStore();
+  const { canCreate, canUpdate, canDelete, canManage } = usePermissionProps('roles');
   const [showForm, setShowForm] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showPermissionAssignment, setShowPermissionAssignment] = useState(false);
   const [selectedRole, setSelectedRole] = useState<{ id: string; name: string } | null>(null);
-  const [selectedModule, setSelectedModule] = useState<{ id: string; name: string } | null>(null);
+  const [loadingRole, setLoadingRole] = useState(false);
 
-  // Wait for store to hydrate before checking auth
+  // Handle URL-based navigation for edit action (when coming from direct URL)
   useEffect(() => {
-    if (!_hasHydrated) {
-      return; // Still hydrating, don't redirect yet
-    }
+    const roleId = searchParams.get('roleId');
+    const action = searchParams.get('action');
     
-    // Only redirect if we're sure the user is not authenticated after hydration
-    if (!isAuthenticated || !token) {
-      router.push('/login');
-      return;
-    }
-  }, [_hasHydrated, isAuthenticated, token, router]);
+    if (!token) return;
 
-  // Show loading state while hydrating or checking auth
-  if (!_hasHydrated || !isAuthenticated || !token) {
-    return (
-      <div className="container mx-auto py-6 px-4">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+    if (action === 'create') {
+      setShowForm(true);
+      setEditingRole(null);
+      setLoadingRole(false);
+    } else if (action === 'edit' && roleId && !editingRole) {
+      // Only fetch if we don't already have the role data
+      setLoadingRole(true);
+      fetch(`/api/roles/${roleId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setEditingRole(data.data);
+            setShowForm(true);
+          } else {
+            toast.error('Failed to load role details');
+            router.push('/roles');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load role:', err);
+          toast.error('Failed to load role details');
+          router.push('/roles');
+        })
+        .finally(() => setLoadingRole(false));
+    } else if (action === 'configure' && roleId && !selectedRole) {
+      // Only fetch if we don't already have the role data (e.g., direct URL access)
+      setLoadingRole(true);
+      fetch(`/api/roles/${roleId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setSelectedRole({ id: roleId, name: data.data.name });
+            setShowPermissionAssignment(true);
+          } else {
+            toast.error('Failed to load role details');
+            router.push('/roles');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to load role:', err);
+          toast.error('Failed to load role details');
+          router.push('/roles');
+        })
+        .finally(() => setLoadingRole(false));
+    } else if (!action || (action !== 'create' && action !== 'edit' && action !== 'configure')) {
+      // No action in URL, show list
+      setShowForm(false);
+      setShowPermissionAssignment(false);
+      setEditingRole(null);
+      setSelectedRole(null);
+      setLoadingRole(false);
+    }
+  }, [searchParams, token, router]);
 
   const handleCreate = async (data: CreateRoleInput | UpdateRoleInput) => {
     if (!token) {
-      alert('You must be logged in to create roles');
+      toast.error('You must be logged in to create roles');
       return;
     }
 
@@ -73,25 +123,23 @@ export default function RolesPage() {
         throw new Error(result.error || 'Failed to save role');
       }
 
-      setShowForm(false);
-      setEditingRole(null);
-      // Trigger refresh of role list
+      toast.success(editingRole ? 'Role updated successfully' : 'Role created successfully');
+      // Navigate back to list
+      router.push('/roles');
       setRefreshTrigger((prev) => prev + 1);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to save role');
+      toast.error(error instanceof Error ? error.message : 'Failed to save role');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleEdit = (role: Role) => {
-    setEditingRole(role);
-    setShowForm(true);
+    router.push(`/roles?action=edit&roleId=${role.id}`);
   };
 
   const handleCancel = () => {
-    setShowForm(false);
-    setEditingRole(null);
+    router.push('/roles');
   };
 
   if (showForm) {
@@ -114,57 +162,40 @@ export default function RolesPage() {
     );
   }
 
-  const handleConfigurePermissions = async (roleId: string, moduleId: string) => {
-    // Fetch role details
-    try {
-      const roleResponse = await fetch(`/api/roles/${roleId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const roleData = await roleResponse.json();
-      
-      if (!roleData.data) return;
-
-      // Try to fetch module name, fallback to 'Module' if API doesn't exist
-      let moduleName = 'Module';
-      try {
-        const moduleResponse = await fetch(`/api/modules/${moduleId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const moduleData = await moduleResponse.json();
-        if (moduleData.data) {
-          moduleName = moduleData.data.name;
-        }
-      } catch {
-        // Module API might not exist, use fallback
-      }
-
-      setSelectedRole({ id: roleId, name: roleData.data.name });
-      setSelectedModule({ id: moduleId, name: moduleName });
-      setShowPermissionAssignment(true);
-    } catch (err) {
-      console.error('Failed to load role/module:', err);
-    }
+  const handleConfigurePermissions = (role: Role) => {
+    // Set role data immediately and show permission assignment
+    setSelectedRole({ id: role.id, name: role.name });
+    setShowPermissionAssignment(true);
+    // Update URL to reflect the action
+    router.push(`/roles?action=configure&roleId=${role.id}`, { scroll: false });
   };
 
   const handleBackFromPermissions = () => {
-    setShowPermissionAssignment(false);
-    setSelectedRole(null);
-    setSelectedModule(null);
+    router.push('/roles');
     setRefreshTrigger((prev) => prev + 1); // Refresh to show updated permissions
   };
 
-  if (showPermissionAssignment && selectedRole && selectedModule) {
+  if (loadingRole) {
     return (
       <div className="container mx-auto py-6 px-4">
-        <PermissionAssignment
+        <Card>
+          <CardContent className="py-12">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+              <p className="text-sm text-gray-500">Loading role details...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (showPermissionAssignment && selectedRole) {
+    return (
+      <div className="container mx-auto py-6 px-4">
+        <EnhancedPermissionAssignment
           roleId={selectedRole.id}
           roleName={selectedRole.name}
-          moduleId={selectedModule.id}
-          moduleName={selectedModule.name}
           onBack={handleBackFromPermissions}
         />
       </div>
@@ -178,7 +209,7 @@ export default function RolesPage() {
         description="Manage roles and their permissions"
       />
       <RoleList
-        onCreateClick={() => setShowForm(true)}
+        onCreateClick={() => router.push('/roles?action=create')}
         onEditClick={handleEdit}
         refreshTrigger={refreshTrigger}
         onConfigurePermissions={handleConfigurePermissions}

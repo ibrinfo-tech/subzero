@@ -5,13 +5,15 @@ import { useAuthStore } from '@/core/store/authStore';
 import { ExpandableRoleTable } from './ExpandableRoleTable';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { EmptyState } from '@/core/components/common/EmptyState';
+import { ConfirmDialog } from '@/core/components/common/ConfirmDialog';
 import type { Role } from '@/core/lib/db/baseSchema';
+import { toast } from 'sonner';
 
 interface RoleListProps {
   onCreateClick?: () => void;
   onEditClick?: (role: Role) => void;
   refreshTrigger?: number; // When this changes, refetch roles
-  onConfigurePermissions?: (roleId: string, moduleId: string) => void;
+  onConfigurePermissions?: (role: Role) => void;
 }
 
 export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigurePermissions }: RoleListProps) {
@@ -21,6 +23,9 @@ export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigu
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchRoles = async () => {
     if (!token) return;
@@ -57,13 +62,18 @@ export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigu
     fetchRoles();
   }, [token, searchTerm, statusFilter, refreshTrigger]);
 
-  const handleDelete = async (role: Role) => {
-    if (!token || !confirm(`Are you sure you want to delete ${role.name}?`)) {
-      return;
-    }
+  const handleDelete = (role: Role) => {
+    setRoleToDelete(role);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!token || !roleToDelete) return;
+
+    setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/roles/${role.id}`, {
+      const response = await fetch(`/api/roles/${roleToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -76,10 +86,14 @@ export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigu
         throw new Error(data.error || 'Failed to delete role');
       }
 
-      // Refresh roles list
+      toast.success('Role deleted successfully');
+      setDeleteDialogOpen(false);
+      setRoleToDelete(null);
       fetchRoles();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete role');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete role');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -106,16 +120,30 @@ export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigu
   }
 
   return (
-    <ExpandableRoleTable
-      roles={roles}
-      isLoading={isLoading}
-      onEdit={onEditClick}
-      onDelete={handleDelete}
-      onCreate={onCreateClick}
-      onSearch={setSearchTerm}
-      onStatusFilter={setStatusFilter}
-      onConfigurePermissions={onConfigurePermissions}
-    />
+    <>
+      <ExpandableRoleTable
+        roles={roles}
+        isLoading={isLoading}
+        onEdit={onEditClick}
+        onDelete={handleDelete}
+        onCreate={onCreateClick}
+        onSearch={setSearchTerm}
+        onStatusFilter={setStatusFilter}
+        onConfigurePermissions={onConfigurePermissions}
+      />
+      
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Role"
+        description={`Are you sure you want to delete the role "${roleToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+    </>
   );
 }
 

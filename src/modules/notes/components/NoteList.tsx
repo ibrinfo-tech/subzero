@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useAuthStore } from '@/core/store/authStore';
+import { usePermissionProps } from '@/core/components/common/PermissionGate';
 import { NoteCard } from './NoteCard';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { EmptyState } from '@/core/components/common/EmptyState';
+import { ConfirmDialog } from '@/core/components/common/ConfirmDialog';
 import { Button } from '@/core/components/ui/button';
 import { Plus } from 'lucide-react';
 import type { Note } from '../types';
+import { toast } from 'sonner';
 
 interface NoteListProps {
   onCreateClick?: () => void;
@@ -18,6 +21,10 @@ interface NoteListProps {
 export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
   const { notes, isLoading, error, setNotes, removeNote, setLoading, setError } = useNotesStore();
   const { token } = useAuthStore();
+  const { canDelete } = usePermissionProps('notes');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchNotes = async () => {
     if (!token) return;
@@ -50,13 +57,23 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
     fetchNotes();
   }, [token]);
 
-  const handleDelete = async (id: string) => {
-    if (!token || !confirm('Are you sure you want to delete this note?')) {
+  const handleDelete = (id: string) => {
+    if (!canDelete) {
+      toast.error('You do not have permission to delete notes');
       return;
     }
 
+    setNoteToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!token || !noteToDelete) return;
+
+    setIsDeleting(true);
+
     try {
-      const response = await fetch(`/api/notes/${id}`, {
+      const response = await fetch(`/api/notes/${noteToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -69,9 +86,14 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
         throw new Error(data.error || 'Failed to delete note');
       }
 
-      removeNote(id);
+      toast.success('Note deleted successfully');
+      removeNote(noteToDelete);
+      setDeleteDialogOpen(false);
+      setNoteToDelete(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete note');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete note');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -120,26 +142,40 @@ export function NoteList({ onCreateClick, onEditClick }: NoteListProps) {
   }
 
   return (
-    <div>
-      {onCreateClick && (
-        <div className="mb-4 flex justify-end">
-          <Button onClick={onCreateClick}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Note
-          </Button>
+    <>
+      <div>
+        {onCreateClick && (
+          <div className="mb-4 flex justify-end">
+            <Button onClick={onCreateClick}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Note
+            </Button>
+          </div>
+        )}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {notes.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              onEdit={onEditClick}
+              onDelete={canDelete ? handleDelete : undefined}
+            />
+          ))}
         </div>
-      )}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {notes.map((note) => (
-          <NoteCard
-            key={note.id}
-            note={note}
-            onEdit={onEditClick}
-            onDelete={handleDelete}
-          />
-        ))}
       </div>
-    </div>
+      
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Note"
+        description="Are you sure you want to delete this note? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+    </>
   );
 }
 

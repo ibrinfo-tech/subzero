@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '@/core/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import type { ModuleNavigation } from '@/core/types/module';
+import { useAuthStore } from '@/core/store/authStore';
 
 interface NavItem {
   label: string;
@@ -13,13 +14,7 @@ interface NavItem {
   icon?: React.ReactNode;
 }
 
-// Static navigation items (always shown)
-const staticNavItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: <LucideIcons.LayoutDashboard className="w-5 h-5" /> },
-  { label: 'Profile', href: '/profile', icon: <LucideIcons.User className="w-5 h-5" /> },
-  { label: 'User Management', href: '/users', icon: <LucideIcons.Users className="w-5 h-5" /> },
-  { label: 'Role Management', href: '/roles', icon: <LucideIcons.Shield className="w-5 h-5" /> },
-];
+// Static navigation items are now loaded from API and filtered by permissions
 
 // Helper to get icon component from string name
 function getIconComponent(iconName?: string): React.ReactNode {
@@ -35,15 +30,72 @@ function getIconComponent(iconName?: string): React.ReactNode {
   return <LucideIcons.FileText className="w-5 h-5" />;
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigationLoaded?: () => void;
+}
+
+export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
   const pathname = usePathname();
   const [moduleNavItems, setModuleNavItems] = useState<NavItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { isAuthenticated, _hasHydrated, token } = useAuthStore();
 
   useEffect(() => {
-    // Load module navigation items from API
-    // We use API because moduleRegistry is server-side only
-    fetch('/api/modules/navigation')
-      .then((res) => res.json())
+    // Wait for hydration to complete
+    if (!_hasHydrated) {
+      console.log('[Sidebar] Waiting for auth store to hydrate...');
+      setIsLoading(true);
+      // Set a fallback timeout for hydration
+      const hydrationTimeout = setTimeout(() => {
+        console.error('[Sidebar] Hydration timeout - forcing load');
+        setIsLoading(false);
+        onNavigationLoaded?.();
+      }, 3000);
+      return () => clearTimeout(hydrationTimeout);
+    }
+
+    if (!isAuthenticated) {
+      console.log('[Sidebar] User not authenticated, skipping navigation load');
+      setIsLoading(false);
+      setModuleNavItems([]);
+      onNavigationLoaded?.();
+      return;
+    }
+
+    console.log('[Sidebar] Loading navigation...');
+    console.log('[Sidebar] Has token in store:', !!token);
+    setIsLoading(true);
+
+    // Load module navigation items from API (filtered by user permissions)
+    // Try both Bearer token (from store) and cookies
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('[Sidebar] Adding Bearer token to request');
+    }
+
+    // Set a timeout to ensure we don't hang forever
+    const timeoutId = setTimeout(() => {
+      console.error('[Sidebar] Navigation loading timeout after 10 seconds');
+      setModuleNavItems([]);
+      setIsLoading(false);
+      onNavigationLoaded?.();
+    }, 10000);
+
+    fetch('/api/modules/navigation', {
+      headers,
+      credentials: 'include', // Also include cookies for authentication
+      cache: 'no-store', // Don't cache this request
+    })
+      .then((res) => {
+        clearTimeout(timeoutId);
+        console.log('[Sidebar] Response status:', res.status);
+        console.log('[Sidebar] Response headers:', Object.fromEntries(res.headers.entries()));
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
       .then((data) => {
         console.log('[Sidebar] Navigation API response:', data);
         if (data.success && data.navigation) {
@@ -56,22 +108,39 @@ export function Sidebar() {
           setModuleNavItems(items);
         } else {
           console.warn('[Sidebar] Navigation API returned no navigation items:', data);
+          setModuleNavItems([]);
         }
+        setIsLoading(false);
+        onNavigationLoaded?.();
       })
       .catch((err) => {
+        clearTimeout(timeoutId);
         console.error('[Sidebar] Failed to load module navigation:', err);
+        setModuleNavItems([]);
+        setIsLoading(false);
+        onNavigationLoaded?.();
       });
-  }, []);
+  }, [isAuthenticated, _hasHydrated, token, onNavigationLoaded]);
 
-  const allNavItems = [...staticNavItems, ...moduleNavItems];
+  // All navigation items (static + dynamic) come from API, filtered by permissions
+  // The API now returns both static items (Dashboard, Profile, etc.) and dynamic modules
+  const allNavItems = moduleNavItems;
 
   return (
-    <aside className="w-64 bg-gray-900 text-white min-h-screen p-6">
-      <div className="mb-8">
+    <aside className="fixed left-0 top-0 w-64 bg-gray-900 text-white h-screen flex flex-col">
+      <div className="p-6 flex-shrink-0">
         <h1 className="text-xl font-bold">RAD Framework</h1>
       </div>
-      <nav className="space-y-2">
-        {allNavItems.map((item) => {
+      <nav className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
+        {isLoading ? (
+          <div className="text-gray-400 text-sm py-4">Loading navigation...</div>
+        ) : allNavItems.length === 0 ? (
+          <div className="text-gray-400 text-sm py-4">
+            No navigation items available.
+            {!isAuthenticated && <div className="mt-2">Please log in.</div>}
+          </div>
+        ) : (
+          allNavItems.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
           return (
             <Link
@@ -88,7 +157,8 @@ export function Sidebar() {
               <span>{item.label}</span>
             </Link>
           );
-        })}
+          })
+        )}
       </nav>
     </aside>
   );

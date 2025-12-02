@@ -1,23 +1,29 @@
 import { db } from '@/core/lib/db';
-import { roles, users } from '@/core/lib/db/baseSchema';
-import { eq, and, or, like, isNull, desc, count } from 'drizzle-orm';
+import { roles, userRoles } from '@/core/lib/db/baseSchema';
+import { eq, and, or, like, isNull, desc, count, lte, gte, sql } from 'drizzle-orm';
 import type { Role, NewRole } from '@/core/lib/db/baseSchema';
 
 export interface CreateRoleInput {
   name: string;
   code: string;
   description?: string;
+  tenantId?: string;
+  parentRoleId?: string;
   isSystem?: boolean;
+  isDefault?: boolean;
   priority?: number;
-  status?: 'active' | 'inactive';
+  color?: string;
+  status?: 'active' | 'inactive' | 'deprecated';
 }
 
 export interface UpdateRoleInput {
   name?: string;
   code?: string;
   description?: string;
+  parentRoleId?: string;
   priority?: number;
-  status?: 'active' | 'inactive';
+  color?: string;
+  status?: 'active' | 'inactive' | 'deprecated';
 }
 
 /**
@@ -25,11 +31,12 @@ export interface UpdateRoleInput {
  */
 export async function getRoles(options?: {
   search?: string;
+  tenantId?: string;
   status?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ roles: Role[]; total: number }> {
-  const { search, status, limit = 100, offset = 0 } = options || {};
+  const { search, tenantId, status, limit = 100, offset = 0 } = options || {};
 
   // Build where conditions
   const conditions = [];
@@ -44,12 +51,17 @@ export async function getRoles(options?: {
     );
   }
   
+  if (tenantId !== undefined) {
+    if (tenantId === null) {
+      conditions.push(isNull(roles.tenantId));
+    } else {
+      conditions.push(eq(roles.tenantId, tenantId));
+    }
+  }
+  
   if (status) {
     conditions.push(eq(roles.status, status));
   }
-  
-  // Exclude soft-deleted roles
-  conditions.push(isNull(roles.deletedAt));
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -66,7 +78,7 @@ export async function getRoles(options?: {
     .select()
     .from(roles)
     .where(whereClause)
-    .orderBy(desc(roles.createdAt))
+    .orderBy(desc(roles.priority), desc(roles.createdAt))
     .limit(limit)
     .offset(offset);
 
@@ -83,7 +95,7 @@ export async function getRoleById(id: string): Promise<Role | null> {
   const result = await db
     .select()
     .from(roles)
-    .where(and(eq(roles.id, id), isNull(roles.deletedAt)))
+    .where(eq(roles.id, id))
     .limit(1);
   
   if (result.length === 0) {
@@ -98,14 +110,15 @@ export async function getRoleById(id: string): Promise<Role | null> {
  */
 export async function getRoleWithUserCount(id: string) {
   const role = await getRoleById(id);
+  
   if (!role) {
     return null;
   }
-  
+
   const userCount = await getRoleUserCount(id);
-  
+
   return {
-    ...role,
+    role,
     userCount,
   };
 }
@@ -120,10 +133,14 @@ export async function createRole(data: CreateRoleInput, createdBy: string): Prom
       name: data.name,
       code: data.code.toUpperCase(),
       description: data.description || null,
+      tenantId: data.tenantId || null,
+      parentRoleId: data.parentRoleId || null,
       isSystem: data.isSystem || false,
+      isDefault: data.isDefault || false,
       priority: data.priority || 0,
+      color: data.color || null,
       status: data.status || 'active',
-      createdBy,
+      metadata: {},
     })
     .returning();
   
@@ -143,13 +160,7 @@ export async function updateRole(
     return null;
   }
   
-  // Prevent updating system roles' code and isSystem flag
-  if (existing.isSystem && (data.code !== undefined || data.isSystem !== undefined)) {
-    throw new Error('Cannot modify system role code or system flag');
-  }
-  
   const updateData: Partial<NewRole> = {
-    updatedBy,
     updatedAt: new Date(),
   };
   
@@ -162,11 +173,19 @@ export async function updateRole(
   }
   
   if (data.description !== undefined) {
-    updateData.description = data.description || null;
+    updateData.description = data.description;
+  }
+  
+  if (data.parentRoleId !== undefined) {
+    updateData.parentRoleId = data.parentRoleId;
   }
   
   if (data.priority !== undefined) {
     updateData.priority = data.priority;
+  }
+  
+  if (data.color !== undefined) {
+    updateData.color = data.color;
   }
   
   if (data.status !== undefined) {
@@ -183,7 +202,7 @@ export async function updateRole(
 }
 
 /**
- * Delete a role (soft delete)
+ * Delete a role (only if not system role and no users assigned)
  */
 export async function deleteRole(id: string, deletedBy: string): Promise<boolean> {
   const existing = await getRoleById(id);
@@ -191,39 +210,85 @@ export async function deleteRole(id: string, deletedBy: string): Promise<boolean
     return false;
   }
   
-  // Prevent deleting system roles
+  // Prevent deletion of system roles
   if (existing.isSystem) {
     throw new Error('Cannot delete system roles');
   }
   
-  // Check if role has users assigned
+  // Check if role has users
   const userCount = await getRoleUserCount(id);
   if (userCount > 0) {
-    throw new Error(`Cannot delete role: ${userCount} user(s) are assigned to this role`);
+    throw new Error('Cannot delete role with assigned users');
   }
   
-  // Soft delete
+  // Delete role (hard delete since it has no users)
   await db
-    .update(roles)
-    .set({
-      deletedAt: new Date(),
-      updatedBy: deletedBy,
-      updatedAt: new Date(),
-    })
+    .delete(roles)
     .where(eq(roles.id, id));
   
   return true;
 }
 
 /**
- * Get count of users with a specific role
+ * Get count of users with a specific role (active assignments only)
  */
 export async function getRoleUserCount(roleId: string): Promise<number> {
+  const now = new Date();
+  
   const result = await db
     .select({ count: count() })
-    .from(users)
-    .where(and(eq(users.roleId, roleId), isNull(users.deletedAt)));
+    .from(userRoles)
+    .where(
+      and(
+        eq(userRoles.roleId, roleId),
+        eq(userRoles.isActive, true),
+        or(
+          isNull(userRoles.validFrom),
+          lte(userRoles.validFrom, now)
+        ),
+        or(
+          isNull(userRoles.validUntil),
+          gte(userRoles.validUntil, now)
+        )
+      )
+    );
   
   return result[0]?.count || 0;
 }
 
+/**
+ * Get system roles (global roles)
+ */
+export async function getSystemRoles(): Promise<Role[]> {
+  const result = await db
+    .select()
+    .from(roles)
+    .where(
+      and(
+        eq(roles.isSystem, true),
+        isNull(roles.tenantId),
+        eq(roles.status, 'active')
+      )
+    )
+    .orderBy(desc(roles.priority));
+
+  return result;
+}
+
+/**
+ * Get tenant-specific roles
+ */
+export async function getTenantRoles(tenantId: string): Promise<Role[]> {
+  const result = await db
+    .select()
+    .from(roles)
+    .where(
+      and(
+        eq(roles.tenantId, tenantId),
+        eq(roles.status, 'active')
+      )
+    )
+    .orderBy(desc(roles.priority));
+
+  return result;
+}

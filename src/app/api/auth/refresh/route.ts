@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRefreshToken, generateAccessToken, generateRefreshToken, revokeRefreshToken } from '@/core/lib/tokens';
+import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
 
 /**
  * POST /api/auth/refresh
@@ -32,9 +33,15 @@ export async function POST(request: NextRequest) {
     // Revoke old refresh token (token rotation)
     await revokeRefreshToken(refreshToken);
 
-    // Generate new access and refresh tokens
-    const { token: newAccessToken, expiresAt: accessExpiresAt } = await generateAccessToken(userId);
-    const { token: newRefreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(userId);
+    // Generate new access and refresh tokens (non-expiring if configured)
+    const { token: newAccessToken, expiresAt: accessExpiresAt } = await generateAccessToken(
+      userId,
+      USE_NON_EXPIRING_TOKENS
+    );
+    const { token: newRefreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(
+      userId,
+      USE_NON_EXPIRING_TOKENS
+    );
 
     // Create response
     const response = NextResponse.json(
@@ -48,12 +55,21 @@ export async function POST(request: NextRequest) {
     );
 
     // Set new tokens in HTTP-only cookies
+    // If non-expiring tokens are enabled, set cookie maxAge to a very long time (10 years)
+    const cookieMaxAge = USE_NON_EXPIRING_TOKENS 
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 15; // 15 minutes
+    
+    const refreshCookieMaxAge = USE_NON_EXPIRING_TOKENS
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 60 * 24 * 7; // 7 days
+    
     response.cookies.set('access-token', newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 15, // 15 minutes
+      maxAge: cookieMaxAge,
     });
 
     response.cookies.set('refresh-token', newRefreshToken, {
@@ -61,7 +77,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: refreshCookieMaxAge,
     });
 
     return response;

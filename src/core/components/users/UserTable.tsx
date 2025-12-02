@@ -159,7 +159,9 @@ export function UserTable({
               </TableRow>
             ) : (
               users.map((user) => {
-                const role = roles.find((r) => r.id === user.roleId);
+                // Get user's roles from the roles array (many-to-many relationship)
+                const userRoles = (user as any).roles || [];
+                const primaryRole = userRoles[0]; // Display first role
                 const initials = getInitials(user.fullName, user.email);
                 const dateAdded = user.createdAt
                   ? new Date(user.createdAt).toLocaleDateString('en-US', {
@@ -185,9 +187,20 @@ export function UserTable({
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-gray-700">
-                        {role?.name || 'No role'}
-                      </span>
+                      {userRoles.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm text-gray-700">
+                            {primaryRole.name}
+                          </span>
+                          {userRoles.length > 1 && (
+                            <span className="text-xs text-gray-500">
+                              +{userRoles.length - 1} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">No role</span>
+                      )}
                     </TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
                     <TableCell className="text-sm text-gray-500">{dateAdded}</TableCell>

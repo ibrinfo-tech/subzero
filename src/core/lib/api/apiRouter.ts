@@ -169,9 +169,9 @@ export async function routeApiRequest(
   }
 
   try {
-    // Handlers are Next.js route handlers that receive NextRequest directly
-    // They handle their own middleware, body parsing, etc.
-    const result = await handler(request);
+    // Handlers are Next.js route handlers that receive NextRequest and params
+    // Pass params as a plain object (not a Promise) to match Next.js 15 handler signature
+    const result = await handler(request, { params: routeParams });
 
     // Handlers should return NextResponse
     if (result instanceof NextResponse) {

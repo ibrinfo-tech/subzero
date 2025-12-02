@@ -51,7 +51,9 @@ export function UserForm({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Convert empty string to undefined for optional fields like roleId
+    const processedValue = value === '' ? undefined : value;
+    setFormData((prev) => ({ ...prev, [name]: processedValue }));
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -84,6 +86,7 @@ export function UserForm({
       return;
     }
 
+    console.log('[UserForm] Submitting form data:', formData);
     await onSubmit(formData);
   };
 

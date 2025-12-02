@@ -19,30 +19,35 @@ import { relations } from 'drizzle-orm';
 // Note: tenants and roles are referenced before definition, but PostgreSQL allows this
 // We'll define them in the correct order
 
-// Core identity table
+// Core identity table - aligned with core.sql
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  roleId: uuid('role_id'),
-  email: varchar('email', { length: 255 }).notNull().unique(),
+  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
+  email: varchar('email', { length: 255 }).notNull(),
   passwordHash: varchar('password_hash', { length: 255 }),
-  isEmailVerified: boolean('is_email_verified').default(false).notNull(),
   fullName: varchar('full_name', { length: 255 }),
   avatarUrl: text('avatar_url'),
-  status: varchar('status', { length: 20 }).default('active').notNull(),
-  roleAssignedAt: timestamp('role_assigned_at'),
-  roleAssignedBy: uuid('role_assigned_by'),
+  status: varchar('status', { length: 20 }).default('pending').notNull(), // active, inactive, suspended, pending
+  isEmailVerified: boolean('email_verified').default(false).notNull(),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false).notNull(),
+  twoFactorSecret: text('two_factor_secret'),
+  timezone: varchar('timezone', { length: 50 }).default('UTC'),
+  locale: varchar('locale', { length: 10 }).default('en'),
+  lastLoginAt: timestamp('last_login_at'),
+  lastLoginIp: varchar('last_login_ip', { length: 45 }),
+  failedLoginAttempts: integer('failed_login_attempts').default(0).notNull(),
+  lockedUntil: timestamp('locked_until'),
+  metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),
-  createdBy: uuid('created_by'),
-  updatedBy: uuid('updated_by'),
 }, (table) => ({
   emailIdx: index('idx_users_email').on(table.email),
   tenantIdx: index('idx_users_tenant').on(table.tenantId),
-  roleIdx: index('idx_users_role').on(table.roleId),
+  tenantEmailUnique: unique('users_tenant_email_unique').on(table.tenantId, table.email),
   deletedIdx: index('idx_users_deleted').on(table.deletedAt),
   statusIdx: index('idx_users_status').on(table.status),
+  lockedIdx: index('idx_users_locked').on(table.lockedUntil),
 }));
 
 // Supports email/password AND external login (Google, GitHub, Azure AD, etc.)
@@ -109,74 +114,93 @@ export const modules = pgTable('modules', {
   codeIdx: index('idx_modules_code').on(table.code),
 }));
 
-// Permission action types (CREATE, READ, UPDATE, DELETE, EXECUTE, etc.)
-export const permissionActions = pgTable('permission_actions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 50 }).notNull().unique(),
-  code: varchar('code', { length: 50 }).notNull().unique(),
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
-
-// Permission groups for organizing permissions hierarchically
+// Permission groups (reusable permission sets) - from core.sql
 export const permissionGroups = pgTable('permission_groups', {
   id: uuid('id').primaryKey().defaultRandom(),
-  parentId: uuid('parent_id'),
-  moduleId: uuid('module_id').references(() => modules.id, { onDelete: 'cascade' }),
-  name: varchar('name', { length: 255 }).notNull(),
-  code: varchar('code', { length: 100 }).notNull().unique(),
-  description: text('description'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  createdBy: uuid('created_by'),
-}, (table) => ({
-  moduleIdx: index('idx_permission_groups_module').on(table.moduleId),
-  parentIdx: index('idx_permission_groups_parent').on(table.parentId),
-}));
-
-// Define atomic permissions
-export const permissions = pgTable('permissions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  moduleId: uuid('module_id').notNull().references(() => modules.id, { onDelete: 'restrict' }),
-  groupId: uuid('group_id').references(() => permissionGroups.id, { onDelete: 'set null' }),
-  actionId: uuid('action_id').references(() => permissionActions.id, { onDelete: 'set null' }),
-  name: varchar('name', { length: 255 }).notNull(),
-  code: varchar('code', { length: 100 }).notNull().unique(),
-  description: text('description'),
-  resource: varchar('resource', { length: 100 }),
-  isActive: boolean('is_active').default(true).notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at'),
-  createdBy: uuid('created_by'),
-  updatedBy: uuid('updated_by'),
-}, (table) => ({
-  moduleIdx: index('idx_permissions_module').on(table.moduleId),
-  codeIdx: index('idx_permissions_code').on(table.code),
-  groupIdx: index('idx_permissions_group').on(table.groupId),
-  deletedIdx: index('idx_permissions_deleted').on(table.deletedAt),
-}));
-
-// Roles can be global or tenant-specific
-export const roles = pgTable('roles', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  name: varchar('name', { length: 255 }).notNull(),
-  code: varchar('code', { length: 100 }).notNull(),
+  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
   description: text('description'),
   isSystem: boolean('is_system').default(false).notNull(),
-  priority: integer('priority').default(0).notNull(),
-  status: varchar('status', { length: 20 }).default('active').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  tenantCodeUnique: unique('permission_groups_tenant_code_unique').on(table.tenantId, table.code),
+}));
+
+// Permission group items (many-to-many between groups and permissions)
+export const permissionGroupItems = pgTable('permission_group_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  groupId: uuid('group_id').notNull().references(() => permissionGroups.id, { onDelete: 'cascade' }),
+  permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
+}, (table) => ({
+  groupIdx: index('idx_pg_items_group').on(table.groupId),
+  groupPermissionUnique: unique('permission_group_items_unique').on(table.groupId, table.permissionId),
+}));
+
+// Define atomic permissions - aligned with core.sql (module:action format)
+export const permissions = pgTable('permissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: varchar('code', { length: 100 }).notNull().unique(), // Format: module:action (e.g., users:create)
+  name: varchar('name', { length: 255 }).notNull(),
+  module: varchar('module', { length: 50 }).notNull(),
+  resource: varchar('resource', { length: 50 }),
+  action: varchar('action', { length: 50 }).notNull(), // create, read, update, delete, execute, manage, approve
+  description: text('description'),
+  isDangerous: boolean('is_dangerous').default(false).notNull(), // Requires extra confirmation
+  requiresMfa: boolean('requires_mfa').default(false).notNull(), // MFA required to use
+  isActive: boolean('is_active').default(true).notNull(),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  codeIdx: index('idx_permissions_code').on(table.code),
+  moduleIdx: index('idx_permissions_module').on(table.module),
+  dangerousIdx: index('idx_permissions_dangerous').on(table.isDangerous),
+}));
+
+// Roles can be global (system) or tenant-specific - aligned with core.sql
+export const roles = pgTable('roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
+  parentRoleId: uuid('parent_role_id'), // For hierarchical roles
+  name: varchar('name', { length: 100 }).notNull(),
+  code: varchar('code', { length: 50 }).notNull(),
+  description: text('description'),
+  isSystem: boolean('is_system').default(false).notNull(),
+  isDefault: boolean('is_default').default(false).notNull(),
+  priority: integer('priority').default(0).notNull(), // 0-100
+  color: varchar('color', { length: 7 }), // Hex color
+  maxUsers: integer('max_users'),
+  status: varchar('status', { length: 20 }).default('active').notNull(), // active, inactive, deprecated
+  metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at'),
-  createdBy: uuid('created_by'),
-  updatedBy: uuid('updated_by'),
 }, (table) => ({
   tenantIdx: index('idx_roles_tenant').on(table.tenantId),
   codeIdx: index('idx_roles_code').on(table.code),
   statusIdx: index('idx_roles_status').on(table.status),
-  deletedIdx: index('idx_roles_deleted').on(table.deletedAt),
+  parentIdx: index('idx_roles_parent').on(table.parentRoleId),
+  priorityIdx: index('idx_roles_priority').on(table.priority),
   tenantCodeUnique: unique('roles_tenant_code_unique').on(table.tenantId, table.code),
+}));
+
+// User-Role assignments (many-to-many with temporal access) - from core.sql
+export const userRoles = pgTable('user_roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  validFrom: timestamp('valid_from').defaultNow(),
+  validUntil: timestamp('valid_until'),
+  isActive: boolean('is_active').default(true).notNull(),
+  metadata: jsonb('metadata').default({}),
+  assignedAt: timestamp('assigned_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('idx_user_roles_user').on(table.userId),
+  roleIdx: index('idx_user_roles_role').on(table.roleId),
+  tenantIdx: index('idx_user_roles_tenant').on(table.tenantId),
+  temporalIdx: index('idx_user_roles_temporal').on(table.validFrom, table.validUntil),
+  userRoleTenantUnique: unique('user_roles_user_role_tenant_unique').on(table.userId, table.roleId, table.tenantId),
 }));
 
 // Mapping between roles and permissions with conditions
@@ -185,50 +209,74 @@ export const rolePermissions = pgTable('role_permissions', {
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
   permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
   conditions: jsonb('conditions'),
-  grantedBy: uuid('granted_by'),
   grantedAt: timestamp('granted_at').defaultNow().notNull(),
 }, (table) => ({
   roleIdx: index('idx_role_permissions_role').on(table.roleId),
   permissionIdx: index('idx_role_permissions_permission').on(table.permissionId),
+  conditionsIdx: index('idx_role_permissions_conditions').on(table.conditions),
   rolePermissionUnique: unique('role_permissions_role_permission_unique').on(table.roleId, table.permissionId),
 }));
 
-// Resource-level permissions (for specific resources)
+// Resource-level permissions (object-level access control) - from core.sql
 export const resourcePermissions = pgTable('resource_permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  permissionId: uuid('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
-  resourceType: varchar('resource_type', { length: 100 }).notNull(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  resourceType: varchar('resource_type', { length: 50 }).notNull(),
   resourceId: uuid('resource_id').notNull(),
-  grantedBy: uuid('granted_by'),
-  grantedAt: timestamp('granted_at').defaultNow().notNull(),
-  expiresAt: timestamp('expires_at'),
+  permissionCode: varchar('permission_code', { length: 100 }).notNull(),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  validFrom: timestamp('valid_from').defaultNow(),
+  validUntil: timestamp('valid_until'),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (table) => ({
   userIdx: index('idx_resource_permissions_user').on(table.userId),
-  permissionIdx: index('idx_resource_permissions_permission').on(table.permissionId),
   resourceIdx: index('idx_resource_permissions_resource').on(table.resourceType, table.resourceId),
-  userPermissionResourceUnique: unique('resource_permissions_user_permission_resource_unique').on(table.userId, table.permissionId, table.resourceType, table.resourceId),
+  temporalIdx: index('idx_resource_permissions_temporal').on(table.validFrom, table.validUntil),
+  userResourcePermUnique: unique('resource_permissions_unique').on(table.userId, table.resourceType, table.resourceId, table.permissionCode),
+}));
+
+// Sessions (track active user sessions) - from core.sql
+export const sessions = pgTable('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  lastActivity: timestamp('last_activity').defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('idx_sessions_user').on(table.userId),
+  expiresIdx: index('idx_sessions_expires').on(table.expiresAt),
+  activityIdx: index('idx_sessions_activity').on(table.lastActivity),
 }));
 
 // ============================================================================
 // 3. MULTI-TENANT SUPPORT
 // ============================================================================
 
-// Tenants (organizations / companies)
+// Tenants (organizations / companies) - aligned with core.sql
 export const tenants = pgTable('tenants', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 255 }).notNull(),
-  subdomain: varchar('subdomain', { length: 100 }).unique(),
-  status: varchar('status', { length: 20 }).default('active').notNull(),
-  settings: jsonb('settings'),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  settings: jsonb('settings').default({}),
+  status: varchar('status', { length: 20 }).default('active').notNull(), // active, suspended, archived, trial
+  plan: varchar('plan', { length: 50 }).default('free').notNull(), // free, starter, pro, enterprise
+  maxUsers: integer('max_users').default(10),
+  trialEndsAt: timestamp('trial_ends_at'),
+  metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),
-  createdBy: uuid('created_by'),
-  updatedBy: uuid('updated_by'),
 }, (table) => ({
-  subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
+  slugIdx: index('idx_tenants_slug').on(table.slug),
   statusIdx: index('idx_tenants_status').on(table.status),
+  planIdx: index('idx_tenants_plan').on(table.plan),
 }));
 
 // Track which user belongs to which tenant
@@ -276,54 +324,41 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     fields: [users.tenantId],
     references: [tenants.id],
   }),
-  role: one(roles, {
-    fields: [users.roleId],
-    references: [roles.id],
-  }),
   authProviders: many(authProviders),
   refreshTokens: many(refreshTokens),
   accessTokens: many(accessTokens),
   tenantUsers: many(tenantUsers),
+  userRoles: many(userRoles),
   resourcePermissions: many(resourcePermissions),
+  sessions: many(sessions),
 }));
 
 export const modulesRelations = relations(modules, ({ many }) => ({
-  permissions: many(permissions),
-  permissionGroups: many(permissionGroups),
-}));
-
-export const permissionActionsRelations = relations(permissionActions, ({ many }) => ({
-  permissions: many(permissions),
+  // Modules are now just organizational units, not directly linked to permissions
 }));
 
 export const permissionGroupsRelations = relations(permissionGroups, ({ one, many }) => ({
-  parent: one(permissionGroups, {
-    fields: [permissionGroups.parentId],
-    references: [permissionGroups.id],
+  tenant: one(tenants, {
+    fields: [permissionGroups.tenantId],
+    references: [tenants.id],
   }),
-  module: one(modules, {
-    fields: [permissionGroups.moduleId],
-    references: [modules.id],
-  }),
-  permissions: many(permissions),
-  children: many(permissionGroups),
+  items: many(permissionGroupItems),
 }));
 
-export const permissionsRelations = relations(permissions, ({ one, many }) => ({
-  module: one(modules, {
-    fields: [permissions.moduleId],
-    references: [modules.id],
-  }),
+export const permissionGroupItemsRelations = relations(permissionGroupItems, ({ one }) => ({
   group: one(permissionGroups, {
-    fields: [permissions.groupId],
+    fields: [permissionGroupItems.groupId],
     references: [permissionGroups.id],
   }),
-  action: one(permissionActions, {
-    fields: [permissions.actionId],
-    references: [permissionActions.id],
+  permission: one(permissions, {
+    fields: [permissionGroupItems.permissionId],
+    references: [permissions.id],
   }),
+}));
+
+export const permissionsRelations = relations(permissions, ({ many }) => ({
   rolePermissions: many(rolePermissions),
-  resourcePermissions: many(resourcePermissions),
+  groupItems: many(permissionGroupItems),
 }));
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
@@ -331,9 +366,29 @@ export const rolesRelations = relations(roles, ({ one, many }) => ({
     fields: [roles.tenantId],
     references: [tenants.id],
   }),
+  parentRole: one(roles, {
+    fields: [roles.parentRoleId],
+    references: [roles.id],
+  }),
   rolePermissions: many(rolePermissions),
-  users: many(users),
+  userRoles: many(userRoles),
   tenantUsers: many(tenantUsers),
+  childRoles: many(roles),
+}));
+
+export const userRolesRelations = relations(userRoles, ({ one }) => ({
+  user: one(users, {
+    fields: [userRoles.userId],
+    references: [users.id],
+  }),
+  role: one(roles, {
+    fields: [userRoles.roleId],
+    references: [roles.id],
+  }),
+  tenant: one(tenants, {
+    fields: [userRoles.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
@@ -347,10 +402,24 @@ export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => 
   }),
 }));
 
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [sessions.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
   roles: many(roles),
   tenantUsers: many(tenantUsers),
+  userRoles: many(userRoles),
+  resourcePermissions: many(resourcePermissions),
+  sessions: many(sessions),
 }));
 
 export const tenantUsersRelations = relations(tenantUsers, ({ one }) => ({
@@ -382,18 +451,22 @@ export type AccessToken = typeof accessTokens.$inferSelect;
 export type NewAccessToken = typeof accessTokens.$inferInsert;
 export type Module = typeof modules.$inferSelect;
 export type NewModule = typeof modules.$inferInsert;
-export type PermissionAction = typeof permissionActions.$inferSelect;
-export type NewPermissionAction = typeof permissionActions.$inferInsert;
 export type PermissionGroup = typeof permissionGroups.$inferSelect;
 export type NewPermissionGroup = typeof permissionGroups.$inferInsert;
+export type PermissionGroupItem = typeof permissionGroupItems.$inferSelect;
+export type NewPermissionGroupItem = typeof permissionGroupItems.$inferInsert;
 export type Permission = typeof permissions.$inferSelect;
 export type NewPermission = typeof permissions.$inferInsert;
 export type Role = typeof roles.$inferSelect;
 export type NewRole = typeof roles.$inferInsert;
+export type UserRole = typeof userRoles.$inferSelect;
+export type NewUserRole = typeof userRoles.$inferInsert;
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type NewRolePermission = typeof rolePermissions.$inferInsert;
 export type ResourcePermission = typeof resourcePermissions.$inferSelect;
 export type NewResourcePermission = typeof resourcePermissions.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
 export type Tenant = typeof tenants.$inferSelect;
 export type NewTenant = typeof tenants.$inferInsert;
 export type TenantUser = typeof tenantUsers.$inferSelect;

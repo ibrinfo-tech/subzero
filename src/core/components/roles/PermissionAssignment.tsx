@@ -1,225 +1,165 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/core/store/authStore';
-import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
 import { Button } from '@/core/components/ui/button';
-import { Input } from '@/core/components/ui/input';
-import { Select } from '@/core/components/ui/select';
-import { ArrowLeft, Save } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import { ArrowLeft, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
+import { toast } from 'sonner';
 
 interface Permission {
   id: string;
-  name: string;
   code: string;
+  name: string;
+  action: string;
+  resource: string | null;
+  isDangerous: boolean;
+  requiresMfa: boolean;
+  description: string | null;
+  granted: boolean;
 }
 
-interface Field {
-  id: string;
-  name: string;
-  code: string;
-  label: string;
-}
-
-interface RoleModulePermissions {
+interface ModulePermissions {
   moduleId: string;
   moduleName: string;
   moduleCode: string;
-  hasAccess: boolean;
-  dataAccess: 'none' | 'own' | 'team' | 'all';
-  permissions: Array<{
-    permissionId: string;
-    permissionName: string;
-    permissionCode: string;
-    granted: boolean;
-  }>;
-  fields: Array<{
-    fieldId: string;
-    fieldName: string;
-    fieldCode: string;
-    fieldLabel: string;
-    isVisible: boolean;
-    isEditable: boolean;
-  }>;
+  icon: string | null;
+  permissions: Permission[];
 }
 
 interface PermissionAssignmentProps {
   roleId: string;
   roleName: string;
-  moduleId: string;
-  moduleName: string;
   onBack: () => void;
 }
 
 export function PermissionAssignment({
   roleId,
   roleName,
-  moduleId,
-  moduleName,
   onBack,
 }: PermissionAssignmentProps) {
-  const router = useRouter();
   const { token } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [hasAccess, setHasAccess] = useState(false);
-  const [dataAccess, setDataAccess] = useState<'none' | 'own' | 'team' | 'all'>('none');
-  const [availablePermissions, setAvailablePermissions] = useState<Permission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modulePermissions, setModulePermissions] = useState<ModulePermissions[]>([]);
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
-  const [availableFields, setAvailableFields] = useState<Field[]>([]);
-  const [fieldPermissions, setFieldPermissions] = useState<Record<string, { visible: boolean; editable: boolean }>>({});
 
   useEffect(() => {
-    fetchPermissions();
-  }, [roleId, moduleId, token]);
+    loadRolePermissions();
+  }, [roleId, token]);
 
-  const fetchPermissions = async () => {
+  const loadRolePermissions = async () => {
     if (!token) return;
 
-    setIsLoading(true);
-    setError(null);
-
+    setLoading(true);
     try {
-      const response = await fetch(`/api/roles/${roleId}/permissions/${moduleId}`, {
+      const response = await fetch(`/api/roles/${roleId}/permissions`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch permissions');
+        throw new Error('Failed to load permissions');
       }
 
-      const rolePerms = data.data.roleModulePermissions;
-      const perms = data.data.availablePermissions || [];
-      const fields = data.data.availableFields || [];
+      const data = await response.json();
+      setModulePermissions(data.modulePermissions || []);
 
-      setAvailablePermissions(perms);
-      setAvailableFields(fields);
-
-      if (rolePerms) {
-        setHasAccess(rolePerms.hasAccess);
-        setDataAccess(rolePerms.dataAccess);
-        
-        // Set selected permissions
-        const grantedPerms = new Set(
-          rolePerms.permissions
-            .filter((p: any) => p.granted)
-            .map((p: any) => p.permissionId)
-        );
-        setSelectedPermissions(grantedPerms);
-
-        // Set field permissions
-        const fieldPerms: Record<string, { visible: boolean; editable: boolean }> = {};
-        rolePerms.fields.forEach((f: any) => {
-          fieldPerms[f.fieldId] = {
-            visible: f.isVisible,
-            editable: f.isEditable,
-          };
+      // Set initially granted permissions
+      const granted = new Set<string>();
+      data.modulePermissions?.forEach((module: ModulePermissions) => {
+        module.permissions.forEach((perm: Permission) => {
+          if (perm.granted) {
+            granted.add(perm.id);
+          }
         });
-        setFieldPermissions(fieldPerms);
-      } else {
-        // Initialize field permissions
-        const fieldPerms: Record<string, { visible: boolean; editable: boolean }> = {};
-        fields.forEach((f: Field) => {
-          fieldPerms[f.id] = { visible: false, editable: false };
-        });
-        setFieldPermissions(fieldPerms);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load permissions');
+      });
+      setSelectedPermissions(granted);
+
+      // Expand modules that have granted permissions
+      const expanded = new Set<string>();
+      data.modulePermissions?.forEach((module: ModulePermissions) => {
+        if (module.permissions.some((p: Permission) => p.granted)) {
+          expanded.add(module.moduleId);
+        }
+      });
+      setExpandedModules(expanded);
+    } catch (error) {
+      console.error('Failed to load role permissions:', error);
+      toast.error('Failed to load permissions');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
+  };
+
+  const toggleModule = (moduleId: string) => {
+    const newExpanded = new Set(expandedModules);
+    if (newExpanded.has(moduleId)) {
+      newExpanded.delete(moduleId);
+    } else {
+      newExpanded.add(moduleId);
+    }
+    setExpandedModules(newExpanded);
+  };
+
+  const togglePermission = (permissionId: string) => {
+    const newSelected = new Set(selectedPermissions);
+    if (newSelected.has(permissionId)) {
+      newSelected.delete(permissionId);
+    } else {
+      newSelected.add(permissionId);
+    }
+    setSelectedPermissions(newSelected);
+  };
+
+  const toggleAllModulePermissions = (moduleId: string, permissions: Permission[]) => {
+    const newSelected = new Set(selectedPermissions);
+    const allSelected = permissions.every(p => newSelected.has(p.id));
+
+    if (allSelected) {
+      // Deselect all
+      permissions.forEach(p => newSelected.delete(p.id));
+    } else {
+      // Select all
+      permissions.forEach(p => newSelected.add(p.id));
+    }
+    setSelectedPermissions(newSelected);
   };
 
   const handleSave = async () => {
     if (!token) return;
 
-    setIsSaving(true);
-    setError(null);
-
+    setSaving(true);
     try {
-      const permissions = availablePermissions.map((perm) => ({
-        permissionId: perm.id,
-        granted: selectedPermissions.has(perm.id),
-      }));
-
-      const fields = availableFields.map((field) => ({
-        fieldId: field.id,
-        isVisible: fieldPermissions[field.id]?.visible || false,
-        isEditable: fieldPermissions[field.id]?.editable || false,
-      }));
-
-      const response = await fetch(`/api/roles/${roleId}/permissions/${moduleId}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/roles/${roleId}/permissions`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          hasAccess,
-          dataAccess,
-          permissions,
-          fields,
+          permissionIds: Array.from(selectedPermissions),
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to save permissions');
+        throw new Error('Failed to update permissions');
       }
 
-      // Success - go back
+      toast.success('Permissions updated successfully');
       onBack();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save permissions');
+    } catch (error) {
+      console.error('Failed to update permissions:', error);
+      toast.error('Failed to update permissions');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const togglePermission = (permissionId: string) => {
-    const newSet = new Set(selectedPermissions);
-    if (newSet.has(permissionId)) {
-      newSet.delete(permissionId);
-    } else {
-      newSet.add(permissionId);
-    }
-    setSelectedPermissions(newSet);
-  };
-
-  const toggleFieldVisible = (fieldId: string) => {
-    setFieldPermissions((prev) => ({
-      ...prev,
-      [fieldId]: {
-        ...prev[fieldId],
-        visible: !prev[fieldId]?.visible,
-        editable: prev[fieldId]?.visible ? prev[fieldId]?.editable : false, // Can't edit if not visible
-      },
-    }));
-  };
-
-  const toggleFieldEditable = (fieldId: string) => {
-    if (!fieldPermissions[fieldId]?.visible) return; // Can't edit if not visible
-    
-    setFieldPermissions((prev) => ({
-      ...prev,
-      [fieldId]: {
-        ...prev[fieldId],
-        editable: !prev[fieldId]?.editable,
-      },
-    }));
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
         <LoadingSpinner />
@@ -232,203 +172,128 @@ export function PermissionAssignment({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Permission Assignment</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Role: {roleName} | Module: {moduleName}
+            <h2 className="text-2xl font-bold text-gray-900">Permission Assignment</h2>
+            <p className="text-sm text-gray-500">
+              Role: <span className="font-medium">{roleName}</span>
             </p>
           </div>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
-          <Save className="h-4 w-4 mr-2" />
-          {isSaving ? 'Saving...' : 'Save Changes'}
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? 'Saving...' : 'Update Changes'}
         </Button>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800">{error}</p>
-        </div>
-      )}
-
       {/* Module Permissions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Module Permissions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="hasAccess"
-              checked={hasAccess}
-              onChange={(e) => setHasAccess(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="hasAccess" className="text-sm font-medium text-gray-700">
-              Enable Access
-            </label>
-          </div>
+      <div className="space-y-4">
+        {modulePermissions.map((module) => {
+          const isExpanded = expandedModules.has(module.moduleId);
+          const selectedCount = module.permissions.filter(p => selectedPermissions.has(p.id)).length;
+          const totalCount = module.permissions.length;
+          const allSelected = selectedCount === totalCount && totalCount > 0;
 
-          {hasAccess && (
-            <>
-              <div className="pt-2">
-                <p className="text-sm font-medium text-gray-700 mb-2">Granular Permissions:</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {availablePermissions.map((perm) => (
-                    <div key={perm.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id={`perm-${perm.id}`}
-                        checked={selectedPermissions.has(perm.id)}
-                        onChange={() => togglePermission(perm.id)}
-                        disabled={!hasAccess}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <label
-                        htmlFor={`perm-${perm.id}`}
-                        className={`text-sm ${
-                          selectedPermissions.has(perm.id)
-                            ? 'text-gray-900 font-medium'
-                            : 'text-gray-600'
-                        }`}
-                      >
-                        {perm.name}
-                      </label>
-                    </div>
-                  ))}
+          return (
+            <Card key={module.moduleId}>
+              <CardHeader
+                className="cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => toggleModule(module.moduleId)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                    )}
+                    <CardTitle className="text-lg font-semibold">
+                      {module.moduleName}
+                    </CardTitle>
+                    <span className="text-sm text-gray-500">
+                      ({selectedCount}/{totalCount} selected)
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleAllModulePermissions(module.moduleId, module.permissions);
+                    }}
+                  >
+                    {allSelected ? 'Deselect All' : 'Select All'}
+                  </Button>
                 </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </CardHeader>
 
-      {/* Data Permission */}
-      {hasAccess && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Data Permission</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="data-none"
-                name="dataAccess"
-                value="none"
-                checked={dataAccess === 'none'}
-                onChange={(e) => setDataAccess(e.target.value as any)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <label htmlFor="data-none" className="text-sm text-gray-700">
-                No Data Access
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="data-own"
-                name="dataAccess"
-                value="own"
-                checked={dataAccess === 'own'}
-                onChange={(e) => setDataAccess(e.target.value as any)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <label htmlFor="data-own" className="text-sm text-gray-700">
-                Own Data - Access own data within the module.
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="data-team"
-                name="dataAccess"
-                value="team"
-                checked={dataAccess === 'team'}
-                onChange={(e) => setDataAccess(e.target.value as any)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <label htmlFor="data-team" className="text-sm text-gray-700">
-                Team Data - Access team data within the module.
-              </label>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="radio"
-                id="data-all"
-                name="dataAccess"
-                value="all"
-                checked={dataAccess === 'all'}
-                onChange={(e) => setDataAccess(e.target.value as any)}
-                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-              />
-              <label htmlFor="data-all" className="text-sm text-gray-700">
-                All Data - Access all data within the module.
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Field Level Permission */}
-      {hasAccess && availableFields.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Field Level Permission</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Field Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Visibility
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Editability
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {availableFields.map((field) => (
-                    <tr key={field.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {field.label || field.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+              {isExpanded && (
+                <CardContent>
+                  <div className="space-y-2">
+                    {module.permissions.map((permission) => (
+                      <div
+                        key={permission.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                      >
                         <input
                           type="checkbox"
-                          checked={fieldPermissions[field.id]?.visible || false}
-                          onChange={() => toggleFieldVisible(field.id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          checked={selectedPermissions.has(permission.id)}
+                          onChange={() => togglePermission(permission.id)}
+                          className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={fieldPermissions[field.id]?.editable || false}
-                          onChange={() => toggleFieldEditable(field.id)}
-                          disabled={!fieldPermissions[field.id]?.visible}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">
+                              {permission.name}
+                            </span>
+                            <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              {permission.code}
+                            </code>
+                            {permission.isDangerous && (
+                              <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
+                                Dangerous
+                              </span>
+                            )}
+                            {permission.requiresMfa && (
+                              <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded">
+                                Requires MFA
+                              </span>
+                            )}
+                          </div>
+                          {permission.description && (
+                            <p className="text-sm text-gray-500 mt-1">
+                              {permission.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+
+      {modulePermissions.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-gray-500">No permissions available</p>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
-

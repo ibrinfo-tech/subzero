@@ -7,6 +7,7 @@ import { NoteForm } from '../components/NoteForm';
 import { useAuthStore } from '@/core/store/authStore';
 import { useNotesStore } from '../store/notesStore';
 import { type CreateNoteInput } from '../schemas/notesValidation';
+import { toast } from 'sonner';
 
 export default function NewNotePage() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function NewNotePage() {
 
   const handleCreate = async (data: CreateNoteInput) => {
     if (!token) {
-      alert('You must be logged in to create notes');
+      toast.error('You must be logged in to create notes');
       router.push('/login');
       return;
     }
@@ -52,9 +53,10 @@ export default function NewNotePage() {
       }
 
       addNote(result.data);
+      toast.success('Note created successfully');
       router.push('/notes');
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to create note');
+      toast.error(error instanceof Error ? error.message : 'Failed to create note');
     } finally {
       setIsSubmitting(false);
     }

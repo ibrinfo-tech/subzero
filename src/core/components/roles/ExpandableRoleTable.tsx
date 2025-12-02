@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useAuthStore } from '@/core/store/authStore';
 import {
   Table,
@@ -13,7 +13,7 @@ import {
 import { Button } from '@/core/components/ui/button';
 import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
-import { Edit, Trash2, Search, ShieldPlus, ChevronDown, ChevronRight, Settings } from 'lucide-react';
+import { Edit, Trash2, Search, ShieldPlus, ChevronRight, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
 import type { Role } from '@/core/lib/db/baseSchema';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
@@ -30,6 +30,7 @@ interface ModulePermission {
     permissionCode: string;
     granted: boolean;
   }>;
+  totalPermissions?: number;
 }
 
 interface ExpandableRoleTableProps {
@@ -40,7 +41,7 @@ interface ExpandableRoleTableProps {
   onCreate?: () => void;
   onSearch?: (search: string) => void;
   onStatusFilter?: (status: string) => void;
-  onConfigurePermissions?: (roleId: string, moduleId: string) => void;
+  onConfigurePermissions?: (role: Role) => void;
 }
 
 export function ExpandableRoleTable({
@@ -73,15 +74,19 @@ export function ExpandableRoleTable({
   const toggleRoleExpansion = async (roleId: string) => {
     const newExpanded = new Set(expandedRoles);
     if (newExpanded.has(roleId)) {
+      // Collapse immediately
       newExpanded.delete(roleId);
+      setExpandedRoles(newExpanded);
     } else {
+      // Expand immediately to show loading state
       newExpanded.add(roleId);
+      setExpandedRoles(newExpanded);
+      
       // Load permissions if not already loaded
       if (!rolePermissions[roleId] && token) {
         await loadRolePermissions(roleId);
       }
     }
-    setExpandedRoles(newExpanded);
   };
 
   const loadRolePermissions = async (roleId: string) => {
@@ -98,10 +103,31 @@ export function ExpandableRoleTable({
 
       const data = await response.json();
 
-      if (response.ok && data.data) {
+      if (response.ok && data.modulePermissions) {
+        // Transform the data to match the expected format - SHOW ALL MODULES
+        const modules = data.modulePermissions.map((module: any) => {
+          const grantedPermissions = module.permissions.filter((p: any) => p.granted);
+          
+          return {
+            moduleId: module.moduleId,
+            moduleName: module.moduleName,
+            moduleCode: module.moduleCode,
+            hasAccess: grantedPermissions.length > 0,
+            dataAccess: 'all' as const,
+            permissions: grantedPermissions.map((p: any) => ({
+              permissionId: p.id,
+              permissionName: p.name,
+              permissionCode: p.code,
+              granted: true,
+            })),
+            totalPermissions: module.permissions.length,
+          };
+        });
+        // Show ALL modules, even if they have no granted permissions
+
         setRolePermissions((prev) => ({
           ...prev,
-          [roleId]: data.data.modules || [],
+          [roleId]: modules,
         }));
       }
     } catch (err) {
@@ -234,20 +260,21 @@ export function ExpandableRoleTable({
                 const isLoadingPerms = loadingPermissions.has(role.id);
 
                 return (
-                  <>
-                    <TableRow key={role.id}>
+                  <Fragment key={role.id}>
+                    <TableRow>
                       <TableCell>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => toggleRoleExpansion(role.id)}
                           className="p-0 h-6 w-6"
+                          disabled={isLoadingPerms}
                         >
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
+                          <ChevronRight 
+                            className={`h-4 w-4 transition-transform duration-300 ${
+                              isExpanded ? 'rotate-90' : 'rotate-0'
+                            }`}
+                          />
                         </Button>
                       </TableCell>
                       <TableCell>
@@ -268,6 +295,15 @@ export function ExpandableRoleTable({
                       <TableCell>{getStatusBadge(role.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {onConfigurePermissions && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onConfigurePermissions(role)}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          )}
                           {onEdit && (
                             <Button
                               variant="outline"
@@ -291,60 +327,57 @@ export function ExpandableRoleTable({
                       </TableCell>
                     </TableRow>
                     {isExpanded && (
-                      <TableRow>
+                      <TableRow className="animate-in fade-in slide-in-from-top-2 duration-300">
                         <TableCell colSpan={7} className="bg-gray-50 p-4">
                           {isLoadingPerms ? (
-                            <div className="flex justify-center py-4">
-                              <LoadingSpinner />
+                            <div className="flex justify-center py-8 animate-in fade-in duration-200">
+                              <div className="flex flex-col items-center gap-3">
+                                <LoadingSpinner />
+                                <p className="text-sm text-gray-500">Loading permissions...</p>
+                              </div>
                             </div>
                           ) : modules.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-4">
+                            <p className="text-sm text-gray-500 text-center py-4 animate-in fade-in duration-200">
                               No module permissions configured
                             </p>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {modules.map((module) => (
-                                <Card key={module.moduleId} className="bg-white">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
+                              {modules.map((module, index) => (
+                                <Card 
+                                  key={module.moduleId} 
+                                  className="bg-white animate-in fade-in slide-in-from-bottom-2 duration-300"
+                                  style={{ animationDelay: `${index * 50}ms` }}
+                                >
                                   <CardHeader className="pb-3">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
                                       <CardTitle className="text-sm font-medium">
                                         {module.moduleName}
                                       </CardTitle>
-                                      {onConfigurePermissions && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            onConfigurePermissions(role.id, module.moduleId)
-                                          }
-                                          className="h-6 px-2 text-xs"
-                                        >
-                                          <Settings className="h-3 w-3 mr-1" />
-                                          Configure
-                                        </Button>
-                                      )}
+                                      <span className="text-xs text-gray-500 mt-1">
+                                        {module.permissions.length} of {module.totalPermissions || module.permissions.length} permissions
+                                      </span>
                                     </div>
                                   </CardHeader>
                                   <CardContent className="pt-0 space-y-2">
                                     {!module.hasAccess ? (
-                                      <p className="text-xs text-gray-500">
-                                        This module is not enabled
-                                      </p>
+                                      <div className="text-xs text-gray-500">
+                                        <p>No permissions granted</p>
+                                      </div>
                                     ) : (
                                       <>
-                                        {getDataAccessBadge(module.dataAccess)}
+                                        <div className="text-xs text-gray-600 mb-2">
+                                          {getDataAccessBadge(module.dataAccess)}
+                                        </div>
                                         {module.permissions.length > 0 && (
-                                          <div className="flex flex-wrap gap-1 mt-2">
-                                            {module.permissions
-                                              .filter((p) => p.granted)
-                                              .map((perm) => (
-                                                <span
-                                                  key={perm.permissionId}
-                                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                                                >
-                                                  {perm.permissionName}
-                                                </span>
-                                              ))}
+                                          <div className="flex flex-wrap gap-1">
+                                            {module.permissions.map((perm) => (
+                                              <span
+                                                key={perm.permissionId}
+                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                                              >
+                                                {perm.permissionName}
+                                              </span>
+                                            ))}
                                           </div>
                                         )}
                                       </>
@@ -357,7 +390,7 @@ export function ExpandableRoleTable({
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })
             )}

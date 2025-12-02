@@ -20,7 +20,7 @@ export async function DELETE(
     }
     
     const userId = authResult;
-    const noteId = params.id;
+    const { id: noteId } = params;
     
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

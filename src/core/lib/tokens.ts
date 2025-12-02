@@ -6,14 +6,22 @@ import { eq, and, gt } from 'drizzle-orm';
 // Token expiration times (in seconds)
 export const ACCESS_TOKEN_EXPIRY = 60 * 15; // 15 minutes
 export const REFRESH_TOKEN_EXPIRY = 60 * 60 * 24 * 7; // 7 days
+export const NON_EXPIRING_TOKEN_DATE = new Date('2099-12-31'); // Far future date for non-expiring tokens
 
 /**
  * Generate and store access token
+ * @param userId - User ID
+ * @param neverExpires - If true, token will not expire (useful for API keys, service accounts)
  */
-export async function generateAccessToken(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function generateAccessToken(
+  userId: string,
+  neverExpires: boolean = false
+): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken(32);
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + ACCESS_TOKEN_EXPIRY * 1000);
+  const expiresAt = neverExpires 
+    ? NON_EXPIRING_TOKEN_DATE 
+    : new Date(Date.now() + ACCESS_TOKEN_EXPIRY * 1000);
 
   await db.insert(accessTokens).values({
     userId,
@@ -27,11 +35,18 @@ export async function generateAccessToken(userId: string): Promise<{ token: stri
 
 /**
  * Generate and store refresh token
+ * @param userId - User ID
+ * @param neverExpires - If true, token will not expire (useful for API keys, service accounts)
  */
-export async function generateRefreshToken(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function generateRefreshToken(
+  userId: string,
+  neverExpires: boolean = false
+): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken(32);
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY * 1000);
+  const expiresAt = neverExpires 
+    ? NON_EXPIRING_TOKEN_DATE 
+    : new Date(Date.now() + REFRESH_TOKEN_EXPIRY * 1000);
 
   await db.insert(refreshTokens).values({
     userId,

@@ -39,14 +39,33 @@ export interface RolePermissionsData {
 
 /**
  * Get all permissions for a role, organized by module
+ * Super Admin automatically gets access to all modules and all permissions
  */
 export async function getRolePermissions(roleId: string): Promise<RolePermissionsData> {
+  // Check if this is Super Admin role
+  const role = await db
+    .select()
+    .from(roles)
+    .where(eq(roles.id, roleId))
+    .limit(1);
+
+  const isSuperAdmin = role.length > 0 && role[0].code === 'SUPER_ADMIN';
+
   // Get all modules
   const allModules = await db
     .select()
     .from(modules)
     .where(eq(modules.isActive, true))
     .orderBy(modules.sortOrder);
+
+  // Get all permissions (needed for Super Admin)
+  const allPermissions = await db
+    .select()
+    .from(permissions)
+    .where(and(
+      isNull(permissions.deletedAt),
+      eq(permissions.isActive, true)
+    ));
 
   // Get module access for this role
   const moduleAccess = await db
@@ -84,6 +103,35 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     const moduleFieldsList = allFields.filter((f) => f.moduleId === module.id);
     const fieldPerms = fieldPermissions.filter((fp) => fp.moduleId === module.id);
 
+    // For Super Admin: grant access to all modules and all permissions
+    if (isSuperAdmin) {
+      // Get all permissions for this module
+      const moduleAllPermissions = allPermissions.filter((p) => p.moduleId === module.id);
+      
+      return {
+        moduleId: module.id,
+        moduleName: module.name,
+        moduleCode: module.code,
+        hasAccess: true, // Super Admin has access to all modules
+        dataAccess: 'all' as DataAccessLevel, // Super Admin can access all data
+        permissions: moduleAllPermissions.map((p) => ({
+          permissionId: p.id,
+          permissionName: p.name,
+          permissionCode: p.code,
+          granted: true, // Super Admin has all permissions granted
+        })),
+        fields: moduleFieldsList.map((field) => ({
+          fieldId: field.id,
+          fieldName: field.name,
+          fieldCode: field.code,
+          fieldLabel: field.label || field.name,
+          isVisible: true, // Super Admin can see all fields
+          isEditable: true, // Super Admin can edit all fields
+        })),
+      };
+    }
+
+    // For other roles: use actual permissions from database
     return {
       moduleId: module.id,
       moduleName: module.name,

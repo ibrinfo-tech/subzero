@@ -5,6 +5,7 @@ import { loginSchema } from '@/core/lib/validations/auth';
 import { verifyPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
 import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
+import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -70,9 +71,23 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generate access and refresh tokens
-    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(user.id);
-    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(user.id);
+    // Generate access and refresh tokens (non-expiring if configured)
+    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(
+      user.id,
+      USE_NON_EXPIRING_TOKENS
+    );
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(
+      user.id,
+      USE_NON_EXPIRING_TOKENS
+    );
+    
+    console.log('[Login] Tokens generated:', {
+      userId: user.id,
+      email: user.email,
+      nonExpiring: USE_NON_EXPIRING_TOKENS,
+      accessExpiresAt,
+      refreshExpiresAt,
+    });
     
     // Create response with user data (without password) and tokens
     const response = NextResponse.json(
@@ -93,12 +108,21 @@ export async function POST(request: NextRequest) {
     );
     
     // Set tokens in HTTP-only cookies
+    // If non-expiring tokens are enabled, set cookie maxAge to a very long time (10 years)
+    const cookieMaxAge = USE_NON_EXPIRING_TOKENS 
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 15; // 15 minutes
+    
+    const refreshCookieMaxAge = USE_NON_EXPIRING_TOKENS
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 60 * 24 * 7; // 7 days
+    
     response.cookies.set('access-token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 15, // 15 minutes
+      maxAge: cookieMaxAge,
     });
     
     response.cookies.set('refresh-token', refreshToken, {
@@ -106,7 +130,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: refreshCookieMaxAge,
     });
     
     return response;

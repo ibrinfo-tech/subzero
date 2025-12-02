@@ -5,15 +5,18 @@ import { useAuthStore } from '@/core/store/authStore';
 import { UserTable } from './UserTable';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { EmptyState } from '@/core/components/common/EmptyState';
+import { ConfirmDialog } from '@/core/components/common/ConfirmDialog';
 import type { User } from '@/core/lib/db/baseSchema';
+import { toast } from 'sonner';
 
 interface UserListProps {
   onCreateClick?: () => void;
   onEditClick?: (user: User) => void;
+  onDeleteClick?: (user: User) => void;
   refreshTrigger?: number; // When this changes, refetch users
 }
 
-export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserListProps) {
+export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTrigger }: UserListProps) {
   const { token } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Array<{ id: string; name: string; code: string }>>([]);
@@ -22,6 +25,9 @@ export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserLis
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchUsers = async () => {
     if (!token) return;
@@ -49,7 +55,9 @@ export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserLis
 
       setUsers(data.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load users';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -80,13 +88,20 @@ export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserLis
     fetchRoles();
   }, [token, searchTerm, roleFilter, statusFilter, refreshTrigger]);
 
-  const handleDelete = async (user: User) => {
-    if (!token || !confirm(`Are you sure you want to delete ${user.email}?`)) {
-      return;
-    }
+  const handleDelete = (user: User) => {
+    setUserToDelete(user);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!token || !userToDelete) return;
+
+    setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/users/${user.id}`, {
+      console.log('[UserList] Deleting user:', userToDelete.id);
+      
+      const response = await fetch(`/api/users/${userToDelete.id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -94,15 +109,23 @@ export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserLis
       });
 
       const data = await response.json();
+      
+      console.log('[UserList] Delete response:', { status: response.status, data });
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to delete user');
       }
 
+      toast.success(`User ${userToDelete.email} deleted successfully`);
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
       // Refresh users list
       fetchUsers();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete user');
+      console.error('[UserList] Delete error:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete user');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -129,17 +152,31 @@ export function UserList({ onCreateClick, onEditClick, refreshTrigger }: UserLis
   }
 
   return (
-    <UserTable
-      users={users}
-      roles={roles}
-      isLoading={isLoading}
-      onEdit={onEditClick}
-      onDelete={handleDelete}
-      onCreate={onCreateClick}
-      onSearch={setSearchTerm}
-      onRoleFilter={setRoleFilter}
-      onStatusFilter={setStatusFilter}
-    />
+    <>
+      <UserTable
+        users={users}
+        roles={roles}
+        isLoading={isLoading}
+        onEdit={onEditClick}
+        onDelete={onDeleteClick ? handleDelete : undefined}
+        onCreate={onCreateClick}
+        onSearch={setSearchTerm}
+        onRoleFilter={setRoleFilter}
+        onStatusFilter={setStatusFilter}
+      />
+      
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete User"
+        description={`Are you sure you want to delete ${userToDelete?.email}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+      />
+    </>
   );
 }
 

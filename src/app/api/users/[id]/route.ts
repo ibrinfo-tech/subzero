@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
-import { requirePermission } from '@/core/middleware/permissions';
-import { getUserWithRole, updateUser, deleteUser } from '@/core/lib/services/usersService';
+import { getUserWithRoles, updateUser, deleteUser } from '@/core/lib/services/usersService';
+import { getUserTenantId, userHasPermission, userBelongsToTenant } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { users } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -10,6 +10,7 @@ import { eq, and, isNull } from 'drizzle-orm';
  * GET /api/users/:id
  * Get a single user by ID
  * Requires: users:read permission
+ * Tenant isolation: Non-super-admin users can only view users in their tenant
  */
 export async function GET(
   request: NextRequest,
@@ -24,18 +25,22 @@ export async function GET(
       return authResult; // Unauthorized response
     }
     
-    // Check permission
-    const permissionMiddleware = requirePermission('users:read');
-    const permissionResult = await permissionMiddleware(request);
+    const userId = authResult;
     
-    if (permissionResult instanceof NextResponse) {
-      return permissionResult; // Forbidden response
+    // Check permission
+    const hasPermission = await userHasPermission(userId, 'users:read');
+    
+    if (!hasPermission) {
+      return NextResponse.json(
+        { error: 'Forbidden - Insufficient permissions. users:read permission required.' },
+        { status: 403 }
+      );
     }
     
     const { id } = await params;
     
     // Get user
-    const result = await getUserWithRole(id);
+    const result = await getUserWithRoles(id);
     
     if (!result) {
       return NextResponse.json(
@@ -44,15 +49,25 @@ export async function GET(
       );
     }
     
-    // Remove password hash from response
-    const { passwordHash, ...userWithoutPassword } = result.user;
+    // Tenant isolation check
+    const userTenantId = await getUserTenantId(userId);
+    if (userTenantId !== null && result.user.tenantId !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Forbidden - You can only view users in your tenant' },
+        { status: 403 }
+      );
+    }
+    
+    // Remove password hash and sensitive data from response
+    const { passwordHash, twoFactorSecret, ...userWithoutPassword } = result.user;
     
     return NextResponse.json(
       {
         success: true,
         data: {
           ...userWithoutPassword,
-          role: result.role,
+          roles: result.roles,
+          tenant: result.tenant,
         },
       },
       { status: 200 }
@@ -70,6 +85,7 @@ export async function GET(
  * PATCH /api/users/:id
  * Update a user
  * Requires: users:update permission
+ * Tenant isolation: Non-super-admin users can only update users in their tenant
  */
 export async function PATCH(
   request: NextRequest,
@@ -87,22 +103,50 @@ export async function PATCH(
     const userId = authResult;
     
     // Check permission
-    const permissionMiddleware = requirePermission('users:update');
-    const permissionResult = await permissionMiddleware(request);
+    const hasPermission = await userHasPermission(userId, 'users:update');
     
-    if (permissionResult instanceof NextResponse) {
-      return permissionResult; // Forbidden response
+    if (!hasPermission) {
+      return NextResponse.json(
+        { error: 'Forbidden - Insufficient permissions. users:update permission required.' },
+        { status: 403 }
+      );
     }
     
     const { id } = await params;
     
+    // Get target user
+    const targetUser = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .limit(1);
+    
+    if (targetUser.length === 0) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Tenant isolation check
+    const userTenantId = await getUserTenantId(userId);
+    if (userTenantId !== null && targetUser[0].tenantId !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Forbidden - You can only update users in your tenant' },
+        { status: 403 }
+      );
+    }
+    
     // Parse and validate request body
     const body = await request.json();
+    console.log('[User Update] Request body:', body);
+    
     const { validateRequest } = await import('@/core/middleware/validation');
     const { updateUserSchema } = await import('@/core/lib/validations/users');
     const validation = validateRequest(updateUserSchema, body);
     
     if (!validation.success) {
+      console.log('[User Update] Validation failed:', validation.error.errors);
       return NextResponse.json(
         {
           error: 'Validation failed',
@@ -113,6 +157,7 @@ export async function PATCH(
     }
     
     const data = validation.data;
+    console.log('[User Update] Validated data:', data);
     
     // Check if email is being changed and if it's already taken
     if (data.email) {
@@ -141,7 +186,7 @@ export async function PATCH(
     }
     
     // Remove password hash from response
-    const { passwordHash, ...userWithoutPassword } = user;
+    const { passwordHash, twoFactorSecret, ...userWithoutPassword } = user;
     
     return NextResponse.json(
       {
@@ -163,6 +208,7 @@ export async function PATCH(
  * DELETE /api/users/:id
  * Delete a user (soft delete)
  * Requires: users:delete permission
+ * Tenant isolation: Non-super-admin users can only delete users in their tenant
  */
 export async function DELETE(
   request: NextRequest,
@@ -180,14 +226,20 @@ export async function DELETE(
     const userId = authResult;
     
     // Check permission
-    const permissionMiddleware = requirePermission('users:delete');
-    const permissionResult = await permissionMiddleware(request);
+    const hasPermission = await userHasPermission(userId, 'users:delete');
     
-    if (permissionResult instanceof NextResponse) {
-      return permissionResult; // Forbidden response
+    console.log('[User Delete] Permission check:', { userId, hasPermission });
+    
+    if (!hasPermission) {
+      return NextResponse.json(
+        { error: 'Forbidden - Insufficient permissions. users:delete permission required.' },
+        { status: 403 }
+      );
     }
     
     const { id } = await params;
+    
+    console.log('[User Delete] Attempting to delete user:', id, 'by:', userId);
     
     // Prevent self-deletion
     if (id === userId) {
@@ -197,8 +249,37 @@ export async function DELETE(
       );
     }
     
+    // Get target user
+    const targetUser = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), isNull(users.deletedAt)))
+      .limit(1);
+    
+    console.log('[User Delete] Target user found:', targetUser.length > 0);
+    
+    if (targetUser.length === 0) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Tenant isolation check
+    const userTenantId = await getUserTenantId(userId);
+    console.log('[User Delete] Tenant check:', { userTenantId, targetTenantId: targetUser[0].tenantId });
+    
+    if (userTenantId !== null && targetUser[0].tenantId !== userTenantId) {
+      return NextResponse.json(
+        { error: 'Forbidden - You can only delete users in your tenant' },
+        { status: 403 }
+      );
+    }
+    
     // Delete user
     const success = await deleteUser(id, userId);
+    
+    console.log('[User Delete] Delete result:', success);
     
     if (!success) {
       return NextResponse.json(
@@ -215,11 +296,10 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
-    console.error('Delete user error:', error);
+    console.error('[User Delete] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
-

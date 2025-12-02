@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
-import { users, authProviders } from '@/core/lib/db/baseSchema';
+import { users, authProviders, tenants } from '@/core/lib/db/baseSchema';
 import { registerSchema } from '@/core/lib/validations/auth';
 import { hashPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
 import { isRegistrationEnabled } from '@/core/config/authConfig';
 import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
+import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
 import { getDefaultUserRole } from '@/core/lib/roles';
 import { eq } from 'drizzle-orm';
 
@@ -56,10 +57,38 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(password);
     
-    // Get default "User" role for new registrations
-    const defaultRoleId = await getDefaultUserRole();
+    // Get or create default tenant for self-registered users
+    let defaultTenant = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.slug, 'default'))
+      .limit(1);
     
-    if (!defaultRoleId) {
+    let tenantId: string;
+    
+    if (defaultTenant.length === 0) {
+      // Create default tenant if it doesn't exist
+      console.log('[Register] Creating default tenant for self-registered users');
+      const newTenant = await db
+        .insert(tenants)
+        .values({
+          name: 'Default Organization',
+          slug: 'default',
+          status: 'active',
+          plan: 'free',
+          maxUsers: 100,
+          metadata: {},
+        })
+        .returning();
+      tenantId = newTenant[0].id;
+    } else {
+      tenantId = defaultTenant[0].id;
+    }
+    
+    // Get default "User" role for new registrations
+    const defaultRole = await getDefaultUserRole(tenantId);
+    
+    if (!defaultRole) {
       console.error('Default "USER" role not found. Please run seed script.');
       return NextResponse.json(
         { error: 'System configuration error. Please contact administrator.' },
@@ -67,7 +96,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create new user with default "User" role
+    // Create new user
     const newUser = await db
       .insert(users)
       .values({
@@ -75,9 +104,13 @@ export async function POST(request: NextRequest) {
         passwordHash: hashedPassword,
         fullName: name || null,
         isEmailVerified: false,
-        roleId: defaultRoleId,
-        roleAssignedAt: new Date(),
         status: 'active',
+        tenantId: tenantId,
+        twoFactorEnabled: false,
+        failedLoginAttempts: 0,
+        timezone: 'UTC',
+        locale: 'en',
+        metadata: {},
       })
       .returning();
     
@@ -89,9 +122,26 @@ export async function POST(request: NextRequest) {
       provider: 'password',
     });
     
-    // Generate access and refresh tokens
-    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(user.id);
-    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(user.id);
+    // Assign default role to user
+    const { userRoles } = await import('@/core/lib/db/baseSchema');
+    await db.insert(userRoles).values({
+      userId: user.id,
+      roleId: defaultRole.id,
+      tenantId: tenantId,
+      grantedBy: user.id, // Self-assigned
+      isActive: true,
+      metadata: {},
+    });
+    
+    // Generate access and refresh tokens (non-expiring if configured)
+    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(
+      user.id,
+      USE_NON_EXPIRING_TOKENS
+    );
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(
+      user.id,
+      USE_NON_EXPIRING_TOKENS
+    );
     
     // Create response with user data (without password) and tokens
     const response = NextResponse.json(
@@ -112,12 +162,21 @@ export async function POST(request: NextRequest) {
     );
     
     // Set tokens in HTTP-only cookies
+    // If non-expiring tokens are enabled, set cookie maxAge to a very long time (10 years)
+    const cookieMaxAge = USE_NON_EXPIRING_TOKENS 
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 15; // 15 minutes
+    
+    const refreshCookieMaxAge = USE_NON_EXPIRING_TOKENS
+      ? 60 * 60 * 24 * 365 * 10 // 10 years
+      : 60 * 60 * 24 * 7; // 7 days
+    
     response.cookies.set('access-token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 15, // 15 minutes
+      maxAge: cookieMaxAge,
     });
     
     response.cookies.set('refresh-token', refreshToken, {
@@ -125,7 +184,7 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
+      maxAge: refreshCookieMaxAge,
     });
     
     return response;
