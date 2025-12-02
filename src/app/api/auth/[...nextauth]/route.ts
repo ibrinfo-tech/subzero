@@ -1,2 +1,0 @@
-// NextAuth route handler
-

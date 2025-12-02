@@ -165,7 +165,7 @@ async function seed() {
       {
         name: 'User Management',
         code: 'USERS',
-        description: 'Manage users, roles, and permissions',
+        description: 'Manage users',
         icon: 'Users',
         sortOrder: 3,
         isActive: true,

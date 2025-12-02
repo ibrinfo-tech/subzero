@@ -51,7 +51,7 @@ export function DialogTrigger({
     return React.cloneElement(children, {
       onClick: (e: React.MouseEvent) => {
         onOpenChange(true);
-        children.props.onClick?.(e);
+        (children.props as any).onClick?.(e);
       },
     } as any);
   }

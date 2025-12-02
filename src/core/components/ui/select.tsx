@@ -10,7 +10,7 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, options = [], ...props }, ref) => {
     return (
-      <div className="w-full">
+      <div className={cn("w-full", className)}>
         {label && (
           <label className="block text-sm font-medium text-foreground mb-1.5 cursor-default">
             {label}
@@ -25,8 +25,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               'hover:border-primary/50 hover:shadow-sm',
               'disabled:cursor-not-allowed disabled:opacity-50',
-              error && 'border-destructive focus-visible:ring-destructive',
-              className
+              error && 'border-destructive focus-visible:ring-destructive'
             )}
             {...props}
           >

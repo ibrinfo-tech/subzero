@@ -17,7 +17,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Fallback: Force load after 5 seconds to prevent infinite loading
   useEffect(() => {
     const fallbackTimer = setTimeout(() => {
-      console.log('[DashboardLayout] Fallback timeout - forcing load');
       setNavigationLoaded(true);
     }, 5000);
 

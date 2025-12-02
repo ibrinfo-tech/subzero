@@ -115,12 +115,12 @@ export async function POST(request: NextRequest) {
     // Check if role code already exists
     const { db } = await import('@/core/lib/db');
     const { roles } = await import('@/core/lib/db/baseSchema');
-    const { eq, and, isNull } = await import('drizzle-orm');
+    const { eq } = await import('drizzle-orm');
     
     const existingRole = await db
       .select()
       .from(roles)
-      .where(and(eq(roles.code, data.code.toUpperCase()), isNull(roles.deletedAt)))
+      .where(eq(roles.code, data.code.toUpperCase()))
       .limit(1);
     
     if (existingRole.length > 0) {

@@ -207,7 +207,7 @@ export async function getUserWithRoles(id: string) {
  * Create a new user
  */
 export async function createUser(data: CreateUserInput, createdBy: string): Promise<User> {
-  console.log('[createUser] Creating user:', { email: data.email, tenantId: data.tenantId, roleId: data.roleId });
+  console.log('[createUser] Creating user:', { email: data.email, tenantId: data.tenantId });
   
   const hashedPassword = await hashPassword(data.password);
   

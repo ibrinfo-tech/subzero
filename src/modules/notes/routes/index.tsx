@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { NoteList } from '../components/NoteList';
 import { NoteForm } from '../components/NoteForm';
-import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import { FormDialog } from '@/core/components/common/FormDialog';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { usePermissionProps } from '@/core/components/common/PermissionGate';
 import { useAuthStore } from '@/core/store/authStore';
@@ -81,26 +81,11 @@ export default function NotesPage() {
     router.push(`/notes/${note.id}`);
   };
 
-  if (showForm) {
-    return (
-      <ProtectedPage permission="notes:read" title="Notes" description="Manage your notes">
-        <div className="container mx-auto py-6 px-4 max-w-2xl">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create New Note</CardTitle>
-            </CardHeader>
-            <CardContent>
-            <NoteForm
-              onSubmit={handleCreate}
-              onCancel={() => router.push('/notes')}
-              isLoading={isSubmitting}
-            />
-            </CardContent>
-          </Card>
-        </div>
-      </ProtectedPage>
-    );
-  }
+  const handleCloseDialog = (open: boolean) => {
+    if (!open && !isSubmitting) {
+      router.push('/notes');
+    }
+  };
 
   return (
     <ProtectedPage permission="notes:read" title="Notes" description="Manage your notes">
@@ -113,6 +98,21 @@ export default function NotesPage() {
           onCreateClick={canCreate ? () => router.push('/notes?action=create') : undefined}
           onEditClick={canUpdate ? handleEdit : undefined}
         />
+
+        {/* Form Dialog */}
+        <FormDialog
+          open={showForm}
+          onOpenChange={handleCloseDialog}
+          title="Create New Note"
+          description="Add a new note to your collection"
+          maxWidth="2xl"
+        >
+          <NoteForm
+            onSubmit={handleCreate}
+            onCancel={() => router.push('/notes')}
+            isLoading={isSubmitting}
+          />
+        </FormDialog>
       </div>
     </ProtectedPage>
   );

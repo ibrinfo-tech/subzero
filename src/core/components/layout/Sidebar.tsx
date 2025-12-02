@@ -45,7 +45,6 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
   useEffect(() => {
     // Wait for hydration to complete
     if (!_hasHydrated) {
-      console.log('[Sidebar] Waiting for auth store to hydrate...');
       setIsLoading(true);
       // Set a fallback timeout for hydration
       const hydrationTimeout = setTimeout(() => {
@@ -53,7 +52,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         setIsLoading(false);
         // Small delay to ensure state updates are applied before hiding skeleton
         setTimeout(() => {
-          onNavigationLoaded?.();
+        onNavigationLoaded?.();
         }, 50);
       }, 3000);
       return () => clearTimeout(hydrationTimeout);
@@ -65,13 +64,11 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       setModuleNavItems([]);
       // Small delay to ensure state updates are applied before hiding skeleton
       setTimeout(() => {
-        onNavigationLoaded?.();
+      onNavigationLoaded?.();
       }, 50);
       return;
     }
 
-    console.log('[Sidebar] Loading navigation...');
-    console.log('[Sidebar] Has token in store:', !!token);
     setIsLoading(true);
 
     // Load module navigation items from API (filtered by user permissions)
@@ -79,7 +76,6 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
     const headers: HeadersInit = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-      console.log('[Sidebar] Adding Bearer token to request');
     }
 
     // Set a timeout to ensure we don't hang forever
@@ -89,7 +85,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       setIsLoading(false);
       // Small delay to ensure state updates are applied before hiding skeleton
       setTimeout(() => {
-        onNavigationLoaded?.();
+      onNavigationLoaded?.();
       }, 50);
     }, 10000);
 
@@ -100,22 +96,18 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
     })
       .then((res) => {
         clearTimeout(timeoutId);
-        console.log('[Sidebar] Response status:', res.status);
-        console.log('[Sidebar] Response headers:', Object.fromEntries(res.headers.entries()));
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         return res.json();
       })
       .then((data) => {
-        console.log('[Sidebar] Navigation API response:', data);
         if (data.success && data.navigation) {
           const items: NavItem[] = data.navigation.map((nav: ModuleNavigation) => ({
             label: nav.label,
             href: nav.path,
             icon: getIconComponent(nav.icon),
           }));
-          console.log('[Sidebar] Setting navigation items:', items);
           setModuleNavItems(items);
         } else {
           console.warn('[Sidebar] Navigation API returned no navigation items:', data);
@@ -124,7 +116,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         setIsLoading(false);
         // Small delay to ensure state updates are applied before hiding skeleton
         setTimeout(() => {
-          onNavigationLoaded?.();
+        onNavigationLoaded?.();
         }, 50);
       })
       .catch((err) => {
@@ -134,7 +126,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         setIsLoading(false);
         // Small delay to ensure state updates are applied before hiding skeleton
         setTimeout(() => {
-          onNavigationLoaded?.();
+        onNavigationLoaded?.();
         }, 50);
       });
   }, [isAuthenticated, _hasHydrated, token, onNavigationLoaded]);

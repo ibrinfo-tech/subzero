@@ -5,9 +5,13 @@ import { eq, and, isNull } from 'drizzle-orm';
 /**
  * Get the default role for new registrations (is_default = true)
  */
-export async function getDefaultUserRole(tenantId?: string): Promise<string | null> {
+export async function getDefaultUserRole(tenantId?: string): Promise<{ id: string; name: string; code: string } | null> {
   const result = await db
-    .select({ id: roles.id })
+    .select({ 
+      id: roles.id,
+      name: roles.name,
+      code: roles.code,
+    })
     .from(roles)
     .where(
       and(
@@ -18,7 +22,7 @@ export async function getDefaultUserRole(tenantId?: string): Promise<string | nu
     )
     .limit(1);
 
-  return result.length > 0 ? result[0].id : null;
+  return result.length > 0 ? result[0] : null;
 }
 
 /**

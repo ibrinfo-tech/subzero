@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RoleList } from '@/core/components/roles/RoleList';
 import { EnhancedPermissionAssignment } from '@/core/components/roles/EnhancedPermissionAssignment';
 import { RoleForm } from '@/core/components/roles/RoleForm';
-import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
+import { FormDialog } from '@/core/components/common/FormDialog';
+import { Card, CardContent } from '@/core/components/ui/card';
 import { PageHeader } from '@/core/components/common/PageHeader';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { usePermissionProps } from '@/core/components/common/PermissionGate';
@@ -14,7 +15,7 @@ import { type CreateRoleInput, type UpdateRoleInput } from '@/core/lib/validatio
 import type { Role } from '@/core/lib/db/baseSchema';
 import { toast } from 'sonner';
 
-export default function RolesPage() {
+function RolesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token } = useAuthStore();
@@ -38,9 +39,10 @@ export default function RolesPage() {
       setShowForm(true);
       setEditingRole(null);
       setLoadingRole(false);
-    } else if (action === 'edit' && roleId && !editingRole) {
-      // Only fetch if we don't already have the role data
+    } else if (action === 'edit' && roleId) {
+      setShowForm(true);
       setLoadingRole(true);
+      // Fetch role details for editing
       fetch(`/api/roles/${roleId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -50,7 +52,6 @@ export default function RolesPage() {
         .then(data => {
           if (data.success && data.data) {
             setEditingRole(data.data);
-            setShowForm(true);
           } else {
             toast.error('Failed to load role details');
             router.push('/roles');
@@ -62,9 +63,10 @@ export default function RolesPage() {
           router.push('/roles');
         })
         .finally(() => setLoadingRole(false));
-    } else if (action === 'configure' && roleId && !selectedRole) {
-      // Only fetch if we don't already have the role data (e.g., direct URL access)
+    } else if (action === 'configure' && roleId) {
+      setShowPermissionAssignment(true);
       setLoadingRole(true);
+      // Fetch role details for permission configuration
       fetch(`/api/roles/${roleId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -74,7 +76,6 @@ export default function RolesPage() {
         .then(data => {
           if (data.success && data.data) {
             setSelectedRole({ id: roleId, name: data.data.name });
-            setShowPermissionAssignment(true);
           } else {
             toast.error('Failed to load role details');
             router.push('/roles');
@@ -142,25 +143,11 @@ export default function RolesPage() {
     router.push('/roles');
   };
 
-  if (showForm) {
-    return (
-      <div className="w-full max-w-2xl mx-auto">
-        <Card>
-          <CardHeader className="p-4 sm:p-6">
-            <CardTitle className="text-lg sm:text-xl">{editingRole ? 'Edit Role' : 'Create New Role'}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 sm:p-6">
-            <RoleForm
-              initialData={editingRole || undefined}
-              onSubmit={handleCreate}
-              onCancel={handleCancel}
-              isLoading={isSubmitting}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const handleCloseDialog = (open: boolean) => {
+    if (!open && !isSubmitting) {
+      router.push('/roles');
+    }
+  };
 
   const handleConfigurePermissions = (role: Role) => {
     // Set role data immediately and show permission assignment
@@ -214,7 +201,43 @@ export default function RolesPage() {
         refreshTrigger={refreshTrigger}
         onConfigurePermissions={handleConfigurePermissions}
       />
+
+      {/* Form Dialog */}
+      <FormDialog
+        open={showForm}
+        onOpenChange={handleCloseDialog}
+        title={editingRole ? 'Edit Role' : 'Create New Role'}
+        description={editingRole ? 'Update role information and settings' : 'Add a new role to the system'}
+        maxWidth="2xl"
+        isLoading={loadingRole}
+      >
+        <RoleForm
+          initialData={editingRole || undefined}
+          onSubmit={handleCreate}
+          onCancel={handleCancel}
+          isLoading={isSubmitting}
+        />
+      </FormDialog>
     </div>
+  );
+}
+
+export default function RolesPage() {
+  return (
+    <Suspense fallback={
+      <div className="w-full">
+        <Card>
+          <CardContent className="py-8 sm:py-12">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <RolesPageContent />
+    </Suspense>
   );
 }
 
