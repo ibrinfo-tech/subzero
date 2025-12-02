@@ -165,7 +165,6 @@ export const roles = pgTable('roles', {
   name: varchar('name', { length: 100 }).notNull(),
   code: varchar('code', { length: 50 }).notNull(),
   description: text('description'),
-  deletedAt: timestamp('deleted_at'),
   isSystem: boolean('is_system').default(false).notNull(),
   isDefault: boolean('is_default').default(false).notNull(),
   priority: integer('priority').default(0).notNull(), // 0-100

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserList } from '@/core/components/users/UserList';
 import { UserForm } from '@/core/components/users/UserForm';
@@ -13,7 +13,7 @@ import { type CreateUserInput, type UpdateUserInput } from '@/core/lib/validatio
 import type { User } from '@/core/lib/db/baseSchema';
 import { toast } from 'sonner';
 
-export default function UsersPage() {
+function UsersPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token } = useAuthStore();
@@ -194,5 +194,30 @@ export default function UsersPage() {
         />
       </div>
     </ProtectedPage>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={
+      <ProtectedPage
+        permission="users:read"
+        title="User Management"
+        description="Manage users, roles, and permissions"
+      >
+        <div className="w-full">
+          <Card>
+            <CardContent className="py-8 sm:py-12">
+              <div className="flex flex-col items-center justify-center gap-4">
+                <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ProtectedPage>
+    }>
+      <UsersPageContent />
+    </Suspense>
   );
 }

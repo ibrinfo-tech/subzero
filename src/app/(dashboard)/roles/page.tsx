@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RoleList } from '@/core/components/roles/RoleList';
 import { EnhancedPermissionAssignment } from '@/core/components/roles/EnhancedPermissionAssignment';
@@ -14,7 +14,7 @@ import { type CreateRoleInput, type UpdateRoleInput } from '@/core/lib/validatio
 import type { Role } from '@/core/lib/db/baseSchema';
 import { toast } from 'sonner';
 
-export default function RolesPage() {
+function RolesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token } = useAuthStore();
@@ -215,6 +215,25 @@ export default function RolesPage() {
         onConfigurePermissions={handleConfigurePermissions}
       />
     </div>
+  );
+}
+
+export default function RolesPage() {
+  return (
+    <Suspense fallback={
+      <div className="w-full">
+        <Card>
+          <CardContent className="py-8 sm:py-12">
+            <div className="flex flex-col items-center justify-center gap-4">
+              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <RolesPageContent />
+    </Suspense>
   );
 }
 

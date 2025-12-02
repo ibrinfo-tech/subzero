@@ -4,7 +4,7 @@ import { requirePermission } from '@/core/middleware/permissions';
 import { getRoleWithUserCount, updateRole, deleteRole } from '@/core/lib/services/rolesService';
 import { db } from '@/core/lib/db';
 import { Role, roles } from '@/core/lib/db/baseSchema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 /**
  * GET /api/roles/:id
@@ -113,7 +113,7 @@ export async function PATCH(
       const existingRole = await db
         .select()
         .from(roles)
-        .where(and(eq(roles.code, data.code.toUpperCase()), isNull(roles.deletedAt)))
+        .where(eq(roles.code, data.code.toUpperCase()))
         .limit(1);
       
       if (existingRole.length > 0 && existingRole[0].id !== id) {

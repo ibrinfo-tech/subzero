@@ -113,7 +113,6 @@ export function EnhancedPermissionAssignment({
   const handleModuleSelect = (moduleId: string) => {
     const module = modulePermissions.find(m => m.moduleId === moduleId);
     if (module) {
-      console.log('[PermissionAssignment] Selecting module:', module.moduleName, moduleId);
       setSelectedModule(moduleId);
       updateUrl(module.moduleCode);
     } else {
@@ -302,13 +301,13 @@ export function EnhancedPermissionAssignment({
 
   // Debug logging
   if (process.env.NODE_ENV === 'development') {
-    console.log('[PermissionAssignment] Current state:', {
-      selectedModule,
-      selectedModuleData: selectedModuleData?.moduleName,
-      hasConfig: !!selectedConfig,
-      totalModules: modulePermissions.length,
-      moduleIds: modulePermissions.map(m => ({ id: m.moduleId, name: m.moduleName, code: m.moduleCode }))
-    });
+    // console.log('[PermissionAssignment] Current state:', {
+    //   selectedModule,
+    //   selectedModuleData: selectedModuleData?.moduleName,
+    //   hasConfig: !!selectedConfig,
+    //   totalModules: modulePermissions.length,
+    //   moduleIds: modulePermissions.map(m => ({ id: m.moduleId, name: m.moduleName, code: m.moduleCode }))
+    // });
   }
 
   // Sample fields for demonstration (in real app, fetch from module metadata)

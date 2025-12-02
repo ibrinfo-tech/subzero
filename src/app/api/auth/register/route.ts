@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     const { userRoles } = await import('@/core/lib/db/baseSchema');
     await db.insert(userRoles).values({
       userId: user.id,
-      roleId: defaultRole,
+      roleId: defaultRole.id,
       tenantId: tenantId,
       grantedBy: user.id, // Self-assigned
       isActive: true,
