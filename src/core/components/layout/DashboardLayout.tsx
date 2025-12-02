@@ -26,12 +26,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   // Show full-page loading state until navigation is loaded
   if (!navigationLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <Toaster />
         <div className="text-center">
           <LoadingSpinner />
-          <p className="mt-4 text-gray-600">Loading application...</p>
-          <p className="mt-2 text-xs text-gray-400">This should only take a moment...</p>
+          <p className="mt-4 text-muted-foreground">Loading application...</p>
+          <p className="mt-2 text-xs text-muted-foreground/70">This should only take a moment...</p>
         </div>
       </div>
     );
@@ -39,12 +39,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Once loaded, show the full layout
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-background">
       <Toaster />
       <Sidebar onNavigationLoaded={() => setNavigationLoaded(true)} />
       <div className="flex-1 flex flex-col ml-64">
         <Topbar />
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-6 bg-muted/30">
           {children}
         </main>
       </div>

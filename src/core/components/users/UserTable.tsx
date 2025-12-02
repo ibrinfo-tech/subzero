@@ -59,9 +59,9 @@ export function UserTable({
 
   const getStatusBadge = (status: string) => {
     const colors = {
-      active: 'bg-green-100 text-green-800',
-      inactive: 'bg-gray-100 text-gray-800',
-      suspended: 'bg-red-100 text-red-800',
+      active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      inactive: 'bg-muted text-muted-foreground',
+      suspended: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     };
     return (
       <span
@@ -92,7 +92,7 @@ export function UserTable({
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex flex-1 gap-2 w-full sm:w-auto">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
               placeholder="Search by name, email..."
               value={searchTerm}
@@ -133,7 +133,7 @@ export function UserTable({
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -147,13 +147,13 @@ export function UserTable({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   Loading users...
                 </TableCell>
               </TableRow>
             ) : users.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
@@ -175,35 +175,35 @@ export function UserTable({
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-700">
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-foreground">
                           {initials}
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">
+                          <div className="font-medium text-foreground">
                             {user.fullName || 'No name'}
                           </div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
+                          <div className="text-sm text-muted-foreground">{user.email}</div>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       {userRoles.length > 0 ? (
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm text-gray-700">
+                          <span className="text-sm text-foreground">
                             {primaryRole.name}
                           </span>
                           {userRoles.length > 1 && (
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                               +{userRoles.length - 1} more
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="text-sm text-gray-500">No role</span>
+                        <span className="text-sm text-muted-foreground">No role</span>
                       )}
                     </TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
-                    <TableCell className="text-sm text-gray-500">{dateAdded}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{dateAdded}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         {onEdit && (
@@ -220,7 +220,7 @@ export function UserTable({
                             variant="outline"
                             size="sm"
                             onClick={() => onDelete(user)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

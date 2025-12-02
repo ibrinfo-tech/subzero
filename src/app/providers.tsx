@@ -1,8 +1,20 @@
 'use client';
 
-// App-level providers wrapper
-// Currently no additional providers needed, but structure is ready for future additions
+import { ThemeProvider } from '@/core/components/common/ThemeProvider';
 
+/**
+ * App-level providers wrapper
+ * Wraps the application with all necessary providers
+ */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      {children}
+    </ThemeProvider>
+  );
 }

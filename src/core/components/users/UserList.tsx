@@ -139,11 +139,11 @@ export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTri
 
   if (error && users.length === 0) {
     return (
-      <div className="rounded-md bg-red-50 p-4">
-        <p className="text-sm text-red-800">{error}</p>
+      <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4">
+        <p className="text-sm text-destructive">{error}</p>
         <button
           onClick={fetchUsers}
-          className="mt-2 text-sm text-red-600 underline"
+          className="mt-2 text-sm text-destructive underline hover:text-destructive/80"
         >
           Retry
         </button>

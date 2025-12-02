@@ -127,15 +127,15 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
   const allNavItems = moduleNavItems;
 
   return (
-    <aside className="fixed left-0 top-0 w-64 bg-gray-900 text-white h-screen flex flex-col">
+    <aside className="fixed left-0 top-0 w-64 bg-sidebar text-sidebar-foreground h-screen flex flex-col border-r border-sidebar-border">
       <div className="p-6 flex-shrink-0">
         <h1 className="text-xl font-bold">RAD Framework</h1>
       </div>
       <nav className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
         {isLoading ? (
-          <div className="text-gray-400 text-sm py-4">Loading navigation...</div>
+          <div className="text-muted-foreground text-sm py-4">Loading navigation...</div>
         ) : allNavItems.length === 0 ? (
-          <div className="text-gray-400 text-sm py-4">
+          <div className="text-muted-foreground text-sm py-4">
             No navigation items available.
             {!isAuthenticated && <div className="mt-2">Please log in.</div>}
           </div>
@@ -149,8 +149,8 @@ export function Sidebar({ onNavigationLoaded }: SidebarProps = {}) {
               className={cn(
                 'flex items-center gap-3 px-4 py-2 rounded-md transition-colors',
                 isActive
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               )}
             >
               {item.icon}

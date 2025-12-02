@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/core/store/authStore';
 import { Button } from '@/core/components/ui/button';
+import { ThemeToggle } from '@/core/components/common/ThemeToggle';
 
 export function Topbar() {
   const router = useRouter();
@@ -17,15 +18,16 @@ export function Topbar() {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
+    <header className="bg-card border-b border-border px-6 py-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-card-foreground">
             Welcome, {user?.fullName || user?.email || 'User'}
           </h2>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-600">{user?.email}</span>
+          <span className="text-sm text-muted-foreground">{user?.email}</span>
+          <ThemeToggle />
           <Button variant="outline" size="sm" onClick={handleLogout}>
             Logout
           </Button>
