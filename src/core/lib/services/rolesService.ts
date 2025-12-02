@@ -2,29 +2,7 @@ import { db } from '@/core/lib/db';
 import { roles, userRoles } from '@/core/lib/db/baseSchema';
 import { eq, and, or, like, isNull, desc, count, lte, gte, sql } from 'drizzle-orm';
 import type { Role, NewRole } from '@/core/lib/db/baseSchema';
-
-export interface CreateRoleInput {
-  name: string;
-  code: string;
-  description?: string;
-  tenantId?: string;
-  parentRoleId?: string;
-  isSystem?: boolean;
-  isDefault?: boolean;
-  priority?: number;
-  color?: string;
-  status?: 'active' | 'inactive' | 'deprecated';
-}
-
-export interface UpdateRoleInput {
-  name?: string;
-  code?: string;
-  description?: string;
-  parentRoleId?: string;
-  priority?: number;
-  color?: string;
-  status?: 'active' | 'inactive' | 'deprecated';
-}
+import type { CreateRoleInput, UpdateRoleInput } from '@/core/lib/validations/roles';
 
 /**
  * Get all roles with optional filtering and pagination

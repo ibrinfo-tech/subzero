@@ -1,7 +1,8 @@
 // Module registry and auto-discovery
 
-import { loadAllModules, type LoadedModule } from '@/core/lib/moduleLoader';
+import { loadAllModules } from '@/core/lib/moduleLoader';
 import type { ModuleConfig, ModuleNavigation } from '@/core/types/module';
+import type { LoadedModule } from '@/core/types/module';
 
 class ModuleRegistry {
   private modules: Map<string, LoadedModule> = new Map();

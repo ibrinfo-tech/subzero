@@ -3,7 +3,7 @@ import { requireAuth } from '@/core/middleware/auth';
 import { requirePermission } from '@/core/middleware/permissions';
 import { getRoleWithUserCount, updateRole, deleteRole } from '@/core/lib/services/rolesService';
 import { db } from '@/core/lib/db';
-import { roles } from '@/core/lib/db/baseSchema';
+import { Role, roles } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
 
 /**

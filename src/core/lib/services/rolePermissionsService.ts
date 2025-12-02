@@ -62,10 +62,7 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
   const allPermissions = await db
     .select()
     .from(permissions)
-    .where(and(
-      isNull(permissions.deletedAt),
-      eq(permissions.isActive, true)
-    ));
+    .where(eq(permissions.isActive, true));
 
   // Get module access for this role
   const moduleAccess = await db
@@ -106,7 +103,7 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     // For Super Admin: grant access to all modules and all permissions
     if (isSuperAdmin) {
       // Get all permissions for this module
-      const moduleAllPermissions = allPermissions.filter((p) => p.moduleId === module.id);
+      const moduleAllPermissions = allPermissions.filter((p) => p.module === module.code);
       
       return {
         moduleId: module.id,
@@ -310,12 +307,12 @@ export async function updateRoleModulePermissions(
 /**
  * Get all permissions for a module
  */
-export async function getModulePermissions(moduleId: string) {
+export async function getModulePermissions(moduleCode: string) {
   return await db
     .select()
     .from(permissions)
     .where(and(
-      eq(permissions.moduleId, moduleId),
+      eq(permissions.module, moduleCode),
       eq(permissions.isActive, true)
     ));
 }

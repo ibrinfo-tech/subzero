@@ -30,8 +30,8 @@ export function UserForm({
   const [formData, setFormData] = useState<CreateUserInput | UpdateUserInput>({
     email: initialData?.email || '',
     fullName: initialData?.fullName || '',
-    roleId: initialData?.roleId || undefined,
-    status: (initialData?.status as 'active' | 'inactive' | 'suspended') || 'active',
+    roleId: undefined,
+    status: (initialData?.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
     ...(initialData ? {} : { password: '' }),
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
@@ -41,8 +41,8 @@ export function UserForm({
       setFormData({
         email: initialData.email,
         fullName: initialData.fullName || '',
-        roleId: initialData.roleId || undefined,
-        status: (initialData.status as 'active' | 'inactive' | 'suspended') || 'active',
+        roleId: undefined,
+        status: (initialData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
       });
     }
   }, [initialData]);

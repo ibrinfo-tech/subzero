@@ -36,7 +36,7 @@ interface FieldPermission {
 }
 
 interface ModuleConfig {
-  moduleId: string;
+  moduleId: string ;
   enabled: boolean;
   dataAccess: 'none' | 'own' | 'team' | 'all';
   permissions: {
@@ -380,7 +380,7 @@ export function EnhancedPermissionAssignment({
         </nav>
       </div>
 
-      {selectedModuleData && selectedConfig && (
+      {selectedModuleData && selectedConfig && selectedModule && (
         <>
           {/* Module Permissions */}
           <Card>
@@ -404,7 +404,7 @@ export function EnhancedPermissionAssignment({
                   <input
                     type="checkbox"
                     checked={selectedConfig.enabled}
-                    onChange={() => toggleModuleEnabled(selectedModule)}
+                    onChange={() => toggleModuleEnabled(selectedModule!)}
                     className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                   />
                   <label className="font-medium text-foreground">Enable Access</label>
@@ -419,7 +419,7 @@ export function EnhancedPermissionAssignment({
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.view}
-                          onChange={() => togglePermission(selectedModule, 'view')}
+                          onChange={() => togglePermission(selectedModule!, 'view')}
                           className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
                         <span className="text-sm text-foreground">View</span>
@@ -428,7 +428,7 @@ export function EnhancedPermissionAssignment({
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.create}
-                          onChange={() => togglePermission(selectedModule, 'create')}
+                          onChange={() => togglePermission(selectedModule!, 'create')}
                           className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
                         <span className="text-sm text-foreground">Create</span>
@@ -437,7 +437,7 @@ export function EnhancedPermissionAssignment({
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.update}
-                          onChange={() => togglePermission(selectedModule, 'update')}
+                          onChange={() => togglePermission(selectedModule!, 'update')}
                           className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
                         <span className="text-sm text-foreground">Edit</span>
@@ -446,7 +446,7 @@ export function EnhancedPermissionAssignment({
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.delete}
-                          onChange={() => togglePermission(selectedModule, 'delete')}
+                          onChange={() => togglePermission(selectedModule!, 'delete')}
                           className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
                         <span className="text-sm text-foreground">Delete</span>
@@ -455,7 +455,7 @@ export function EnhancedPermissionAssignment({
                         <input
                           type="checkbox"
                           checked={selectedConfig.permissions.manage}
-                          onChange={() => togglePermission(selectedModule, 'manage')}
+                          onChange={() => togglePermission(selectedModule!, 'manage')}
                           className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                         />
                         <span className="text-sm text-foreground">Manage All</span>
@@ -487,7 +487,7 @@ export function EnhancedPermissionAssignment({
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <button
-                      onClick={() => setDataAccess(selectedModule, 'own')}
+                      onClick={() => setDataAccess(selectedModule!, 'own')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'own'
                           ? 'border-primary bg-primary/10'
@@ -500,7 +500,7 @@ export function EnhancedPermissionAssignment({
                       </div>
                     </button>
                     <button
-                      onClick={() => setDataAccess(selectedModule, 'team')}
+                      onClick={() => setDataAccess(selectedModule!, 'team')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'team'
                           ? 'border-primary bg-primary/10'
@@ -513,7 +513,7 @@ export function EnhancedPermissionAssignment({
                       </div>
                     </button>
                     <button
-                      onClick={() => setDataAccess(selectedModule, 'all')}
+                      onClick={() => setDataAccess(selectedModule!, 'all')}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         selectedConfig.dataAccess === 'all'
                           ? 'border-primary bg-primary/10'
@@ -579,7 +579,7 @@ export function EnhancedPermissionAssignment({
                                 <input
                                   type="checkbox"
                                   checked={fieldPerm.visible}
-                                  onChange={() => toggleFieldPermission(selectedModule, field.name, 'visible')}
+                                  onChange={() => toggleFieldPermission(selectedModule!, field.name, 'visible')}
                                   className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                                 />
                               </td>
@@ -587,7 +587,7 @@ export function EnhancedPermissionAssignment({
                                 <input
                                   type="checkbox"
                                   checked={fieldPerm.editable}
-                                  onChange={() => toggleFieldPermission(selectedModule, field.name, 'editable')}
+                                  onChange={() => toggleFieldPermission(selectedModule!, field.name, 'editable')}
                                   disabled={!fieldPerm.visible}
                                   className="w-4 h-4 text-primary border-border rounded focus:ring-primary disabled:opacity-50"
                                 />
