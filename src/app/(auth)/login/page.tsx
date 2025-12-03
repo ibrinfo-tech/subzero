@@ -99,8 +99,11 @@ export default function LoginPage() {
       // Tokens are also set in cookies by the API response
       // No need to manually set them here as they're HTTP-only
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Add a small delay to ensure cookies are set before redirecting
+      // This prevents race condition where middleware checks for cookie before it's available
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1000);
     } catch (error) {
       console.error('Login error:', error);
       setApiError('An error occurred. Please try again.');
