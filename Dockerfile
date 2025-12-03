@@ -13,7 +13,13 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build arguments for environment variables needed during build
+ARG DATABASE_URL
+ARG NEXT_PUBLIC_API_URL
+
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=$DATABASE_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 RUN npm run build
 
