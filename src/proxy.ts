@@ -19,8 +19,6 @@ export function proxy(request: NextRequest) {
   console.log('[Proxy] Route Access:', {
     pathname,
     hasToken: !!token,
-    allCookies: request.cookies.getSetCookie().length > 0,
-    cookieNames: Array.from(request.cookies.entries()).map(([key]) => key),
   });
   
   // Check if registration is enabled
