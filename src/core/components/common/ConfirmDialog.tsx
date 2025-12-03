@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { AlertTriangle, Trash2, Info, AlertCircle } from 'lucide-react';
 import { 
   Dialog, 
@@ -155,7 +156,3 @@ export function useConfirmDialog() {
     ConfirmDialog: ConfirmDialogComponent,
   };
 }
-
-// Add React import for the hook
-import React from 'react';
-
