@@ -19,9 +19,15 @@ const DialogContext = React.createContext<DialogContextValue | undefined>(undefi
 
 function useDialog() {
   const context = React.useContext(DialogContext);
+  
+  // During SSR, return a default value instead of throwing
   if (!context) {
+    if (typeof window === 'undefined') {
+      return { open: false, onOpenChange: () => {} };
+    }
     throw new Error('Dialog components must be used within a Dialog');
   }
+  
   return context;
 }
 

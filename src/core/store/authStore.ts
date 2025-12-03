@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface User {
   id: string;
@@ -28,42 +28,57 @@ interface AuthState {
   setHasHydrated: (state: boolean) => void;
 }
 
+// SSR-safe storage wrapper
+const createStorage = () => {
+  if (typeof window === 'undefined') {
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    };
+  }
+  return createJSONStorage(() => localStorage);
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       accessToken: null,
       refreshToken: null,
-      token: null, // Will be synced with accessToken
+      token: null,
       _hasHydrated: false,
-      setUser: (user, accessToken, refreshToken) => 
-        set({ 
-          user, 
-          isAuthenticated: true, 
-          accessToken, 
-          token: accessToken, // Keep token in sync
-          refreshToken: refreshToken || null 
+      setUser: (user, accessToken, refreshToken) =>
+        set({
+          user,
+          accessToken,
+          refreshToken,
+          token: accessToken,
+          isAuthenticated: true,
         }),
-      logout: () => set({ 
-        user: null, 
-        isAuthenticated: false, 
-        accessToken: null,
-        token: null,
-        refreshToken: null 
-      }),
+      logout: () =>
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          token: null,
+          isAuthenticated: false,
+        }),
       setHasHydrated: (state) => {
         set({
-          _hasHydrated: state
+          _hasHydrated: state,
         });
       },
     }),
     {
       name: 'auth-storage',
+      storage: createStorage(),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },
+      // Skip hydration during SSR
+      skipHydration: typeof window === 'undefined',
     }
   )
 );
-
