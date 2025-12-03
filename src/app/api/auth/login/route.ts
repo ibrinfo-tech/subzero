@@ -117,19 +117,31 @@ export async function POST(request: NextRequest) {
       ? 60 * 60 * 24 * 365 * 10 // 10 years
       : 60 * 60 * 24 * 7; // 7 days
     
+    // Determine if connection is secure based on request protocol
+    // In production/docker, check x-forwarded-proto header for proxy setups
+    const isSecureConnection = request.headers.get('x-forwarded-proto') === 'https' 
+      || request.nextUrl.protocol === 'https:'
+      || process.env.NODE_ENV === 'development';
+    
+    console.log('[Login] Cookie Configuration:', {
+      isSecureConnection,
+      xForwardedProto: request.headers.get('x-forwarded-proto'),
+      protocol: request.nextUrl.protocol,
+      nodeEnv: process.env.NODE_ENV,
+    });
+    
     response.cookies.set('access-token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isSecureConnection,
+      sameSite: isSecureConnection ? 'strict' : 'lax',
       path: '/',
       maxAge: cookieMaxAge,
     });
     
     response.cookies.set('refresh-token', refreshToken, {
       httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      secure: false,
-      sameSite: 'lax',
+      secure: isSecureConnection,
+      sameSite: isSecureConnection ? 'strict' : 'lax',
       path: '/',
       maxAge: refreshCookieMaxAge,
     });
