@@ -300,15 +300,15 @@ export function EnhancedPermissionAssignment({
   const selectedConfig = selectedModule ? moduleConfigs[selectedModule] : null;
 
   // Debug logging
-  if (process.env.NODE_ENV === 'development') {
-    // console.log('[PermissionAssignment] Current state:', {
-    //   selectedModule,
-    //   selectedModuleData: selectedModuleData?.moduleName,
-    //   hasConfig: !!selectedConfig,
-    //   totalModules: modulePermissions.length,
-    //   moduleIds: modulePermissions.map(m => ({ id: m.moduleId, name: m.moduleName, code: m.moduleCode }))
-    // });
-  }
+  // if (process.env.NODE_ENV === 'development') {
+  //   // console.log('[PermissionAssignment] Current state:', {
+  //   //   selectedModule,
+  //   //   selectedModuleData: selectedModuleData?.moduleName,
+  //   //   hasConfig: !!selectedConfig,
+  //   //   totalModules: modulePermissions.length,
+  //   //   moduleIds: modulePermissions.map(m => ({ id: m.moduleId, name: m.moduleName, code: m.moduleCode }))
+  //   // });
+  // }
 
   // Sample fields for demonstration (in real app, fetch from module metadata)
   const sampleFields = [
