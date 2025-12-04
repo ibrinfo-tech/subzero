@@ -5,9 +5,9 @@ import { registerSchema } from '@/core/lib/validations/auth';
 import { hashPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
 import { isRegistrationEnabled } from '@/core/config/authConfig';
-import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
-import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
 import { getDefaultUserRole } from '@/core/lib/roles';
+import { sendEmailVerificationEmail } from '@/core/lib/email';
+import { generateEmailVerificationToken } from '@/core/lib/verificationToken';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -85,18 +85,20 @@ export async function POST(request: NextRequest) {
       tenantId = defaultTenant[0].id;
     }
     
-    // Get default "User" role for new registrations
-    const defaultRole = await getDefaultUserRole(tenantId);
+    // Get default "User" role for new registrations (system role with isDefault = true)
+    const defaultRole = await getDefaultUserRole();
     
     if (!defaultRole) {
-      console.error('Default "USER" role not found. Please run seed script.');
+      console.error('[Register] Default "USER" role not found. Please run seed script.');
       return NextResponse.json(
         { error: 'System configuration error. Please contact administrator.' },
         { status: 500 }
       );
     }
     
-    // Create new user
+    console.log('[Register] Found default role:', defaultRole.code, '(', defaultRole.id, ')');
+    
+    // Create new user with 'pending' status until email is verified
     const newUser = await db
       .insert(users)
       .values({
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest) {
         passwordHash: hashedPassword,
         fullName: name || null,
         isEmailVerified: false,
-        status: 'active',
+        status: 'pending', // Will be changed to 'active' after email verification
         tenantId: tenantId,
         twoFactorEnabled: false,
         failedLoginAttempts: 0,
@@ -133,63 +135,33 @@ export async function POST(request: NextRequest) {
       metadata: {},
     });
     
-    // Generate access and refresh tokens (non-expiring if configured)
-    const { token: accessToken, expiresAt: accessExpiresAt } = await generateAccessToken(
-      user.id,
-      USE_NON_EXPIRING_TOKENS
-    );
-    const { token: refreshToken, expiresAt: refreshExpiresAt } = await generateRefreshToken(
-      user.id,
-      USE_NON_EXPIRING_TOKENS
-    );
+    // Generate JWT email verification token (no database storage needed)
+    const verificationToken = generateEmailVerificationToken(user.email, 24); // 24 hours expiry
     
-    // Create response with user data (without password) and tokens
-    const response = NextResponse.json(
+    // Send verification email
+    try {
+      await sendEmailVerificationEmail(user.email, verificationToken, user.fullName || undefined);
+      console.log('[Register] Verification email sent to:', user.email);
+    } catch (emailError) {
+      console.error('[Register] Failed to send verification email:', emailError);
+      // Don't fail registration if email fails - user can request resend
+      console.warn('[Register] User created but verification email failed. User can request resend.');
+    }
+    
+    // Return success response WITHOUT tokens - user must verify email first
+    return NextResponse.json(
       {
         success: true,
+        message: 'Registration successful! Please check your email to verify your account.',
         user: {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
-          isEmailVerified: user.isEmailVerified,
-          tenantId: user.tenantId,
+          isEmailVerified: false,
         },
-        accessToken,
-        refreshToken,
-        expiresAt: accessExpiresAt.toISOString(),
       },
       { status: 201 }
     );
-    
-    // Set tokens in HTTP-only cookies
-    // If non-expiring tokens are enabled, set cookie maxAge to a very long time (10 years)
-    const cookieMaxAge = USE_NON_EXPIRING_TOKENS 
-      ? 60 * 60 * 24 * 365 * 10 // 10 years
-      : 60 * 15; // 15 minutes
-    
-    const refreshCookieMaxAge = USE_NON_EXPIRING_TOKENS
-      ? 60 * 60 * 24 * 365 * 10 // 10 years
-      : 60 * 60 * 24 * 7; // 7 days
-    
-    response.cookies.set('access-token', accessToken, {
-      httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      secure: false,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: cookieMaxAge,
-    });
-    
-    response.cookies.set('refresh-token', refreshToken, {
-      httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      secure: false,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: refreshCookieMaxAge,
-    });
-    
-    return response;
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(

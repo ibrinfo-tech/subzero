@@ -3,8 +3,7 @@
 import { notFound } from 'next/navigation';
 import { moduleRegistry } from '@/core/config/moduleRegistry';
 import { getModuleRoutePath } from '@/core/lib/moduleLoader';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { existsSync } from 'fs';
 import React from 'react';
 
 interface PageProps {
@@ -65,29 +64,48 @@ export default async function DynamicModulePage({ params }: PageProps) {
   }
 
   try {
-    // Dynamically import the component
-    // Next.js app router supports dynamic imports with proper path resolution
+    // Dynamically import the component using path alias
+    // Next.js should resolve @/modules/* at build/runtime
     const modulePath = `@/modules/${moduleId}/routes/${route.component}`;
     
+    console.log(`[DynamicRoute] Attempting to import: ${modulePath}`);
+    console.log(`[DynamicRoute] Component file exists: ${componentPath}`);
+    console.log(`[DynamicRoute] Module ID: ${moduleId}, Component: ${route.component}`);
+    
     // Use dynamic import with error handling
-    let ComponentModule;
+    // For Next.js App Router, dynamic imports with path aliases should work
+    let ComponentModule: any;
     try {
+      // Dynamic import with path alias - Next.js should resolve this at runtime
       ComponentModule = await import(modulePath);
-    } catch (importError) {
-      console.error(`Failed to import module at ${modulePath}:`, importError);
+    } catch (importError: any) {
+      console.error(`[DynamicRoute] Failed to import module at ${modulePath}:`, importError);
+      console.error(`[DynamicRoute] Error details:`, {
+        message: importError?.message,
+        code: importError?.code,
+        stack: importError?.stack,
+        name: importError?.name,
+      });
+      notFound();
+    }
+
+    if (!ComponentModule) {
+      console.error(`[DynamicRoute] Import returned null/undefined for ${modulePath}`);
       notFound();
     }
 
     const Component = ComponentModule.default;
 
     if (!Component) {
-      console.error(`No default export found in ${modulePath}`);
+      console.error(`[DynamicRoute] No default export found in ${modulePath}`);
+      console.error(`[DynamicRoute] Available exports:`, Object.keys(ComponentModule));
       notFound();
     }
 
+    console.log(`[DynamicRoute] Successfully loaded component for ${route.path}`);
     return <Component />;
   } catch (error) {
-    console.error(`Failed to load component for route ${route.path}:`, error);
+    console.error(`[DynamicRoute] Failed to load component for route ${route.path}:`, error);
     notFound();
   }
 }

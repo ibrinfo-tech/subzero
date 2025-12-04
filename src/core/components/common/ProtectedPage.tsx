@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/core/hooks/usePermissions';
 import { useAuthStore } from '@/core/store/authStore';
 import { PageHeader } from './PageHeader';
+import { LoadingSpinner } from './LoadingSpinner';
 
 interface ProtectedPageProps {
   children: ReactNode;
@@ -13,6 +14,7 @@ interface ProtectedPageProps {
   title?: string;
   description?: string;
   fallbackPath?: string;
+  showLoader?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function ProtectedPage({
   title,
   description,
   fallbackPath = '/dashboard',
+  showLoader = true,
 }: ProtectedPageProps) {
   const router = useRouter();
   const { isAuthenticated, _hasHydrated } = useAuthStore();
@@ -33,10 +36,20 @@ export function ProtectedPage({
 
   // Show loading state while hydrating or checking permissions
   if (!_hasHydrated || loading) {
+    if (!showLoader) {
+      // For pages that handle their own loading, still render the shell
+      return (
+        <div className="w-full">
+          {title && <PageHeader title={title} description={description} />}
+        </div>
+      );
+    }
+
     return (
-      <div className="container mx-auto py-6 px-4">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <p className="text-gray-600">Loading...</p>
+      <div className="w-full">
+        {title && <PageHeader title={title} description={description} />}
+        <div className="flex items-center justify-center min-h-[260px]">
+          <LoadingSpinner />
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserList } from '@/core/components/users/UserList';
 import { UserForm } from '@/core/components/users/UserForm';
@@ -25,6 +25,11 @@ function UsersPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
+
+  // Derive current action from URL so we can keep dialog labels stable
+  const action = searchParams.get('action');
+  const isCreateMode = action === 'create';
+  const isEditMode = action === 'edit';
 
   // Fetch roles for the form
   useEffect(() => {
@@ -53,15 +58,14 @@ function UsersPageContent() {
   // Handle URL-based navigation
   useEffect(() => {
     const userId = searchParams.get('userId');
-    const action = searchParams.get('action');
-    
+
     if (!token) return;
 
-    if (action === 'create') {
+    if (isCreateMode) {
       setShowForm(true);
       setEditingUser(null);
       setIsLoadingUser(false);
-    } else if (action === 'edit' && userId) {
+    } else if (isEditMode && userId) {
       setShowForm(true);
       setIsLoadingUser(true);
       // Fetch user details for editing
@@ -89,13 +93,13 @@ function UsersPageContent() {
           router.push('/users');
         })
         .finally(() => setIsLoadingUser(false));
-    } else {
+    } else if (!action || (action !== 'create' && action !== 'edit')) {
       // No action in URL, show list
       setShowForm(false);
       setEditingUser(null);
       setIsLoadingUser(false);
     }
-  }, [searchParams, token, router]);
+  }, [searchParams, token, router, isCreateMode, isEditMode, action]);
 
   const handleCreate = async (data: CreateUserInput | UpdateUserInput) => {
     if (!token) {
@@ -189,8 +193,8 @@ function UsersPageContent() {
         <FormDialog
           open={showForm}
           onOpenChange={handleCloseDialog}
-          title={editingUser ? 'Edit User' : 'Create New User'}
-          description={editingUser ? 'Update user information and permissions' : 'Add a new user to the system'}
+          title={isEditMode ? 'Edit User' : 'Create New User'}
+          description={isEditMode ? 'Update user information and permissions' : 'Add a new user to the system'}
           maxWidth="2xl"
           isLoading={isLoadingUser}
         >
@@ -208,25 +212,9 @@ function UsersPageContent() {
 }
 
 export default function UsersPage() {
+  // Wrap content that uses useSearchParams in a Suspense boundary
   return (
-    <Suspense fallback={
-      <ProtectedPage
-        permission="users:read"
-        title="User Management"
-        description="Manage users"
-      >
-        <div className="w-full">
-          <Card>
-            <CardContent className="py-8 sm:py-12">
-              <div className="flex flex-col items-center justify-center gap-4">
-                <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
-                <p className="text-sm text-muted-foreground">Loading...</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </ProtectedPage>
-    }>
+    <Suspense>
       <UsersPageContent />
     </Suspense>
   );

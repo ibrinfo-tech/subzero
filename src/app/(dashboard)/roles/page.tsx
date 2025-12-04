@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { RoleList } from '@/core/components/roles/RoleList';
 import { EnhancedPermissionAssignment } from '@/core/components/roles/EnhancedPermissionAssignment';
@@ -28,18 +28,22 @@ function RolesPageContent() {
   const [selectedRole, setSelectedRole] = useState<{ id: string; name: string } | null>(null);
   const [loadingRole, setLoadingRole] = useState(false);
 
+  // Derive current action from URL so dialog labels don't flicker
+  const action = searchParams.get('action');
+  const isCreateMode = action === 'create';
+  const isEditMode = action === 'edit';
+
   // Handle URL-based navigation for edit action (when coming from direct URL)
   useEffect(() => {
     const roleId = searchParams.get('roleId');
-    const action = searchParams.get('action');
     
     if (!token) return;
 
-    if (action === 'create') {
+    if (isCreateMode) {
       setShowForm(true);
       setEditingRole(null);
       setLoadingRole(false);
-    } else if (action === 'edit' && roleId) {
+    } else if (isEditMode && roleId) {
       setShowForm(true);
       setLoadingRole(true);
       // Fetch role details for editing
@@ -48,10 +52,11 @@ function RolesPageContent() {
           Authorization: `Bearer ${token}`,
         },
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data) {
-            setEditingRole(data.data);
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.data?.role) {
+            // API returns an object with `{ role, userCount }`
+            setEditingRole(data.data.role as Role);
           } else {
             toast.error('Failed to load role details');
             router.push('/roles');
@@ -72,10 +77,11 @@ function RolesPageContent() {
           Authorization: `Bearer ${token}`,
         },
       })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success && data.data) {
-            setSelectedRole({ id: roleId, name: data.data.name });
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.data?.role) {
+            // API returns an object with `{ role, userCount }`
+            setSelectedRole({ id: roleId, name: data.data.role.name as string });
           } else {
             toast.error('Failed to load role details');
             router.push('/roles');
@@ -95,7 +101,7 @@ function RolesPageContent() {
       setSelectedRole(null);
       setLoadingRole(false);
     }
-  }, [searchParams, token, router]);
+  }, [searchParams, token, router, isCreateMode, isEditMode, action]);
 
   const handleCreate = async (data: CreateRoleInput | UpdateRoleInput) => {
     if (!token) {
@@ -162,20 +168,20 @@ function RolesPageContent() {
     setRefreshTrigger((prev) => prev + 1); // Refresh to show updated permissions
   };
 
-  if (loadingRole) {
-    return (
-      <div className="w-full">
-        <Card>
-          <CardContent className="py-8 sm:py-12">
-            <div className="flex flex-col items-center justify-center gap-4">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
-              <p className="text-sm text-muted-foreground">Loading role details...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // if (loadingRole) {
+  //   return (
+  //     <div className="w-full">
+  //       <Card>
+  //         <CardContent className="py-8 sm:py-12">
+  //           <div className="flex flex-col items-center justify-center gap-4">
+  //             <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
+  //             <p className="text-sm text-muted-foreground">Loading role details...</p>
+  //           </div>
+  //         </CardContent>
+  //       </Card>
+  //     </div>
+  //   );
+  // }
 
   if (showPermissionAssignment && selectedRole) {
     return (
@@ -190,54 +196,49 @@ function RolesPageContent() {
   }
 
   return (
-    <div className="w-full">
-      <PageHeader
-        title="Role Management"
-        description="Manage roles and their permissions"
-      />
-      <RoleList
-        onCreateClick={() => router.push('/roles?action=create')}
-        onEditClick={handleEdit}
-        refreshTrigger={refreshTrigger}
-        onConfigurePermissions={handleConfigurePermissions}
-      />
-
-      {/* Form Dialog */}
-      <FormDialog
-        open={showForm}
-        onOpenChange={handleCloseDialog}
-        title={editingRole ? 'Edit Role' : 'Create New Role'}
-        description={editingRole ? 'Update role information and settings' : 'Add a new role to the system'}
-        maxWidth="2xl"
-        isLoading={loadingRole}
-      >
-        <RoleForm
-          initialData={editingRole || undefined}
-          onSubmit={handleCreate}
-          onCancel={handleCancel}
-          isLoading={isSubmitting}
+    <ProtectedPage
+      permission="roles:read"
+      title="Role Management"
+      description="Manage roles and their permissions"
+    >
+      <div className="w-full">
+        <PageHeader
+          title="Role Management"
+          description="Manage roles and their permissions"
         />
-      </FormDialog>
-    </div>
+        <RoleList
+          onCreateClick={() => router.push('/roles?action=create')}
+          onEditClick={handleEdit}
+          refreshTrigger={refreshTrigger}
+          onConfigurePermissions={handleConfigurePermissions}
+        />
+
+        {/* Form Dialog */}
+        <FormDialog
+          open={showForm}
+          onOpenChange={handleCloseDialog}
+          title={isEditMode ? 'Edit Role' : 'Create New Role'}
+          description={isEditMode ? 'Update role information and settings' : 'Add a new role to the system'}
+          maxWidth="2xl"
+          isLoading={loadingRole}
+        >
+          <RoleForm
+            initialData={editingRole || undefined}
+            onSubmit={handleCreate}
+            onCancel={handleCancel}
+            isLoading={isSubmitting}
+          />
+        </FormDialog>
+      </div>
+    </ProtectedPage>
   );
 }
 
 export default function RolesPage() {
+  // Wrap content that uses useSearchParams in a Suspense boundary
   return (
-    <Suspense fallback={
-      <div className="w-full">
-        <Card>
-          <CardContent className="py-8 sm:py-12">
-            <div className="flex flex-col items-center justify-center gap-4">
-              <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary"></div>
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    }>
+    <Suspense>
       <RolesPageContent />
     </Suspense>
   );
 }
-

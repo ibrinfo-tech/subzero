@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
         passwordHash: users.passwordHash,
         fullName: users.fullName,
         isEmailVerified: users.isEmailVerified,
+        status: users.status,
         tenantId: users.tenantId,
       })
       .from(users)
@@ -68,6 +69,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
+      );
+    }
+    
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return NextResponse.json(
+        { 
+          error: 'Email not verified. Please check your email for the verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
+        },
+        { status: 403 }
+      );
+    }
+    
+    // Check if user account is active
+    if (user.status !== 'active') {
+      return NextResponse.json(
+        { error: 'Account is not active. Please contact support.' },
+        { status: 403 }
       );
     }
     
@@ -117,19 +138,31 @@ export async function POST(request: NextRequest) {
       ? 60 * 60 * 24 * 365 * 10 // 10 years
       : 60 * 60 * 24 * 7; // 7 days
     
+    // Determine if connection is secure based on request protocol
+    // In production/docker, check x-forwarded-proto header for proxy setups
+    const isSecureConnection = request.headers.get('x-forwarded-proto') === 'https' 
+      || request.nextUrl.protocol === 'https:'
+      || process.env.NODE_ENV === 'development';
+    
+    console.log('[Login] Cookie Configuration:', {
+      isSecureConnection,
+      xForwardedProto: request.headers.get('x-forwarded-proto'),
+      protocol: request.nextUrl.protocol,
+      nodeEnv: process.env.NODE_ENV,
+    });
+    
     response.cookies.set('access-token', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isSecureConnection,
+      sameSite: isSecureConnection ? 'strict' : 'lax',
       path: '/',
       maxAge: cookieMaxAge,
     });
     
     response.cookies.set('refresh-token', refreshToken, {
       httpOnly: true,
-      // secure: process.env.NODE_ENV === 'production',
-      secure: false,
-      sameSite: 'lax',
+      secure: isSecureConnection,
+      sameSite: isSecureConnection ? 'strict' : 'lax',
       path: '/',
       maxAge: refreshCookieMaxAge,
     });
