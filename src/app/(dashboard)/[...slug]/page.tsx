@@ -86,16 +86,7 @@ export default async function DynamicModulePage({ params }: PageProps) {
         stack: importError?.stack,
         name: importError?.name,
       });
-      
-      // Try alternative import path format
-      try {
-        const altPath = `../../modules/${moduleId}/routes/${route.component}`;
-        console.log(`[DynamicRoute] Trying alternative path: ${altPath}`);
-        ComponentModule = await import(altPath);
-      } catch (altError: any) {
-        console.error(`[DynamicRoute] Alternative import also failed:`, altError);
-        notFound();
-      }
+      notFound();
     }
 
     if (!ComponentModule) {

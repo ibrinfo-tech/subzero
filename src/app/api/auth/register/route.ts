@@ -162,50 +162,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-<<<<<<< HEAD
-=======
-    
-    // Set tokens in HTTP-only cookies
-    // If non-expiring tokens are enabled, set cookie maxAge to a very long time (10 years)
-    const cookieMaxAge = USE_NON_EXPIRING_TOKENS 
-      ? 60 * 60 * 24 * 365 * 10 // 10 years
-      : 60 * 15; // 15 minutes
-    
-    const refreshCookieMaxAge = USE_NON_EXPIRING_TOKENS
-      ? 60 * 60 * 24 * 365 * 10 // 10 years
-      : 60 * 60 * 24 * 7; // 7 days
-    
-    // Determine if connection is secure based on request protocol
-    // In production/docker, check x-forwarded-proto header for proxy setups
-    const isSecureConnection = request.headers.get('x-forwarded-proto') === 'https' 
-      || request.nextUrl.protocol === 'https:'
-      || process.env.NODE_ENV === 'development';
-    
-    console.log('[Register] Cookie Configuration:', {
-      isSecureConnection,
-      xForwardedProto: request.headers.get('x-forwarded-proto'),
-      protocol: request.nextUrl.protocol,
-      nodeEnv: process.env.NODE_ENV,
-    });
-    
-    response.cookies.set('access-token', accessToken, {
-      httpOnly: true,
-      secure: isSecureConnection,
-      sameSite: isSecureConnection ? 'strict' : 'lax',
-      path: '/',
-      maxAge: cookieMaxAge,
-    });
-    
-    response.cookies.set('refresh-token', refreshToken, {
-      httpOnly: true,
-      secure: isSecureConnection,
-      sameSite: isSecureConnection ? 'strict' : 'lax',
-      path: '/',
-      maxAge: refreshCookieMaxAge,
-    });
-    
-    return response;
->>>>>>> 75792a5028c0870ec37b1460bf3531510b17439e
   } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(
