@@ -21,30 +21,37 @@ interface RoleFormProps {
   isLoading?: boolean;
 }
 
+type RoleFormState = {
+  name: string;
+  code: string;
+  description: string;
+  priority: number;
+  status: 'active' | 'inactive';
+};
+
 export function RoleForm({
   initialData,
   onSubmit,
   onCancel,
   isLoading,
 }: RoleFormProps) {
-  const [formData, setFormData] = useState<CreateRoleInput | UpdateRoleInput>({
-    name: initialData?.name || '',
-    code: initialData?.code || '',
-    description: initialData?.description || '',
-    isSystem: initialData?.isSystem || false,
-    priority: initialData?.priority || 0,
-    status: (initialData?.status as 'active' | 'inactive') || 'active',
+  const [formData, setFormData] = useState<RoleFormState>({
+    name: initialData?.name ?? '',
+    code: initialData?.code ?? '',
+    description: initialData?.description ?? '',
+    priority: initialData?.priority ?? 0,
+    status: (initialData?.status as 'active' | 'inactive') ?? 'active',
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
 
   useEffect(() => {
     if (initialData) {
       setFormData({
-        name: initialData.name,
-        code: initialData.code,
-        description: initialData.description || '',
-        priority: initialData.priority,
-        status: (initialData.status as 'active' | 'inactive') || 'active',
+        name: initialData.name ?? '',
+        code: initialData.code ?? '',
+        description: initialData.description ?? '',
+        priority: initialData.priority ?? 0,
+        status: (initialData.status as 'active' | 'inactive') ?? 'active',
       });
     }
   }, [initialData]);
@@ -89,7 +96,7 @@ export function RoleForm({
       return;
     }
 
-    await onSubmit(formData);
+    await onSubmit(formData as CreateRoleInput | UpdateRoleInput);
   };
 
   return (

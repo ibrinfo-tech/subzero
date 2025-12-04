@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
         passwordHash: users.passwordHash,
         fullName: users.fullName,
         isEmailVerified: users.isEmailVerified,
+        status: users.status,
         tenantId: users.tenantId,
       })
       .from(users)
@@ -68,6 +69,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
+      );
+    }
+    
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return NextResponse.json(
+        { 
+          error: 'Email not verified. Please check your email for the verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          email: user.email,
+        },
+        { status: 403 }
+      );
+    }
+    
+    // Check if user account is active
+    if (user.status !== 'active') {
+      return NextResponse.json(
+        { error: 'Account is not active. Please contact support.' },
+        { status: 403 }
       );
     }
     

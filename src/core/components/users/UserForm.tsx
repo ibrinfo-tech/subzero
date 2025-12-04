@@ -31,7 +31,8 @@ export function UserForm({
   const [formData, setFormData] = useState<CreateUserInput | UpdateUserInput>({
     email: initialData?.email || '',
     fullName: initialData?.fullName || '',
-    roleId: undefined,
+    // Prefer roleId from initialData when editing so the role dropdown is pre-filled
+    roleId: (initialData as any)?.roleId ?? undefined,
     status: (initialData?.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
     ...(initialData ? {} : { password: '' }),
   });
@@ -42,7 +43,8 @@ export function UserForm({
       setFormData({
         email: initialData.email,
         fullName: initialData.fullName || '',
-        roleId: undefined,
+        // Preserve roleId from the loaded user (UsersPage injects it from API response)
+        roleId: (initialData as any)?.roleId ?? undefined,
         status: (initialData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
       });
     }

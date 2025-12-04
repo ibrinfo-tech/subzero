@@ -291,7 +291,7 @@ export function EnhancedPermissionAssignment({
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <LoadingSpinner />
+        <LoadingSpinner label="Loading permissions..." />
       </div>
     );
   }

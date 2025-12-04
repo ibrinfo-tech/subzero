@@ -93,6 +93,23 @@ export const accessTokens = pgTable('access_tokens', {
   hashIdx: index('idx_access_tokens_hash').on(table.tokenHash),
 }));
 
+// Password reset tokens for forgot password functionality
+export const passwordResetTokens = pgTable('password_reset_tokens', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  token: varchar('token', { length: 255 }).notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  usedAt: timestamp('used_at'),
+  ipAddress: varchar('ip_address', { length: 45 }),
+}, (table) => ({
+  userIdx: index('idx_password_reset_tokens_user').on(table.userId),
+  tokenIdx: index('idx_password_reset_tokens_token').on(table.token),
+  expiresIdx: index('idx_password_reset_tokens_expires').on(table.expiresAt),
+}));
+
+// Note: Email verification now uses JWT tokens (no database storage needed)
+
 // ============================================================================
 // 2. RBAC (Role-Based Access Control) - ENHANCED VERSION
 // ============================================================================
@@ -327,6 +344,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   authProviders: many(authProviders),
   refreshTokens: many(refreshTokens),
   accessTokens: many(accessTokens),
+  passwordResetTokens: many(passwordResetTokens),
   tenantUsers: many(tenantUsers),
   userRoles: many(userRoles),
   resourcePermissions: many(resourcePermissions),
@@ -449,6 +467,8 @@ export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type NewRefreshToken = typeof refreshTokens.$inferInsert;
 export type AccessToken = typeof accessTokens.$inferSelect;
 export type NewAccessToken = typeof accessTokens.$inferInsert;
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Module = typeof modules.$inferSelect;
 export type NewModule = typeof modules.$inferInsert;
 export type PermissionGroup = typeof permissionGroups.$inferSelect;

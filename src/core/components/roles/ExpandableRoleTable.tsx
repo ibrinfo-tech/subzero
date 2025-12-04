@@ -331,10 +331,7 @@ export function ExpandableRoleTable({
                         <TableCell colSpan={7} className="bg-muted/50 dark:bg-muted/30 p-4">
                           {isLoadingPerms ? (
                             <div className="flex justify-center py-8 animate-in fade-in duration-200">
-                              <div className="flex flex-col items-center gap-3">
-                                <LoadingSpinner />
-                                <p className="text-sm text-muted-foreground">Loading permissions...</p>
-                              </div>
+                              <LoadingSpinner label="Loading permissions..." />
                             </div>
                           ) : modules.length === 0 ? (
                             <p className="text-sm text-muted-foreground text-center py-4 animate-in fade-in duration-200">

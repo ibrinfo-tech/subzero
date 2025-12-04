@@ -57,10 +57,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         onClose={() => setSidebarOpen(false)}
       />
       
-      <div className="flex-1 flex flex-col lg:ml-64 w-full">
+      <div className="flex-1 flex flex-col lg:ml-64 w-full min-h-screen">
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 bg-muted/30">
-          {children}
+        <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 lg:px-8 bg-muted/20">
+          <div className="w-full space-y-6">{children}</div>
         </main>
       </div>
     </div>

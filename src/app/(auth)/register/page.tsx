@@ -84,14 +84,9 @@ export default function RegisterPage() {
         return;
       }
 
-      // Store user and tokens in Zustand store
-      setUser(data.user, data.accessToken, data.refreshToken);
-      
-      // Tokens are also set in cookies by the API response
-      // No need to manually set them here as they're HTTP-only
-
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Redirect to login with a flag so we can show the verification message there
+      const emailParam = encodeURIComponent(formData.email);
+      router.push(`/login?registered=1&email=${emailParam}`);
     } catch (error) {
       console.error('Registration error:', error);
       setApiError('An error occurred. Please try again.');

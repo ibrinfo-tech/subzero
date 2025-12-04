@@ -74,7 +74,6 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-import { hashPassword } from '../src/core/lib/utils';
 import { eq, and, isNull } from 'drizzle-orm';
 
 /**
@@ -85,15 +84,11 @@ import { eq, and, isNull } from 'drizzle-orm';
 async function seed() {
   const { db } = await import('../src/core/lib/db');
   const {
-    users,
     roles,
     permissions,
     modules,
     rolePermissions,
-    userRoles,
     tenants,
-    tenantUsers,
-    authProviders,
   } = await import('../src/core/lib/db/baseSchema');
 
   console.log('🌱 Starting database seed (aligned with core.sql)...\n');
@@ -102,24 +97,15 @@ async function seed() {
     // ============================================================================
     // 1. TENANTS (Must be first - referenced by users and roles)
     // ============================================================================
-    console.log('🏢 Seeding tenants...');
+    console.log('🏢 Seeding default tenant...');
     const tenantData = [
       {
-        name: 'Acme Corporation',
-        slug: 'acme',
+        name: 'Default Organization',
+        slug: 'default',
         status: 'active',
-        plan: 'enterprise',
+        plan: 'free',
         maxUsers: 100,
         settings: { theme: 'light', timezone: 'UTC' },
-        metadata: {},
-      },
-      {
-        name: 'TechStart Inc',
-        slug: 'techstart',
-        status: 'active',
-        plan: 'pro',
-        maxUsers: 50,
-        settings: { theme: 'dark', timezone: 'America/New_York' },
         metadata: {},
       },
     ];
@@ -133,9 +119,14 @@ async function seed() {
     if (tenantsToInsert.length > 0) {
       const newTenants = await db.insert(tenants).values(tenantsToInsert).returning();
       seededTenants = [...seededTenants, ...newTenants];
-      console.log(`✅ Created ${newTenants.length} new tenants (${existingTenants.length} already existed)`);
+      console.log(`✅ Created default tenant: "${newTenants[0].name}"`);
     } else {
-      console.log(`ℹ️  All tenants already exist (${existingTenants.length} total)`);
+      const defaultTenant = existingTenants.find((t) => t.slug === 'default');
+      if (defaultTenant) {
+        console.log(`ℹ️  Default tenant already exists: "${defaultTenant.name}"`);
+      } else {
+        console.log(`ℹ️  ${existingTenants.length} tenant(s) exist`);
+      }
     }
     console.log('');
 
@@ -537,191 +528,9 @@ async function seed() {
     console.log(`✅ Assigned ${viewerCount} new permissions to Viewer\n`);
 
     // ============================================================================
-    // 6. USERS
+    // 6. SKIP USER SEEDING - Users will be created via registration
     // ============================================================================
-    console.log('👤 Seeding users...');
-    const defaultPassword = await hashPassword('password123');
-    
-    const acmeTenant = seededTenants.find((t) => t.slug === 'acme');
-    const techStartTenant = seededTenants.find((t) => t.slug === 'techstart');
-
-    const userData = [
-      {
-        email: 'admin@example.com',
-        passwordHash: defaultPassword,
-        fullName: 'Super Admin',
-        isEmailVerified: true,
-        status: 'active',
-        tenantId: null, // Super Admin does NOT belong to any tenant
-        timezone: 'UTC',
-        locale: 'en',
-        twoFactorEnabled: false,
-        failedLoginAttempts: 0,
-        metadata: {},
-      },
-      {
-        email: 'admin@acme.com',
-        passwordHash: defaultPassword,
-        fullName: 'Acme Admin',
-        isEmailVerified: true,
-        status: 'active',
-        tenantId: acmeTenant?.id || null,
-        timezone: 'UTC',
-        locale: 'en',
-        twoFactorEnabled: false,
-        failedLoginAttempts: 0,
-        metadata: {},
-      },
-      {
-        email: 'manager@acme.com',
-        passwordHash: defaultPassword,
-        fullName: 'Acme Manager',
-        isEmailVerified: true,
-        status: 'active',
-        tenantId: acmeTenant?.id || null,
-        timezone: 'UTC',
-        locale: 'en',
-        twoFactorEnabled: false,
-        failedLoginAttempts: 0,
-        metadata: {},
-      },
-      {
-        email: 'viewer@techstart.com',
-        passwordHash: defaultPassword,
-        fullName: 'TechStart Viewer',
-        isEmailVerified: true,
-        status: 'active',
-        tenantId: techStartTenant?.id || null,
-        timezone: 'America/New_York',
-        locale: 'en',
-        twoFactorEnabled: false,
-        failedLoginAttempts: 0,
-        metadata: {},
-      },
-    ];
-
-    const existingUsers = await db.select().from(users);
-    const existingEmails = new Set(existingUsers.map((u) => u.email));
-    const usersToInsert = userData.filter((u) => !existingEmails.has(u.email));
-
-    let seededUsers = [...existingUsers];
-
-    if (usersToInsert.length > 0) {
-      const newUsers = await db.insert(users).values(usersToInsert).returning();
-      seededUsers = [...seededUsers, ...newUsers];
-      console.log(`✅ Created ${newUsers.length} new users (${existingUsers.length} already existed)`);
-    } else {
-      console.log(`ℹ️  All users already exist (${existingUsers.length} total)`);
-    }
-    console.log('');
-
-    // ============================================================================
-    // 7. AUTH PROVIDERS
-    // ============================================================================
-    console.log('🔑 Seeding auth providers...');
-    const existingAuthProviders = await db.select().from(authProviders);
-    const existingAuthProviderKeys = new Set(
-      existingAuthProviders.map((ap) => `${ap.userId}-${ap.provider}`)
-    );
-
-    const authProvidersToInsert = seededUsers
-      .map((user) => ({
-        userId: user.id,
-        provider: 'password',
-      }))
-      .filter((ap) => !existingAuthProviderKeys.has(`${ap.userId}-${ap.provider}`));
-
-    if (authProvidersToInsert.length > 0) {
-      await db.insert(authProviders).values(authProvidersToInsert);
-      console.log(`✅ Created ${authProvidersToInsert.length} new auth providers`);
-    } else {
-      console.log(`ℹ️  All auth providers already exist`);
-    }
-    console.log('');
-
-    // ============================================================================
-    // 8. USER ROLES (Many-to-many with temporal access)
-    // ============================================================================
-    console.log('🔗 Assigning roles to users...');
-    
-    const superAdminUser = seededUsers.find((u) => u.email === 'admin@example.com');
-    const acmeAdminUser = seededUsers.find((u) => u.email === 'admin@acme.com');
-    const acmeManagerUser = seededUsers.find((u) => u.email === 'manager@acme.com');
-    const techStartViewerUser = seededUsers.find((u) => u.email === 'viewer@techstart.com');
-
-    const existingUserRoles = await db.select().from(userRoles);
-    const existingUserRoleKeys = new Set(
-      existingUserRoles.map((ur) => `${ur.userId}-${ur.roleId}-${ur.tenantId}`)
-    );
-
-    const userRoleData = [];
-
-    // Super Admin role (no tenant)
-    if (superAdminUser && acmeTenant) {
-      userRoleData.push({
-        userId: superAdminUser.id,
-        roleId: superAdminRole.id,
-        tenantId: acmeTenant.id, // Even super admin needs a tenant context for user_roles
-        grantedBy: null,
-        validFrom: new Date(),
-        validUntil: null,
-        isActive: true,
-        metadata: {},
-      });
-    }
-
-    // Acme Admin
-    if (acmeAdminUser && acmeTenant) {
-      userRoleData.push({
-        userId: acmeAdminUser.id,
-        roleId: tenantAdminRole.id,
-        tenantId: acmeTenant.id,
-        grantedBy: superAdminUser?.id || null,
-        validFrom: new Date(),
-        validUntil: null,
-        isActive: true,
-        metadata: {},
-      });
-    }
-
-    // Acme Manager
-    if (acmeManagerUser && acmeTenant) {
-      userRoleData.push({
-        userId: acmeManagerUser.id,
-        roleId: managerRole.id,
-        tenantId: acmeTenant.id,
-        grantedBy: acmeAdminUser?.id || null,
-        validFrom: new Date(),
-        validUntil: null,
-        isActive: true,
-        metadata: {},
-      });
-    }
-
-    // TechStart Viewer
-    if (techStartViewerUser && techStartTenant) {
-      userRoleData.push({
-        userId: techStartViewerUser.id,
-        roleId: viewerRole.id,
-        tenantId: techStartTenant.id,
-        grantedBy: superAdminUser?.id || null,
-        validFrom: new Date(),
-        validUntil: null,
-        isActive: true,
-        metadata: {},
-      });
-    }
-
-    const userRolesToInsert = userRoleData.filter(
-      (ur) => !existingUserRoleKeys.has(`${ur.userId}-${ur.roleId}-${ur.tenantId}`)
-    );
-
-    if (userRolesToInsert.length > 0) {
-      await db.insert(userRoles).values(userRolesToInsert);
-      console.log(`✅ Assigned ${userRolesToInsert.length} new user-role relationships`);
-    } else {
-      console.log(`ℹ️  All user-role relationships already exist`);
-    }
+    console.log('👤 User seeding skipped - users will register via the registration form');
     console.log('');
 
     // ============================================================================
@@ -729,18 +538,15 @@ async function seed() {
     // ============================================================================
     console.log('✨ Seed completed successfully!\n');
     console.log('📊 Summary:');
-    console.log(`   - ${seededTenants.length} tenants`);
+    console.log(`   - ${seededTenants.length} tenant(s) - Default tenant for new registrations`);
     console.log(`   - ${seededModules.length} modules`);
     console.log(`   - ${seededPermissions.length} permissions (module:action format)`);
-    console.log(`   - ${seededRoles.length} roles`);
-    console.log(`   - ${seededUsers.length} users`);
-    console.log(`   - ${existingUserRoles.length + userRolesToInsert.length} user-role assignments\n`);
+    console.log(`   - ${seededRoles.length} roles (including default "USER" role)\n`);
     
-    console.log('🔑 Default login credentials:');
-    console.log('   - admin@example.com / password123 (Super Admin - No tenant, full access)');
-    console.log('   - admin@acme.com / password123 (Tenant Admin - Acme Corporation)');
-    console.log('   - manager@acme.com / password123 (Manager - Acme Corporation)');
-    console.log('   - viewer@techstart.com / password123 (Viewer - TechStart Inc)\n');
+    console.log('✅ System is ready for user registration!');
+    console.log('   - New users will be assigned to the "default" tenant');
+    console.log('   - New users will automatically get the "USER" role');
+    console.log('   - Users can register via the registration form\n');
     
     console.log('📋 Permission System:');
     console.log('   - Format: module:action (e.g., users:create, projects:read)');
@@ -753,7 +559,8 @@ async function seed() {
     console.log('   2. Tenant Admin: Full tenant management (users:*, roles:*, projects:*, billing:*)');
     console.log('   3. Manager: Team management (users:read/create/update, projects:*, roles:read/assign)');
     console.log('   4. Editor: Content editing (projects:create/read/update, users:read)');
-    console.log('   5. Viewer: Read-only (users:read, projects:read, billing:read)\n');
+    console.log('   5. User: Basic access (dashboard, profile, read projects) - DEFAULT ROLE');
+    console.log('   6. Viewer: Read-only (users:read, projects:read, billing:read)\n');
   } catch (error) {
     console.error('❌ Seed failed:', error);
     throw error;
