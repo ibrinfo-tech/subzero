@@ -132,7 +132,7 @@ export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTri
   if (isLoading && users.length === 0) {
     return (
       <div className="flex justify-center items-center py-12">
-        <LoadingSpinner />
+        <LoadingSpinner label="Loading users..." />
       </div>
     );
   }

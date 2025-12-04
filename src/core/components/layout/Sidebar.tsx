@@ -138,13 +138,22 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
   return (
     <aside 
       className={cn(
-        "fixed left-0 top-0 w-64 bg-sidebar text-sidebar-foreground h-screen flex flex-col border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out",
+        "fixed left-0 top-0 w-64 h-screen flex flex-col border-r border-sidebar-border z-50 transition-transform duration-300 ease-in-out",
+        "bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/90 shadow-lg",
         "lg:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}
     >
-      <div className="p-6 flex-shrink-0 flex items-center justify-between">
-        <h1 className="text-xl font-bold">RAD Framework</h1>
+      <div className="px-6 pt-5 pb-4 flex-shrink-0 flex items-center justify-between border-b border-sidebar-border/70">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-xs font-semibold text-primary-foreground shadow-sm">
+            RF
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold tracking-tight">RAD Framework</span>
+            <span className="text-xs text-muted-foreground/80">Admin Console</span>
+          </div>
+        </div>
         {/* Close button for mobile */}
         <button
           onClick={onClose}
@@ -154,7 +163,10 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
           <LucideIcons.X className="w-5 h-5" />
         </button>
       </div>
-      <nav className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
+      <nav className="flex-1 overflow-y-auto px-4 pb-6 pt-3 space-y-1">
+        <p className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+          Navigation
+        </p>
         {isLoading ? (
           // Show skeleton placeholders while loading (matches DashboardSkeleton)
           <>
@@ -182,14 +194,16 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
               href={item.href}
               onClick={() => onClose?.()}
               className={cn(
-                'flex items-center gap-3 px-4 py-2 rounded-md transition-colors',
+                'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'
               )}
             >
-              {item.icon}
-              <span>{item.label}</span>
+              <span className="flex items-center justify-center rounded-md bg-sidebar-accent/20 text-sidebar-foreground group-hover:bg-sidebar-accent/30 group-hover:text-sidebar-accent-foreground h-8 w-8">
+                {item.icon}
+              </span>
+              <span className="truncate">{item.label}</span>
             </Link>
           );
           })

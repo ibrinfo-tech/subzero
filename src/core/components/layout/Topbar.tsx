@@ -67,17 +67,17 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   };
 
   return (
-    <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 py-3 sticky top-0 z-30">
+    <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 px-4 sm:px-6 py-3">
       <div className="flex items-center justify-between gap-2">
         {/* Left side - Menu button and search */}
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Hamburger menu for mobile */}
           <button
             onClick={onMenuClick}
-            className="lg:hidden p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+            className="lg:hidden p-2 rounded-lg hover:bg-muted transition-colors flex-shrink-0 border border-border/60 bg-background/80"
             aria-label="Open menu"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5 text-foreground" />
           </button>
           
           {/* Search bar - hidden on mobile */}
@@ -85,7 +85,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             <input
               type="text"
               placeholder="Search anything..."
-              className="w-full px-4 py-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 text-sm bg-muted border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-transparent"
             />
           </div>
         </div>
@@ -97,10 +97,10 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           
           {/* Notifications */}
           <button
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors relative"
+            className="p-2 rounded-lg hover:bg-muted transition-colors relative border border-border/60 bg-background/80"
             aria-label="Notifications"
           >
-            <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            <Bell className="h-5 w-5 text-muted-foreground" />
           </button>
 
           {/* User Profile Dropdown */}
@@ -111,16 +111,16 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               aria-label="User menu"
             >
               {/* Avatar */}
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold text-sm">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
                 {getUserInitials()}
               </div>
               
               {/* User info - hidden on mobile */}
               <div className="hidden sm:block text-left">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                <div className="text-sm font-semibold text-foreground">
                   {user?.fullName || 'User'}
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
+                <div className="text-xs text-muted-foreground">
                   {getUserRole()}
                 </div>
               </div>
@@ -128,16 +128,16 @@ export function Topbar({ onMenuClick }: TopbarProps) {
 
             {/* Dropdown Menu */}
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-card rounded-lg shadow-lg border border-border/80 py-2 z-50">
                 {/* User Info Header */}
-                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                  <div className="font-semibold text-gray-900 dark:text-white">
+                <div className="px-4 py-3 border-b border-border/70">
+                  <div className="font-semibold text-foreground">
                     {user?.fullName || 'User'}
                   </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  <div className="text-sm text-muted-foreground mt-0.5">
                     {getUserRole()} | {user?.roles?.[0]?.code || 'Super Admin'}
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                  <div className="text-xs text-muted-foreground mt-1 truncate">
                     {user?.email}
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                 <div className="py-1">
                   <button
                     onClick={handleProfileClick}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
                   >
                     <UserCircle className="h-4 w-4" />
                     Profile
@@ -154,7 +154,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                   
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-muted transition-colors"
                   >
                     <LogOut className="h-4 w-4" />
                     Logout

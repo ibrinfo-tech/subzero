@@ -100,7 +100,7 @@ export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigu
   if (isLoading && roles.length === 0) {
     return (
       <div className="flex justify-center items-center py-12">
-        <LoadingSpinner />
+        <LoadingSpinner label="Loading roles..." />
       </div>
     );
   }
