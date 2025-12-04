@@ -6,8 +6,7 @@ WORKDIR /app
 # Install dependencies
 FROM base AS deps
 COPY package*.json ./
-# RUN npm ci
-RUN npm install --force
+RUN npm ci
 
 # Build the application
 FROM base AS builder
