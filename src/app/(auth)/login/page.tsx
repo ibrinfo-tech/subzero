@@ -135,6 +135,11 @@ export default function LoginPage() {
       // Tokens are also set in cookies by the API response
       // No need to manually set them here as they're HTTP-only
 
+      console.log('[Login] Success - redirecting to dashboard', {
+        userId: data.user.id,
+        email: data.user.email,
+      });
+
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (error) {

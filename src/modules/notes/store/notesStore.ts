@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Note } from '../types';
 
 interface NotesState {
@@ -14,6 +14,18 @@ interface NotesState {
   setError: (error: string | null) => void;
   clearNotes: () => void;
 }
+
+// SSR-safe storage wrapper
+const createStorage = () => {
+  if (typeof window === 'undefined') {
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    };
+  }
+  return createJSONStorage(() => localStorage);
+};
 
 export const useNotesStore = create<NotesState>()(
   persist(
@@ -33,13 +45,15 @@ export const useNotesStore = create<NotesState>()(
         set((state) => ({
           notes: state.notes.filter((note) => note.id !== id),
         })),
-      setLoading: (isLoading) => set({ isLoading }),
+      setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error }),
-      clearNotes: () => set({ notes: [], error: null }),
+      clearNotes: () => set({ notes: [] }),
     }),
     {
       name: 'notes-storage',
+      storage: createStorage(),
+      // Skip hydration during SSR
+      skipHydration: typeof window === 'undefined',
     }
   )
 );
-

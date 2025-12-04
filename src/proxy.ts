@@ -16,6 +16,11 @@ export function proxy(request: NextRequest) {
   // Get token from cookies (set by login)
   const token = request.cookies.get('access-token')?.value;
   
+  console.log('[Proxy] Route Access:', {
+    pathname,
+    hasToken: !!token,
+  });
+  
   // Check if registration is enabled
   const registrationEnabled = isRegistrationEnabled();
   
@@ -37,6 +42,7 @@ export function proxy(request: NextRequest) {
   
   // If accessing a protected route without token, redirect to login
   if (!isPublicRoute && !token && routeIsProtected) {
+    console.log('[Proxy] Redirecting to login - no token for protected route:', pathname);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -44,6 +50,7 @@ export function proxy(request: NextRequest) {
   
   // If accessing login/register with token, redirect to dashboard
   if (isPublicRoute && token) {
+    console.log('[Proxy] Redirecting to dashboard - already authenticated');
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
