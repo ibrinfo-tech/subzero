@@ -1,10 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-    // output: 'standalone',
-  // Enable strict mode for better development experience
+  // Temporarily disable standalone to test
+  // output: 'standalone',
   reactStrictMode: true,
-  // TypeScript errors should fail the build in production
   typescript: {
     ignoreBuildErrors: false,
   },
