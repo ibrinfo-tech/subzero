@@ -131,7 +131,7 @@ export function UserForm({
                 name="fullName"
                 label="Full Name"
                 required
-                value={formData.fullName}
+                value={formData.fullName ?? ''}
                 onChange={handleChange}
                 error={errors.fullName}
                 placeholder="John Doe"

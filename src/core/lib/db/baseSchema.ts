@@ -8,7 +8,8 @@ import {
   integer,
   jsonb,
   index,
-  unique
+  unique,
+  date,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -27,6 +28,19 @@ export const users = pgTable('users', {
   passwordHash: varchar('password_hash', { length: 255 }),
   fullName: varchar('full_name', { length: 255 }),
   avatarUrl: text('avatar_url'),
+  // Extended profile details (aligned with core.sql)
+  phoneNumber: varchar('phone_number', { length: 30 }),
+  jobTitle: varchar('job_title', { length: 100 }),
+  department: varchar('department', { length: 100 }),
+  companyName: varchar('company_name', { length: 255 }),
+  dateOfBirth: date('date_of_birth'),
+  bio: text('bio'),
+  addressLine1: varchar('address_line1', { length: 255 }),
+  addressLine2: varchar('address_line2', { length: 255 }),
+  city: varchar('city', { length: 100 }),
+  state: varchar('state', { length: 100 }),
+  postalCode: varchar('postal_code', { length: 20 }),
+  country: varchar('country', { length: 100 }),
   status: varchar('status', { length: 20 }).default('pending').notNull(), // active, inactive, suspended, pending
   isEmailVerified: boolean('email_verified').default(false).notNull(),
   twoFactorEnabled: boolean('two_factor_enabled').default(false).notNull(),

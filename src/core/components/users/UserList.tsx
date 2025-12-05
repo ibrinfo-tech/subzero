@@ -17,7 +17,7 @@ interface UserListProps {
 }
 
 export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTrigger }: UserListProps) {
-  const { token } = useAuthStore();
+  const { token, user: currentUser } = useAuthStore();
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Array<{ id: string; name: string; code: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,6 +89,12 @@ export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTri
   }, [token, searchTerm, roleFilter, statusFilter, refreshTrigger]);
 
   const handleDelete = (user: User) => {
+    // Prevent users from deleting their own account via the User Management UI
+    if (currentUser && user.id === currentUser.id) {
+      toast.error('You cannot delete your own account from User Management.');
+      return;
+    }
+
     setUserToDelete(user);
     setDeleteDialogOpen(true);
   };
