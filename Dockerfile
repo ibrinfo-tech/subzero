@@ -5,15 +5,20 @@ WORKDIR /app
 
 # Install dependencies
 FROM base AS deps
-COPY package*.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
 # Build the application
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 
-# Build arguments for environment variables needed during build
+# Debug: List what was copied
+RUN ls -la
+RUN ls -la src/ || echo "src directory not found!"
+
+# Build arguments
 ARG DATABASE_URL
 ARG NEXT_PUBLIC_API_URL
 
@@ -33,17 +38,17 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built application
-COPY --from=builder /app/public ./public
+# Copy everything (non-standalone mode)
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
 
 USER nextjs
 
 EXPOSE 3000
 
 ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
 
 CMD ["npm", "start"]
