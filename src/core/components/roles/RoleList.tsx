@@ -13,7 +13,7 @@ interface RoleListProps {
   onCreateClick?: () => void;
   onEditClick?: (role: Role) => void;
   refreshTrigger?: number; // When this changes, refetch roles
-  onConfigurePermissions?: (role: Role) => void;
+  onConfigurePermissions?: (role: Role, moduleCode?: string) => void;
 }
 
 export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigurePermissions }: RoleListProps) {

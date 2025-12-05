@@ -14,6 +14,7 @@ import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
 import { Edit, Trash2, Search, UserPlus } from 'lucide-react';
 import type { User } from '@/core/lib/db/baseSchema';
+import { useAuthStore } from '@/core/store/authStore';
 
 interface UserTableProps {
   users: User[];
@@ -41,6 +42,7 @@ export function UserTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const { user: currentUser } = useAuthStore();
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
@@ -89,7 +91,7 @@ export function UserTable({
   return (
     <div className="space-y-4">
       {/* Search and Filters */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 bg-card border border-border rounded-lg px-4 py-3 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -127,7 +129,7 @@ export function UserTable({
           </div>
         </div>
         {onCreate && (
-          <Button onClick={onCreate} className="w-full sm:w-auto sm:self-end">
+          <Button onClick={onCreate} className="w-full sm:w-auto sm:self-end whitespace-nowrap">
             <UserPlus className="h-4 w-4 mr-2" />
             Add User
           </Button>
@@ -135,7 +137,7 @@ export function UserTable({
       </div>
 
       {/* Desktop Table View - Hidden on mobile */}
-      <div className="hidden md:block border border-border rounded-lg overflow-hidden bg-card">
+      <div className="hidden md:block border border-border rounded-lg overflow-hidden bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -216,7 +218,7 @@ export function UserTable({
                             <Edit className="h-4 w-4" />
                           </Button>
                         )}
-                        {onDelete && (
+                        {onDelete && (!currentUser || user.id !== currentUser.id) && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -304,7 +306,7 @@ export function UserTable({
                       Edit
                     </Button>
                   )}
-                  {onDelete && (
+                  {onDelete && (!currentUser || user.id !== currentUser.id) && (
                     <Button
                       variant="outline"
                       size="sm"

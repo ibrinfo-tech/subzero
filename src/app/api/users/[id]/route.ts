@@ -175,8 +175,19 @@ export async function PATCH(
       }
     }
     
+    // Extract only the fields that updateUser expects
+    const updateData: Parameters<typeof updateUser>[1] = {
+      ...(data.email !== undefined && { email: data.email }),
+      ...(data.fullName !== undefined && { fullName: data.fullName }),
+      ...(data.status !== undefined && { status: data.status }),
+      ...(data.password !== undefined && { password: data.password }),
+      ...(data.timezone !== undefined && { timezone: data.timezone }),
+      ...(data.locale !== undefined && { locale: data.locale }),
+      ...(data.roleId !== undefined && { roleId: data.roleId }),
+    };
+    
     // Update user
-    const user = await updateUser(id, data, userId);
+    const user = await updateUser(id, updateData, userId);
     
     if (!user) {
       return NextResponse.json(

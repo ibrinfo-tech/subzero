@@ -15,9 +15,9 @@
 export const protectedRoutes: string[] = [
   // Core protected routes
   '/dashboard',
-  '/profile',
   '/users', // User Management (core feature)
   '/roles', // Role Management (core feature)
+  '/settings', // Settings area (core feature)
   
   // Module routes with requiresAuth: true
   // Add routes here when modules have requiresAuth: true in their module.config.json
@@ -39,4 +39,3 @@ export function isProtectedRoute(pathname: string): boolean {
     return regex.test(pathname);
   });
 }
-

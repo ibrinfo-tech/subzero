@@ -57,6 +57,7 @@ export async function GET(request: NextRequest) {
       else if (moduleCode === 'profile') path = '/profile';
       else if (moduleCode === 'users') path = '/users';
       else if (moduleCode === 'roles') path = '/roles';
+      else if (moduleCode === 'settings') path = '/settings/general';
 
       return {
         label: module.name,

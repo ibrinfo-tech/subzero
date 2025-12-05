@@ -89,7 +89,11 @@ async function seed() {
     modules,
     rolePermissions,
     tenants,
+    users,
+    userRoles,
+    authProviders,
   } = await import('../src/core/lib/db/baseSchema');
+  const { hashPassword } = await import('../src/core/lib/utils');
 
   console.log('🌱 Starting database seed (aligned with core.sql)...\n');
 
@@ -169,6 +173,14 @@ async function seed() {
         sortOrder: 4,
         isActive: true,
       },
+      {
+        name: 'Settings',
+        code: 'SETTINGS',
+        description: 'System settings and configuration',
+        icon: 'Settings',
+        sortOrder: 5,
+        isActive: true,
+      },
     ];
 
     // Discover dynamic modules from src/modules directory
@@ -242,6 +254,31 @@ async function seed() {
       // Profile Permissions
       { code: 'profile:read', name: 'View Profile', module: 'profile', action: 'read', resource: 'profile', isDangerous: false, requiresMfa: false, description: 'View own profile' },
       { code: 'profile:update', name: 'Update Profile', module: 'profile', action: 'update', resource: 'profile', isDangerous: false, requiresMfa: false, description: 'Update own profile' },
+      
+      // Settings Permissions (Main)
+      { code: 'settings:read', name: 'View Settings', module: 'settings', action: 'read', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'View settings' },
+      { code: 'settings:update', name: 'Update Settings', module: 'settings', action: 'update', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'Update settings' },
+      { code: 'settings:*', name: 'All Settings Permissions', module: 'settings', action: 'manage', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'Wildcard - all settings permissions' },
+      
+      // Settings Submenu Permissions - General
+      { code: 'settings:general:read', name: 'View General Settings', module: 'settings', action: 'read', resource: 'settings_general', isDangerous: false, requiresMfa: false, description: 'View general settings' },
+      { code: 'settings:general:update', name: 'Update General Settings', module: 'settings', action: 'update', resource: 'settings_general', isDangerous: false, requiresMfa: false, description: 'Update general settings' },
+      
+      // Settings Submenu Permissions - Registration
+      { code: 'settings:registration:read', name: 'View Registration Settings', module: 'settings', action: 'read', resource: 'settings_registration', isDangerous: false, requiresMfa: false, description: 'View registration settings' },
+      { code: 'settings:registration:update', name: 'Update Registration Settings', module: 'settings', action: 'update', resource: 'settings_registration', isDangerous: false, requiresMfa: false, description: 'Update registration settings' },
+      
+      // Settings Submenu Permissions - Notification Methods
+      { code: 'settings:notification-methods:read', name: 'View Notification Methods', module: 'settings', action: 'read', resource: 'settings_notification_methods', isDangerous: false, requiresMfa: false, description: 'View notification methods settings' },
+      { code: 'settings:notification-methods:update', name: 'Update Notification Methods', module: 'settings', action: 'update', resource: 'settings_notification_methods', isDangerous: false, requiresMfa: false, description: 'Update notification methods settings' },
+      
+      // Settings Submenu Permissions - SMTP Settings
+      { code: 'settings:smtp-settings:read', name: 'View SMTP Settings', module: 'settings', action: 'read', resource: 'settings_smtp', isDangerous: false, requiresMfa: false, description: 'View SMTP settings' },
+      { code: 'settings:smtp-settings:update', name: 'Update SMTP Settings', module: 'settings', action: 'update', resource: 'settings_smtp', isDangerous: true, requiresMfa: true, description: 'Update SMTP settings (sensitive)' },
+      
+      // Settings Submenu Permissions - Custom Fields
+      { code: 'settings:custom-fields:read', name: 'View Custom Fields', module: 'settings', action: 'read', resource: 'settings_custom_fields', isDangerous: false, requiresMfa: false, description: 'View custom fields settings' },
+      { code: 'settings:custom-fields:update', name: 'Update Custom Fields', module: 'settings', action: 'update', resource: 'settings_custom_fields', isDangerous: false, requiresMfa: false, description: 'Update custom fields settings' },
       
       // System Permissions
       { code: 'system:*', name: 'System Administrator', module: 'system', action: 'manage', resource: null, isDangerous: true, requiresMfa: true, description: 'Full system access' },
@@ -450,12 +487,23 @@ async function seed() {
       return 0;
     };
 
-    // Super Admin gets admin:* (which grants everything)
-    const superAdminCount = await insertRolePermissions(
-      superAdminRole,
-      ['admin:*'],
-      'Super Admin'
-    );
+    // Super Admin gets ALL permissions explicitly (full system access)
+    let superAdminCount = 0;
+    {
+      const permissionsToAssign = seededPermissions;
+      const toInsert = permissionsToAssign
+        .map((perm) => ({
+          roleId: superAdminRole.id,
+          permissionId: perm.id,
+          conditions: null,
+        }))
+        .filter((rp) => !existingRolePermissionKeys.has(`${rp.roleId}-${rp.permissionId}`));
+
+      if (toInsert.length > 0) {
+        await db.insert(rolePermissions).values(toInsert);
+        superAdminCount = toInsert.length;
+      }
+    }
 
     // Tenant Admin gets all permissions except system:* and admin:*
     const tenantAdminCount = await insertRolePermissions(
@@ -528,9 +576,70 @@ async function seed() {
     console.log(`✅ Assigned ${viewerCount} new permissions to Viewer\n`);
 
     // ============================================================================
-    // 6. SKIP USER SEEDING - Users will be created via registration
+    // 6. SUPER ADMIN USER (create only if no users exist)
     // ============================================================================
-    console.log('👤 User seeding skipped - users will register via the registration form');
+    console.log('👤 Seeding Super Admin user (if none exist)...');
+
+    const existingUsers = await db.select().from(users).limit(1);
+
+    if (existingUsers.length === 0) {
+      const defaultTenant = seededTenants.find((t) => t.slug === 'default') || seededTenants[0];
+      const superAdminRoleRecord = seededRoles.find((r) => r.code === 'SUPER_ADMIN');
+
+      if (!defaultTenant || !superAdminRoleRecord) {
+        console.warn(
+          '⚠️  Cannot create Super Admin user: default tenant or SUPER_ADMIN role not found.'
+        );
+      } else {
+        const superAdminEmail = process.env.SEED_SUPERADMIN_EMAIL || 'superadmin@example.com';
+        const superAdminPassword = process.env.SEED_SUPERADMIN_PASSWORD || 'SuperAdmin123!';
+
+        console.log(`   Creating Super Admin user: ${superAdminEmail}`);
+
+        const passwordHash = await hashPassword(superAdminPassword);
+
+        const [superAdminUser] = await db
+          .insert(users)
+          .values({
+            email: superAdminEmail,
+            passwordHash,
+            fullName: 'Super Admin',
+            tenantId: defaultTenant.id,
+            status: 'active',
+            isEmailVerified: true,
+            timezone: 'UTC',
+            locale: 'en',
+            metadata: {},
+          })
+          .returning();
+
+        // Create auth provider entry for password auth
+        await db.insert(authProviders).values({
+          userId: superAdminUser.id,
+          provider: 'password',
+        });
+
+        // Assign SUPER_ADMIN role via userRoles (system role, no tenant) if needed
+        await db.insert(userRoles).values({
+          userId: superAdminUser.id,
+          roleId: superAdminRoleRecord.id,
+          tenantId: defaultTenant.id,
+          grantedBy: superAdminUser.id,
+          isActive: true,
+          metadata: {},
+        });
+
+        console.log('   ✅ Super Admin user created successfully');
+        console.log('   👉 Credentials:');
+        console.log(`      Email   : ${superAdminEmail}`);
+        console.log(
+          `      Password: ${process.env.SEED_SUPERADMIN_PASSWORD ? '(from SEED_SUPERADMIN_PASSWORD env)' : superAdminPassword
+          }`
+        );
+      }
+    } else {
+      console.log('ℹ️  Users already exist - skipping Super Admin user creation');
+    }
     console.log('');
 
     // ============================================================================

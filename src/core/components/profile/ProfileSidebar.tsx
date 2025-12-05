@@ -44,7 +44,7 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
           </p>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 w-full mt-6 pt-6 border-t border-border">
+          {/* <div className="grid grid-cols-3 gap-4 w-full mt-6 pt-6 border-t border-border">
             <div className="text-center">
               <div className="text-2xl font-bold text-foreground">{stats.posts}</div>
               <div className="text-xs text-muted-foreground mt-1">Post</div>
@@ -57,10 +57,10 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
               <div className="text-2xl font-bold text-foreground">{stats.members.toLocaleString()}</div>
               <div className="text-xs text-muted-foreground mt-1">Members</div>
             </div>
-          </div>
+          </div> */}
 
           {/* Contact Info */}
-          <div className="w-full mt-6 pt-6 border-t border-border space-y-3 text-left">
+          {/* <div className="w-full mt-6 pt-6 border-t border-border space-y-3 text-left">
             <div className="flex items-center gap-3 text-sm">
               <Mail className="w-4 h-4 text-muted-foreground" />
               <span className="text-foreground break-all">{profile?.email}</span>
@@ -85,12 +85,12 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
                 https://bundui.io/
               </a>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
 
       {/* Complete Your Profile */}
-      <div className="bg-card border border-border rounded-lg p-6">
+      {/* <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="text-sm font-semibold text-foreground mb-4">Complete Your Profile</h3>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
@@ -100,10 +100,10 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
             <span className="ml-3 text-muted-foreground">%66</span>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Skills */}
-      <div className="bg-card border border-border rounded-lg p-6">
+      {/* <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="text-sm font-semibold text-foreground mb-4">Skills</h3>
         <div className="flex flex-wrap gap-2">
           {skills.map((skill) => (
@@ -115,7 +115,7 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
             </span>
           ))}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

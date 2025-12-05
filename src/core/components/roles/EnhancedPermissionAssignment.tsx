@@ -35,6 +35,12 @@ interface FieldPermission {
   editable: boolean;
 }
 
+interface SettingsSubmenuConfig {
+  enabled: boolean;
+  read: boolean;
+  update: boolean;
+}
+
 interface ModuleConfig {
   moduleId: string ;
   enabled: boolean;
@@ -47,6 +53,7 @@ interface ModuleConfig {
     manage: boolean;
   };
   fieldPermissions: Record<string, FieldPermission>;
+  settingsSubmenus?: Record<string, SettingsSubmenuConfig>;
 }
 
 interface EnhancedPermissionAssignmentProps {
@@ -68,6 +75,7 @@ export function EnhancedPermissionAssignment({
   const [modulePermissions, setModulePermissions] = useState<ModulePermissions[]>([]);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     modulePermissions: true,
+    settingsSubmenus: true,
     dataPermission: true,
     fieldPermission: true,
   });
@@ -78,46 +86,43 @@ export function EnhancedPermissionAssignment({
     loadRolePermissions();
   }, [roleId, token]);
 
-  // Auto-select module from URL or first module when data loads
+  // Auto-select module from URL or Settings module when data loads
   useEffect(() => {
-    if (modulePermissions.length > 0 && !selectedModule) {
-      const moduleFromUrl = searchParams.get('module');
-      
-      if (moduleFromUrl) {
-        // Check if module exists
-        const moduleExists = modulePermissions.find(m => m.moduleCode.toLowerCase() === moduleFromUrl.toLowerCase());
-        if (moduleExists) {
-          setSelectedModule(moduleExists.moduleId);
-        } else {
-          // Module doesn't exist, select first one
-          setSelectedModule(modulePermissions[0].moduleId);
-          updateUrl(modulePermissions[0].moduleCode);
-        }
-      } else {
-        // No module in URL, select first one
-        setSelectedModule(modulePermissions[0].moduleId);
-        updateUrl(modulePermissions[0].moduleCode);
+    if (modulePermissions.length === 0) return;
+
+    const moduleFromUrl = searchParams.get('module');
+
+    // Prefer module from URL when available
+    if (moduleFromUrl) {
+      const moduleExists = modulePermissions.find(
+        (m) => m.moduleCode.toLowerCase() === moduleFromUrl.toLowerCase()
+      );
+
+      if (moduleExists) {
+        setSelectedModule(moduleExists.moduleId);
+        return;
       }
     }
-  }, [modulePermissions]); // Only run when modulePermissions loads, not on searchParams change
 
-  // Update URL when module changes
+    // Fallback: prefer Settings module, otherwise first module
+    if (!selectedModule) {
+      const settingsModule = modulePermissions.find(
+        (m) => m.moduleCode.toLowerCase() === 'settings'
+      );
+      const moduleToSelect = settingsModule || modulePermissions[0];
+      if (moduleToSelect) {
+        setSelectedModule(moduleToSelect.moduleId);
+        updateUrl(moduleToSelect.moduleCode);
+      }
+    }
+  }, [modulePermissions, searchParams, selectedModule]);
+
+  // Update URL when module changes (used when falling back to first module)
   const updateUrl = (moduleCode: string) => {
     const params = new URLSearchParams(window.location.search);
     params.set('module', moduleCode.toLowerCase());
     // Use router.replace to update URL properly with Next.js
     router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
-  };
-
-  // Handle module selection
-  const handleModuleSelect = (moduleId: string) => {
-    const module = modulePermissions.find(m => m.moduleId === moduleId);
-    if (module) {
-      setSelectedModule(moduleId);
-      updateUrl(module.moduleCode);
-    } else {
-      console.error('[PermissionAssignment] Module not found:', moduleId);
-    }
   };
 
   const loadRolePermissions = async () => {
@@ -142,19 +147,55 @@ export function EnhancedPermissionAssignment({
       const configs: Record<string, ModuleConfig> = {};
       data.modulePermissions?.forEach((module: ModulePermissions) => {
         const grantedPerms = module.permissions.filter(p => p.granted);
-        configs[module.moduleId] = {
+        const isSettings = module.moduleCode.toLowerCase() === 'settings';
+        
+        const config: ModuleConfig = {
           moduleId: module.moduleId,
           enabled: grantedPerms.length > 0,
           dataAccess: 'team',
           permissions: {
-            view: grantedPerms.some(p => p.action === 'read'),
+            view: grantedPerms.some(p => p.action === 'read' && !p.code.includes(':')),
             create: grantedPerms.some(p => p.action === 'create'),
-            update: grantedPerms.some(p => p.action === 'update'),
+            update: grantedPerms.some(p => p.action === 'update' && !p.code.includes(':')),
             delete: grantedPerms.some(p => p.action === 'delete'),
             manage: grantedPerms.some(p => p.action === 'manage' || p.code.endsWith(':*')),
           },
           fieldPermissions: {},
         };
+
+        // Add settings submenus configuration
+        if (isSettings) {
+          const submenus: Record<string, SettingsSubmenuConfig> = {
+            'general': {
+              enabled: grantedPerms.some(p => p.code.includes('settings:general')),
+              read: grantedPerms.some(p => p.code === 'settings:general:read'),
+              update: grantedPerms.some(p => p.code === 'settings:general:update'),
+            },
+            'registration': {
+              enabled: grantedPerms.some(p => p.code.includes('settings:registration')),
+              read: grantedPerms.some(p => p.code === 'settings:registration:read'),
+              update: grantedPerms.some(p => p.code === 'settings:registration:update'),
+            },
+            'notification-methods': {
+              enabled: grantedPerms.some(p => p.code.includes('settings:notification-methods')),
+              read: grantedPerms.some(p => p.code === 'settings:notification-methods:read'),
+              update: grantedPerms.some(p => p.code === 'settings:notification-methods:update'),
+            },
+            'smtp-settings': {
+              enabled: grantedPerms.some(p => p.code.includes('settings:smtp-settings')),
+              read: grantedPerms.some(p => p.code === 'settings:smtp-settings:read'),
+              update: grantedPerms.some(p => p.code === 'settings:smtp-settings:update'),
+            },
+            'custom-fields': {
+              enabled: grantedPerms.some(p => p.code.includes('settings:custom-fields')),
+              read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
+              update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
+            },
+          };
+          config.settingsSubmenus = submenus;
+        }
+
+        configs[module.moduleId] = config;
       });
       setModuleConfigs(configs);
 
@@ -227,6 +268,43 @@ export function EnhancedPermissionAssignment({
     });
   };
 
+  const toggleSettingsSubmenu = (moduleId: string, submenuKey: string, enabled: boolean) => {
+    const config = moduleConfigs[moduleId];
+    if (!config || !config.settingsSubmenus) return;
+
+    updateModuleConfig(moduleId, {
+      settingsSubmenus: {
+        ...config.settingsSubmenus,
+        [submenuKey]: {
+          ...config.settingsSubmenus[submenuKey],
+          enabled,
+          // If disabling, also disable read and update
+          ...(enabled ? {} : { read: false, update: false }),
+        },
+      },
+    });
+  };
+
+  const toggleSettingsSubmenuPermission = (moduleId: string, submenuKey: string, permission: 'read' | 'update') => {
+    const config = moduleConfigs[moduleId];
+    if (!config || !config.settingsSubmenus) return;
+
+    const submenu = config.settingsSubmenus[submenuKey];
+    if (!submenu) return;
+
+    updateModuleConfig(moduleId, {
+      settingsSubmenus: {
+        ...config.settingsSubmenus,
+        [submenuKey]: {
+          ...submenu,
+          [permission]: !submenu[permission],
+          // If enabling read or update, also enable the submenu
+          enabled: !submenu[permission] ? true : submenu.enabled,
+        },
+      },
+    });
+  };
+
   const handleSave = async () => {
     if (!token) return;
 
@@ -241,20 +319,62 @@ export function EnhancedPermissionAssignment({
         const module = modulePermissions.find(m => m.moduleId === moduleId);
         if (!module) return;
 
+        const isSettings = module.moduleCode.toLowerCase() === 'settings';
+
         // Add permissions based on config
         module.permissions.forEach(perm => {
           let shouldGrant = false;
 
-          if (config.permissions.manage && (perm.action === 'manage' || perm.code.endsWith(':*'))) {
-            shouldGrant = true;
-          } else if (config.permissions.view && perm.action === 'read') {
-            shouldGrant = true;
-          } else if (config.permissions.create && perm.action === 'create') {
-            shouldGrant = true;
-          } else if (config.permissions.update && perm.action === 'update') {
-            shouldGrant = true;
-          } else if (config.permissions.delete && perm.action === 'delete') {
-            shouldGrant = true;
+          // Handle settings submenu permissions separately
+          if (isSettings && config.settingsSubmenus) {
+            // Check if this is a submenu permission
+            const submenuKeys = Object.keys(config.settingsSubmenus);
+            const isSubmenuPerm = submenuKeys.some(key => perm.code.includes(`settings:${key}`));
+            
+            if (isSubmenuPerm) {
+              // Check each submenu
+              for (const [submenuKey, submenuConfig] of Object.entries(config.settingsSubmenus)) {
+                if (submenuConfig.enabled) {
+                  if (perm.code === `settings:${submenuKey}:read` && submenuConfig.read) {
+                    shouldGrant = true;
+                    break;
+                  }
+                  if (perm.code === `settings:${submenuKey}:update` && submenuConfig.update) {
+                    shouldGrant = true;
+                    break;
+                  }
+                }
+              }
+            } else {
+              // Handle main settings permissions (not submenu-specific)
+              // Main settings permissions are: settings:read, settings:update, settings:*
+              const isMainSettingsPerm = perm.code === 'settings:read' || 
+                                        perm.code === 'settings:update' || 
+                                        perm.code === 'settings:*';
+              
+              if (isMainSettingsPerm) {
+                if (config.permissions.manage && perm.code === 'settings:*') {
+                  shouldGrant = true;
+                } else if (config.permissions.view && perm.code === 'settings:read') {
+                  shouldGrant = true;
+                } else if (config.permissions.update && perm.code === 'settings:update') {
+                  shouldGrant = true;
+                }
+              }
+            }
+          } else {
+            // Handle non-settings modules
+            if (config.permissions.manage && (perm.action === 'manage' || perm.code.endsWith(':*'))) {
+              shouldGrant = true;
+            } else if (config.permissions.view && perm.action === 'read') {
+              shouldGrant = true;
+            } else if (config.permissions.create && perm.action === 'create') {
+              shouldGrant = true;
+            } else if (config.permissions.update && perm.action === 'update') {
+              shouldGrant = true;
+            } else if (config.permissions.delete && perm.action === 'delete') {
+              shouldGrant = true;
+            }
           }
 
           if (shouldGrant) {
@@ -353,32 +473,6 @@ export function EnhancedPermissionAssignment({
         </Button>
       </div>
 
-      {/* Module Tabs - Compact Navigation */}
-      <div className="border-b border-border">
-        <nav className="flex gap-2 overflow-x-auto">
-          {modulePermissions.map((module) => (
-            <button
-              key={module.moduleId}
-              onClick={() => handleModuleSelect(module.moduleId)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                selectedModule === module.moduleId
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              }`}
-            >
-              {module.moduleName}
-              <span className={`ml-2 text-xs ${
-                moduleConfigs[module.moduleId]?.enabled 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : 'text-muted-foreground'
-              }`}>
-                {moduleConfigs[module.moduleId]?.enabled ? '●' : '○'}
-              </span>
-            </button>
-          ))}
-        </nav>
-      </div>
-
       {selectedModuleData && selectedConfig && selectedModule && (
         <>
           {/* Module Permissions */}
@@ -465,6 +559,78 @@ export function EnhancedPermissionAssignment({
               </CardContent>
             )}
           </Card>
+
+          {/* Settings Submenus - Only show for Settings module */}
+          {selectedModuleData.moduleCode.toLowerCase() === 'settings' && selectedConfig.settingsSubmenus && (
+            <Card>
+              <CardHeader
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => toggleSection('settingsSubmenus')}
+              >
+                <div className="flex items-center justify-between">
+                  <CardTitle>Settings Submenus</CardTitle>
+                  {expandedSections.settingsSubmenus ? (
+                    <ChevronUp className="h-5 w-5" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5" />
+                  )}
+                </div>
+              </CardHeader>
+              {expandedSections.settingsSubmenus && (
+                <CardContent className="space-y-4">
+                  {Object.entries(selectedConfig.settingsSubmenus).map(([submenuKey, submenuConfig]) => {
+                    const submenuLabels: Record<string, string> = {
+                      'general': 'General',
+                      'registration': 'Registration',
+                      'notification-methods': 'Notification Methods',
+                      'smtp-settings': 'SMTP Settings',
+                      'custom-fields': 'Custom Fields',
+                    };
+
+                    return (
+                      <div key={submenuKey} className="border border-border rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={submenuConfig.enabled}
+                              onChange={(e) => toggleSettingsSubmenu(selectedModule!, submenuKey, e.target.checked)}
+                              className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                            />
+                            <label className="font-medium text-foreground">
+                              {submenuLabels[submenuKey] || submenuKey}
+                            </label>
+                          </div>
+                        </div>
+                        {submenuConfig.enabled && (
+                          <div className="ml-7 space-y-2">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={submenuConfig.read}
+                                onChange={() => toggleSettingsSubmenuPermission(selectedModule!, submenuKey, 'read')}
+                                className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                              />
+                              <span className="text-sm text-foreground">View</span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={submenuConfig.update}
+                                onChange={() => toggleSettingsSubmenuPermission(selectedModule!, submenuKey, 'update')}
+                                className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                              />
+                              <span className="text-sm text-foreground">Update</span>
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           {/* Data Permission */}
           {selectedConfig.enabled && (

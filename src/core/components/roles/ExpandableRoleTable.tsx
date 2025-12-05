@@ -41,7 +41,7 @@ interface ExpandableRoleTableProps {
   onCreate?: () => void;
   onSearch?: (search: string) => void;
   onStatusFilter?: (status: string) => void;
-  onConfigurePermissions?: (role: Role) => void;
+  onConfigurePermissions?: (role: Role, moduleCode?: string) => void;
 }
 
 export function ExpandableRoleTable({
@@ -196,7 +196,7 @@ export function ExpandableRoleTable({
   return (
     <div className="space-y-4">
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-card border border-border rounded-lg px-4 py-3 shadow-sm">
         <div className="flex flex-1 gap-2 w-full sm:w-auto">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -219,7 +219,7 @@ export function ExpandableRoleTable({
           />
         </div>
         {onCreate && (
-          <Button onClick={onCreate} className="w-full sm:w-auto">
+          <Button onClick={onCreate} className="w-full sm:w-auto whitespace-nowrap">
             <ShieldPlus className="h-4 w-4 mr-2" />
             Create New Role
           </Button>
@@ -227,7 +227,7 @@ export function ExpandableRoleTable({
       </div>
 
       {/* Table */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -261,12 +261,18 @@ export function ExpandableRoleTable({
 
                 return (
                   <Fragment key={role.id}>
-                    <TableRow>
+                    <TableRow
+                      className="cursor-pointer hover:bg-muted/40 transition-colors"
+                      onClick={() => toggleRoleExpansion(role.id)}
+                    >
                       <TableCell>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => toggleRoleExpansion(role.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleRoleExpansion(role.id);
+                          }}
                           className="p-0 h-6 w-6"
                           disabled={isLoadingPerms}
                         >
@@ -279,7 +285,6 @@ export function ExpandableRoleTable({
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-foreground">{role.name}</div>
-                        <div className="text-sm text-muted-foreground">{role.code}</div>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-foreground">
@@ -295,15 +300,6 @@ export function ExpandableRoleTable({
                       <TableCell>{getStatusBadge(role.status)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {onConfigurePermissions && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onConfigurePermissions(role)}
-                            >
-                              <Settings className="h-4 w-4" />
-                            </Button>
-                          )}
                           {onEdit && (
                             <Button
                               variant="outline"
@@ -378,6 +374,19 @@ export function ExpandableRoleTable({
                                           </div>
                                         )}
                                       </>
+                                    )}
+
+                                    {onConfigurePermissions && (
+                                      <div className="pt-3 border-t border-border flex justify-end">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => onConfigurePermissions(role, module.moduleCode)}
+                                        >
+                                          <Settings className="h-4 w-4 mr-2" />
+                                          Configure
+                                        </Button>
+                                      </div>
                                     )}
                                   </CardContent>
                                 </Card>

@@ -14,11 +14,11 @@ export interface CreateUserInput {
 
 export interface UpdateUserInput {
   email?: string;
-  fullName?: string;
+  fullName?: string | null;
   status?: 'active' | 'inactive' | 'suspended' | 'pending';
   password?: string;
-  timezone?: string;
-  locale?: string;
+  timezone?: string | null;
+  locale?: string | null;
   roleId?: string; // For updating user's role
 }
 

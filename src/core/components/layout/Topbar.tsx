@@ -58,12 +58,13 @@ export function Topbar({ onMenuClick }: TopbarProps) {
     return user?.email?.substring(0, 2).toUpperCase() || 'U';
   };
 
-  // Get user role display
+  // Get primary user role display (name or code). If none, return empty string.
   const getUserRole = () => {
     if (user?.roles && user.roles.length > 0) {
-      return user.roles[0].name;
+      const primaryRole = user.roles[0];
+      return primaryRole.name || primaryRole.code || '';
     }
-    return 'User';
+    return '';
   };
 
   return (
@@ -120,9 +121,11 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                 <div className="text-sm font-semibold text-foreground">
                   {user?.fullName || 'User'}
                 </div>
+                {getUserRole() && (
                 <div className="text-xs text-muted-foreground">
                   {getUserRole()}
                 </div>
+                )}
               </div>
             </button>
 
@@ -134,9 +137,11 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                   <div className="font-semibold text-foreground">
                     {user?.fullName || 'User'}
                   </div>
+                  {getUserRole() && (
                   <div className="text-sm text-muted-foreground mt-0.5">
-                    {getUserRole()} | {user?.roles?.[0]?.code || 'Super Admin'}
+                      {getUserRole()}
                   </div>
+                  )}
                   <div className="text-xs text-muted-foreground mt-1 truncate">
                     {user?.email}
                   </div>

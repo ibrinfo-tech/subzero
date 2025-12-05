@@ -40,7 +40,73 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
   const pathname = usePathname();
   const [moduleNavItems, setModuleNavItems] = useState<NavItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const { isAuthenticated, _hasHydrated, token } = useAuthStore();
+
+  // Helper to check if user has permission (supports wildcards)
+  const hasPermission = (permissionCode: string): boolean => {
+    if (userPermissions.length === 0) return false;
+    if (userPermissions.includes(permissionCode)) return true;
+    const module = permissionCode.split(':')[0];
+    const wildcardPermission = `${module}:*`;
+    if (userPermissions.includes(wildcardPermission)) return true;
+    if (userPermissions.includes('admin:*')) return true;
+    return false;
+  };
+
+  // Core Settings section (shown when inside /settings routes) - filtered by permissions
+  const getAllSettingsNavItems = (): NavItem[] => {
+    const items: NavItem[] = [
+      {
+        label: 'Back to Main Menu',
+        href: '/dashboard',
+        icon: <LucideIcons.ArrowLeft className="w-5 h-5" />,
+      },
+    ];
+
+    // Only show submenus if user has the corresponding read permission
+    if (hasPermission('settings:general:read') || hasPermission('settings:*')) {
+      items.push({
+        label: 'General',
+        href: '/settings/general',
+        icon: <LucideIcons.FileText className="w-5 h-5" />,
+      });
+    }
+
+    if (hasPermission('settings:registration:read') || hasPermission('settings:*')) {
+      items.push({
+        label: 'Registration',
+        href: '/settings/registration',
+        icon: <LucideIcons.UserPlus className="w-5 h-5" />,
+      });
+    }
+
+    if (hasPermission('settings:notification-methods:read') || hasPermission('settings:*')) {
+      items.push({
+        label: 'Notification Methods',
+        href: '/settings/notification-methods',
+        icon: <LucideIcons.Bell className="w-5 h-5" />,
+      });
+    }
+
+    if (hasPermission('settings:smtp-settings:read') || hasPermission('settings:*')) {
+      items.push({
+        label: 'SMTP Settings',
+        href: '/settings/smtp-settings',
+        icon: <LucideIcons.Mail className="w-5 h-5" />,
+      });
+    }
+
+    if (hasPermission('settings:custom-fields:read') || hasPermission('settings:*')) {
+      items.push({
+        label: 'Custom Fields',
+        href: '/settings/custom-fields',
+        icon: <LucideIcons.SlidersHorizontal className="w-5 h-5" />,
+      });
+    }
+
+    return items;
+  };
 
   useEffect(() => {
     // Wait for hydration to complete
@@ -89,51 +155,85 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       }, 50);
     }, 10000);
 
-    fetch('/api/modules/navigation', {
-      headers,
-      credentials: 'include', // Also include cookies for authentication
-      cache: 'no-store', // Don't cache this request
-    })
-      .then((res) => {
+    // Load navigation and permissions in parallel
+    Promise.all([
+      fetch('/api/modules/navigation', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+      }),
+      fetch('/api/auth/permissions', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+      }),
+    ])
+      .then(async ([navRes, permRes]) => {
         clearTimeout(timeoutId);
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
+        
+        // Handle navigation
+        if (!navRes.ok) {
+          throw new Error(`HTTP error! status: ${navRes.status}`);
         }
-        return res.json();
-      })
-      .then((data) => {
-        if (data.success && data.navigation) {
-          const items: NavItem[] = data.navigation.map((nav: ModuleNavigation) => ({
+        const navData = await navRes.json();
+        
+        // Handle permissions
+        let permissions: string[] = [];
+        if (permRes.ok) {
+          const permData = await permRes.json();
+          permissions = permData.permissions || [];
+        }
+        setUserPermissions(permissions);
+
+        if (navData.success && navData.navigation) {
+          const items: NavItem[] = navData.navigation.map((nav: ModuleNavigation) => ({
             label: nav.label,
             href: nav.path,
             icon: getIconComponent(nav.icon),
           }));
           setModuleNavItems(items);
         } else {
-          console.warn('[Sidebar] Navigation API returned no navigation items:', data);
+          console.warn('[Sidebar] Navigation API returned no navigation items:', navData);
           setModuleNavItems([]);
         }
         setIsLoading(false);
-        // Small delay to ensure state updates are applied before hiding skeleton
         setTimeout(() => {
-        onNavigationLoaded?.();
+          onNavigationLoaded?.();
         }, 50);
       })
       .catch((err) => {
         clearTimeout(timeoutId);
-        console.error('[Sidebar] Failed to load module navigation:', err);
+        console.error('[Sidebar] Failed to load navigation or permissions:', err);
         setModuleNavItems([]);
+        setUserPermissions([]);
         setIsLoading(false);
-        // Small delay to ensure state updates are applied before hiding skeleton
         setTimeout(() => {
-        onNavigationLoaded?.();
+          onNavigationLoaded?.();
         }, 50);
       });
   }, [isAuthenticated, _hasHydrated, token, onNavigationLoaded]);
 
+  const inSettingsSection = pathname?.startsWith('/settings');
+
   // All navigation items (static + dynamic) come from API, filtered by permissions
   // The API now returns both static items (Dashboard, Profile, etc.) and dynamic modules
-  const allNavItems = moduleNavItems;
+  // Check if Settings is already in the API response to avoid duplicates
+  const hasSettingsInNav = moduleNavItems.some(item => 
+    item.href.startsWith('/settings') || item.label.toLowerCase() === 'settings'
+  );
+
+  const mainNavItems: NavItem[] = [
+    ...moduleNavItems,
+    // Only add Settings manually if it's not already in the API response and user has permission
+    ...(!hasSettingsInNav && (hasPermission('settings:read') || hasPermission('settings:*')) ? [{
+      label: 'Settings',
+      href: '/settings/general',
+      icon: <LucideIcons.Settings className="w-5 h-5" />,
+    }] : []),
+  ];
+
+  const settingsNavItems = getAllSettingsNavItems();
+  const navItemsToRender = inSettingsSection ? settingsNavItems : mainNavItems;
 
   return (
     <aside 
@@ -146,12 +246,16 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
     >
       <div className="px-6 pt-5 pb-4 flex-shrink-0 flex items-center justify-between border-b border-sidebar-border/70">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-xs font-semibold text-primary-foreground shadow-sm">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-xs font-semibold text-sidebar-primary-foreground shadow-sm">
             RF
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-semibold tracking-tight">RAD Framework</span>
-            <span className="text-xs text-muted-foreground/80">Admin Console</span>
+            <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
+              RAD Framework
+            </span>
+            <span className="text-xs text-sidebar-foreground/70">
+              Admin Console
+            </span>
           </div>
         </div>
         {/* Close button for mobile */}
@@ -164,8 +268,8 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         </button>
       </div>
       <nav className="flex-1 overflow-y-auto px-4 pb-6 pt-3 space-y-1">
-        <p className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-          Navigation
+        <p className="px-2 pb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/60">
+          {inSettingsSection ? 'Settings' : 'Navigation'}
         </p>
         {isLoading ? (
           // Show skeleton placeholders while loading (matches DashboardSkeleton)
@@ -180,13 +284,13 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
               </div>
             ))}
           </>
-        ) : allNavItems.length === 0 ? (
+        ) : navItemsToRender.length === 0 ? (
           <div className="text-muted-foreground text-sm py-4">
             No navigation items available.
             {!isAuthenticated && <div className="mt-2">Please log in.</div>}
           </div>
         ) : (
-          allNavItems.map((item) => {
+          navItemsToRender.map((item) => {
           const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
           return (
             <Link

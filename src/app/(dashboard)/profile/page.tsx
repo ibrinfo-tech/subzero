@@ -12,14 +12,28 @@ import {
 } from '@/core/components/profile';
 
 interface UserProfile {
-  id: number;
+  id: string;
   email: string;
   fullName: string | null;
   isEmailVerified: boolean;
-  tenantId: number | null;
+  tenantId: string | null;
+  timezone?: string | null;
+  locale?: string | null;
+  phoneNumber?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  companyName?: string | null;
+  dateOfBirth?: string | Date | null;
+  bio?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
   createdAt: Date | string;
   updatedAt: Date | string;
-  roles?: Array<{ id: number; name: string; code: string }>;
+  roles?: Array<{ id: string; name: string; code: string }>;
   permissions?: Array<{
     permissionCode: string;
     permissionName: string;
@@ -37,6 +51,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -60,6 +75,38 @@ export default function ProfilePage() {
 
     fetchProfile();
   }, []);
+
+  const handleProfileUpdated = (updatedProfile: {
+    id: string;
+    email: string;
+    fullName: string | null;
+    timezone?: string | null;
+    locale?: string | null;
+    phoneNumber?: string | null;
+    jobTitle?: string | null;
+    department?: string | null;
+    companyName?: string | null;
+    dateOfBirth?: string | Date | null;
+    bio?: string | null;
+    addressLine1?: string | null;
+    addressLine2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+  }) => {
+    if (profile) {
+      setProfile({
+        ...profile,
+        ...updatedProfile,
+      });
+    }
+    setIsSavingProfile(false);
+  };
+
+  const handleProfileSavingChange = (saving: boolean) => {
+    setIsSavingProfile(saving);
+  };
 
   if (isLoading) {
     return (
@@ -115,8 +162,14 @@ export default function ProfilePage() {
 
           {/* Right Content */}
           <div className="lg:col-span-8">
-            {activeTab === 'overview' && (
-              <OverviewTab onChangePassword={() => setIsPasswordDialogOpen(true)} />
+            {activeTab === 'overview' && profile && (
+              <OverviewTab
+                profile={profile}
+                onProfileUpdated={handleProfileUpdated}
+                onSavingChange={handleProfileSavingChange}
+                isSaving={isSavingProfile}
+                onChangePassword={() => setIsPasswordDialogOpen(true)}
+              />
             )}
             {activeTab === 'security' && (
               <SecurityTab onChangePassword={() => setIsPasswordDialogOpen(true)} />

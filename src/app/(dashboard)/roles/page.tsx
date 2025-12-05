@@ -155,12 +155,15 @@ function RolesPageContent() {
     }
   };
 
-  const handleConfigurePermissions = (role: Role) => {
+  const handleConfigurePermissions = (role: Role, moduleCode?: string) => {
     // Set role data immediately and show permission assignment
     setSelectedRole({ id: role.id, name: role.name });
     setShowPermissionAssignment(true);
-    // Update URL to reflect the action
-    router.push(`/roles?action=configure&roleId=${role.id}`, { scroll: false });
+
+    const moduleQuery = moduleCode ? `&module=${encodeURIComponent(moduleCode.toLowerCase())}` : '';
+
+    // Update URL to reflect the action and optional module
+    router.push(`/roles?action=configure&roleId=${role.id}${moduleQuery}`, { scroll: false });
   };
 
   const handleBackFromPermissions = () => {
@@ -183,17 +186,7 @@ function RolesPageContent() {
   //   );
   // }
 
-  if (showPermissionAssignment && selectedRole) {
-    return (
-      <div className="w-full">
-        <EnhancedPermissionAssignment
-          roleId={selectedRole.id}
-          roleName={selectedRole.name}
-          onBack={handleBackFromPermissions}
-        />
-      </div>
-    );
-  }
+  const isPermissionView = showPermissionAssignment && !!selectedRole;
 
   return (
     <ProtectedPage
@@ -204,31 +197,46 @@ function RolesPageContent() {
       <div className="w-full">
         <PageHeader
           title="Role Management"
-          description="Manage roles and their permissions"
-        />
-        <RoleList
-          onCreateClick={() => router.push('/roles?action=create')}
-          onEditClick={handleEdit}
-          refreshTrigger={refreshTrigger}
-          onConfigurePermissions={handleConfigurePermissions}
+          description={
+            isPermissionView && selectedRole
+              ? `Manage roles and their permissions • Configuring permissions for "${selectedRole.name}"`
+              : 'Manage roles and their permissions'
+          }
         />
 
-        {/* Form Dialog */}
-        <FormDialog
-          open={showForm}
-          onOpenChange={handleCloseDialog}
-          title={isEditMode ? 'Edit Role' : 'Create New Role'}
-          description={isEditMode ? 'Update role information and settings' : 'Add a new role to the system'}
-          maxWidth="2xl"
-          isLoading={loadingRole}
-        >
-          <RoleForm
-            initialData={editingRole || undefined}
-            onSubmit={handleCreate}
-            onCancel={handleCancel}
-            isLoading={isSubmitting}
+        {isPermissionView && selectedRole ? (
+          <EnhancedPermissionAssignment
+            roleId={selectedRole.id}
+            roleName={selectedRole.name}
+            onBack={handleBackFromPermissions}
           />
-        </FormDialog>
+        ) : (
+          <>
+            <RoleList
+              onCreateClick={() => router.push('/roles?action=create')}
+              onEditClick={handleEdit}
+              refreshTrigger={refreshTrigger}
+              onConfigurePermissions={handleConfigurePermissions}
+            />
+
+            {/* Form Dialog */}
+            <FormDialog
+              open={showForm}
+              onOpenChange={handleCloseDialog}
+              title={isEditMode ? 'Edit Role' : 'Create New Role'}
+              description={isEditMode ? 'Update role information and settings' : 'Add a new role to the system'}
+              maxWidth="2xl"
+              isLoading={loadingRole}
+            >
+              <RoleForm
+                initialData={editingRole || undefined}
+                onSubmit={handleCreate}
+                onCancel={handleCancel}
+                isLoading={isSubmitting}
+              />
+            </FormDialog>
+          </>
+        )}
       </div>
     </ProtectedPage>
   );
