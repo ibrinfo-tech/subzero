@@ -231,37 +231,81 @@ async function seed() {
     // ============================================================================
     console.log('🧩 Seeding module fields...');
     const moduleByCode = new Map(seededModules.map((m) => [m.code, m]));
-    const notesModule = moduleByCode.get('NOTES');
 
-    if (notesModule) {
-      const noteFields = [
+    type ModuleFieldSeed = {
+      name: string;
+      code: string;
+      label: string;
+      fieldType: string;
+      description?: string | null;
+      sortOrder: number;
+    };
+
+    const moduleFieldDefinitions: Record<string, ModuleFieldSeed[]> = {
+      // Dynamic example module (Notes)
+      NOTES: [
         { name: 'Title', code: 'title', label: 'Title', fieldType: 'text', description: 'Note title', sortOrder: 1 },
         { name: 'Content', code: 'content', label: 'Content', fieldType: 'text', description: 'Note content/body', sortOrder: 2 },
         { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Creation timestamp', sortOrder: 3 },
         { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Last updated timestamp', sortOrder: 4 },
-      ];
+      ],
+      // Core module fields derived from schema expectations
+      USERS: [
+        { name: 'Full Name', code: 'full_name', label: 'Full Name', fieldType: 'text', description: 'User full name', sortOrder: 1 },
+        { name: 'Email', code: 'email', label: 'Email', fieldType: 'email', description: 'Primary login email', sortOrder: 2 },
+        { name: 'Job Title', code: 'job_title', label: 'Job Title', fieldType: 'text', description: 'Role or title', sortOrder: 3 },
+        { name: 'Department', code: 'department', label: 'Department', fieldType: 'text', description: 'Department or team', sortOrder: 4 },
+        { name: 'Phone Number', code: 'phone_number', label: 'Phone Number', fieldType: 'text', description: 'Contact phone', sortOrder: 5 },
+        { name: 'Status', code: 'status', label: 'Status', fieldType: 'text', description: 'Account status', sortOrder: 6 },
+        { name: 'Locale', code: 'locale', label: 'Locale', fieldType: 'text', description: 'Preferred locale', sortOrder: 7 },
+        { name: 'Timezone', code: 'timezone', label: 'Timezone', fieldType: 'text', description: 'Preferred timezone', sortOrder: 8 },
+        { name: 'Email Verified', code: 'email_verified', label: 'Email Verified', fieldType: 'boolean', description: 'Whether email is verified', sortOrder: 9 },
+        { name: 'Two Factor Enabled', code: 'two_factor_enabled', label: 'Two Factor Enabled', fieldType: 'boolean', description: '2FA status', sortOrder: 10 },
+        { name: 'Last Login At', code: 'last_login_at', label: 'Last Login At', fieldType: 'datetime', description: 'Most recent login', sortOrder: 11 },
+        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Record creation time', sortOrder: 98 },
+        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Record update time', sortOrder: 99 },
+      ],
+      ROLES: [
+        { name: 'Role Name', code: 'name', label: 'Role Name', fieldType: 'text', description: 'Display name of the role', sortOrder: 1 },
+        { name: 'Role Code', code: 'code', label: 'Role Code', fieldType: 'text', description: 'Unique role identifier', sortOrder: 2 },
+        { name: 'Description', code: 'description', label: 'Description', fieldType: 'text', description: 'What this role is for', sortOrder: 3 },
+        { name: 'Priority', code: 'priority', label: 'Priority', fieldType: 'number', description: 'Role precedence (0-100)', sortOrder: 4 },
+        { name: 'Status', code: 'status', label: 'Status', fieldType: 'text', description: 'Active/Inactive/Deprecated', sortOrder: 5 },
+        { name: 'Color', code: 'color', label: 'Color', fieldType: 'text', description: 'Badge color (hex)', sortOrder: 6 },
+        { name: 'System Role', code: 'is_system', label: 'System Role', fieldType: 'boolean', description: 'System-managed role', sortOrder: 7 },
+        { name: 'Default Role', code: 'is_default', label: 'Default Role', fieldType: 'boolean', description: 'Assigned by default', sortOrder: 8 },
+        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Record creation time', sortOrder: 98 },
+        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Record update time', sortOrder: 99 },
+      ],
+    };
+
+    for (const [moduleCode, fields] of Object.entries(moduleFieldDefinitions)) {
+      const moduleRecord = moduleByCode.get(moduleCode);
+
+      if (!moduleRecord) {
+        console.log(`ℹ️  ${moduleCode} module not found - skipping module_fields seeding for it`);
+        continue;
+      }
 
       const existingFields = await db
         .select()
         .from(moduleFields)
-        .where(eq(moduleFields.moduleId, notesModule.id));
+        .where(eq(moduleFields.moduleId, moduleRecord.id));
 
       const existingFieldCodes = new Set(existingFields.map((f) => f.code));
-      const fieldsToInsert = noteFields
+      const fieldsToInsert = fields
         .filter((f) => !existingFieldCodes.has(f.code))
         .map((f) => ({
           ...f,
-          moduleId: notesModule.id,
+          moduleId: moduleRecord.id,
         }));
 
       if (fieldsToInsert.length > 0) {
         await db.insert(moduleFields).values(fieldsToInsert);
-        console.log(`✅ Added ${fieldsToInsert.length} field(s) to Notes module`);
+        console.log(`✅ Added ${fieldsToInsert.length} field(s) to ${moduleRecord.name} module`);
       } else {
-        console.log('ℹ️  Notes module fields already exist');
+        console.log(`ℹ️  ${moduleRecord.name} module fields already exist`);
       }
-    } else {
-      console.log('ℹ️  Notes module not found - skipping Notes field seeding');
     }
     console.log('');
 
