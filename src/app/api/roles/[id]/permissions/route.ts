@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { userHasPermission } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
-import { roles, permissions, rolePermissions, modules } from '@/core/lib/db/baseSchema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { roles, rolePermissions } from '@/core/lib/db/baseSchema';
+import { getRolePermissions, updateRoleModulePermissions } from '@/core/lib/services/rolePermissionsService';
+import { eq } from 'drizzle-orm';
 
 /**
  * GET /api/roles/:id/permissions
@@ -44,60 +45,7 @@ export async function GET(
       );
     }
 
-    // Get all modules
-    const allModules = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.isActive, true))
-      .orderBy(modules.sortOrder);
-
-    // Get all permissions
-    const allPermissions = await db
-      .select()
-      .from(permissions)
-      .where(eq(permissions.isActive, true));
-
-    // Get role's assigned permissions
-    const assignedPermissions = await db
-      .select({
-        permissionId: rolePermissions.permissionId,
-        permissionCode: permissions.code,
-      })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(eq(rolePermissions.roleId, roleId));
-
-    const assignedPermissionIds = new Set(assignedPermissions.map(p => p.permissionId));
-
-    // Group permissions by module
-    const modulePermissionsMap = new Map();
-
-    for (const module of allModules) {
-      const moduleCode = module.code.toLowerCase();
-      const modulePerms = allPermissions.filter(p => p.module === moduleCode);
-
-      if (modulePerms.length > 0) {
-        modulePermissionsMap.set(module.id, {
-          moduleId: module.id,
-          moduleName: module.name,
-          moduleCode: module.code,
-          icon: module.icon,
-          permissions: modulePerms.map(perm => ({
-            id: perm.id,
-            code: perm.code,
-            name: perm.name,
-            action: perm.action,
-            resource: perm.resource,
-            isDangerous: perm.isDangerous,
-            requiresMfa: perm.requiresMfa,
-            description: perm.description,
-            granted: assignedPermissionIds.has(perm.id),
-          })),
-        });
-      }
-    }
-
-    const modulePermissions = Array.from(modulePermissionsMap.values());
+    const permissionsData = await getRolePermissions(roleId);
 
     return NextResponse.json({
       success: true,
@@ -106,7 +54,7 @@ export async function GET(
         name: role[0].name,
         code: role[0].code,
       },
-      modulePermissions,
+      modulePermissions: permissionsData.modules,
     });
   } catch (error) {
     console.error('Get role permissions error:', error);
@@ -142,28 +90,86 @@ export async function PUT(
 
     const { id: roleId } = await params;
     const body = await request.json();
-    const { permissionIds } = body;
+    const modulesPayload = Array.isArray(body.modules) ? body.modules : [];
+    const legacyPermissionIds = Array.isArray(body.permissionIds) ? body.permissionIds : null;
 
-    if (!Array.isArray(permissionIds)) {
-      return NextResponse.json(
-        { error: 'permissionIds must be an array' },
-        { status: 400 }
+    const isValidDataAccess = (value: unknown): value is 'none' | 'own' | 'team' | 'all' =>
+      value === 'none' || value === 'own' || value === 'team' || value === 'all';
+
+    let collectedPermissionIds: string[] = [];
+
+    // Update module-level, data-level, and field-level permissions when provided
+    for (const moduleData of modulesPayload) {
+      if (!moduleData?.moduleId) {
+        continue;
+      }
+
+      const permissionsArray = Array.isArray(moduleData.permissions) ? moduleData.permissions : [];
+      const fieldsArray = Array.isArray(moduleData.fields) ? moduleData.fields : [];
+
+      const hasAccess = typeof moduleData.hasAccess === 'boolean'
+        ? moduleData.hasAccess
+        : permissionsArray.some((p: any) => p?.granted);
+
+      const dataAccess = isValidDataAccess(moduleData.dataAccess)
+        ? moduleData.dataAccess
+        : hasAccess
+          ? 'team'
+          : 'none';
+
+      const normalizedPermissions = permissionsArray
+        .filter((p: any) => p?.permissionId)
+        .map((p: any) => ({
+          permissionId: p.permissionId as string,
+          granted: Boolean(p.granted),
+        }));
+
+      const normalizedFields = fieldsArray
+        .filter((f: any) => f?.fieldId)
+        .map((f: any) => ({
+          fieldId: f.fieldId as string,
+          isVisible: Boolean(f.isVisible),
+          isEditable: Boolean(f.isEditable) && Boolean(f.isVisible),
+        }));
+
+      const grantedPermissionIds = normalizedPermissions
+        .filter((p: { permissionId: string; granted: boolean }) => p.granted)
+        .map((p: { permissionId: string; granted: boolean }) => p.permissionId);
+
+      collectedPermissionIds.push(...grantedPermissionIds);
+
+      await updateRoleModulePermissions(
+        roleId,
+        moduleData.moduleId as string,
+        {
+          hasAccess,
+          dataAccess,
+          permissions: normalizedPermissions,
+          fields: normalizedFields,
+        },
+        userId,
       );
     }
 
-    // Delete existing permissions
+    // Always keep legacy role_permissions table in sync for current auth checks
+    const finalPermissionIds = Array.from(
+      new Set([
+        ...(legacyPermissionIds ?? []),
+        ...collectedPermissionIds,
+      ]),
+    );
+
     await db
       .delete(rolePermissions)
       .where(eq(rolePermissions.roleId, roleId));
 
-    // Insert new permissions
-    if (permissionIds.length > 0) {
+    if (finalPermissionIds.length > 0) {
       await db.insert(rolePermissions).values(
-        permissionIds.map(permissionId => ({
+        finalPermissionIds.map((permissionId) => ({
           roleId,
           permissionId,
           conditions: null,
-        }))
+        })),
       );
     }
 

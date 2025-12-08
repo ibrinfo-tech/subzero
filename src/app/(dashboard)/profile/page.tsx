@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/core/store/authStore';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
+import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import {
   ChangePasswordDialog,
   ProfileSidebar,
@@ -108,22 +109,6 @@ export default function ProfilePage() {
     setIsSavingProfile(saving);
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
-        <p className="text-red-800 dark:text-red-400">{error}</p>
-      </div>
-    );
-  }
-
   // Mock data for demonstration
   const stats = {
     posts: 184,
@@ -132,57 +117,75 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-card border-b border-border">
-        <div className="px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-2xl font-bold text-foreground">Profile Page</h1>
+    <ProtectedPage
+      permission="profile:read"
+      title="Profile"
+      description="Manage your profile settings"
+      fallbackPath="/dashboard"
+      showLoader={false}
+    >
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <LoadingSpinner />
         </div>
-        
-        {/* Tabs */}
-        <div className="px-4 sm:px-6 lg:px-8">
-          <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      ) : error ? (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <p className="text-red-800 dark:text-red-400">{error}</p>
         </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Sidebar */}
-          <div className="lg:col-span-4">
-            <ProfileSidebar
-              profile={{
-                fullName: profile?.fullName || null,
-                email: profile?.email || storeUser?.email || '',
-                roles: profile?.roles
-              }}
-              stats={stats}
-            />
+      ) : (
+        <div className="min-h-screen bg-background">
+          {/* Header */}
+          <div className="bg-card border-b border-border">
+            <div className="px-4 sm:px-6 lg:px-8 py-4">
+              <h1 className="text-2xl font-bold text-foreground">Profile Page</h1>
+            </div>
+            
+            {/* Tabs */}
+            <div className="px-4 sm:px-6 lg:px-8">
+              <ProfileTabs activeTab={activeTab} onTabChange={setActiveTab} />
+            </div>
           </div>
 
-          {/* Right Content */}
-          <div className="lg:col-span-8">
-            {activeTab === 'overview' && profile && (
-              <OverviewTab
-                profile={profile}
-                onProfileUpdated={handleProfileUpdated}
-                onSavingChange={handleProfileSavingChange}
-                isSaving={isSavingProfile}
-                onChangePassword={() => setIsPasswordDialogOpen(true)}
-              />
-            )}
-            {activeTab === 'security' && (
-              <SecurityTab onChangePassword={() => setIsPasswordDialogOpen(true)} />
-            )}
-          </div>
-        </div>
-      </div>
+          {/* Main Content */}
+          <div className="px-4 sm:px-6 lg:px-8 py-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Sidebar */}
+              <div className="lg:col-span-4">
+                <ProfileSidebar
+                  profile={{
+                    fullName: profile?.fullName || null,
+                    email: profile?.email || storeUser?.email || '',
+                    roles: profile?.roles
+                  }}
+                  stats={stats}
+                />
+              </div>
 
-      {/* Change Password Dialog */}
-      <ChangePasswordDialog
-        open={isPasswordDialogOpen}
-        onOpenChange={setIsPasswordDialogOpen}
-      />
-    </div>
+              {/* Right Content */}
+              <div className="lg:col-span-8">
+                {activeTab === 'overview' && profile && (
+                  <OverviewTab
+                    profile={profile}
+                    onProfileUpdated={handleProfileUpdated}
+                    onSavingChange={handleProfileSavingChange}
+                    isSaving={isSavingProfile}
+                    onChangePassword={() => setIsPasswordDialogOpen(true)}
+                  />
+                )}
+                {activeTab === 'security' && (
+                  <SecurityTab onChangePassword={() => setIsPasswordDialogOpen(true)} />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Change Password Dialog */}
+          <ChangePasswordDialog
+            open={isPasswordDialogOpen}
+            onOpenChange={setIsPasswordDialogOpen}
+          />
+        </div>
+      )}
+    </ProtectedPage>
   );
 }

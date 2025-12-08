@@ -5,21 +5,27 @@ import { useAuthStore } from '@/core/store/authStore';
 
 /**
  * Hook to check user permissions on the frontend
- * Fetches permissions from the API and provides helper functions
+ * Uses cached permissions from auth store to avoid redundant API calls
  */
 export function usePermissions() {
-  const { user, isAuthenticated, token } = useAuthStore();
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated, token, permissions: cachedPermissions, permissionsLoaded, setPermissions } = useAuthStore();
+  const [loading, setLoading] = useState(!permissionsLoaded);
 
   useEffect(() => {
-    async function fetchPermissions() {
-      if (!isAuthenticated || !user?.id || !token) {
-        setPermissions([]);
-        setLoading(false);
-        return;
-      }
+    // If permissions are already loaded, use cached values (even if empty array)
+    if (permissionsLoaded) {
+      setLoading(false);
+      return;
+    }
 
+    // Only fetch if authenticated and permissions not loaded
+    if (!isAuthenticated || !user?.id || !token) {
+      setLoading(false);
+      return;
+    }
+
+    // Fetch permissions only once
+    async function fetchPermissions() {
       try {
         const response = await fetch('/api/auth/permissions', {
           headers: {
@@ -30,7 +36,9 @@ export function usePermissions() {
 
         if (response.ok) {
           const data = await response.json();
-          setPermissions(data.permissions || []);
+          const permissions = data.permissions || [];
+          // Cache permissions in store
+          setPermissions(permissions);
         } else {
           setPermissions([]);
         }
@@ -43,13 +51,14 @@ export function usePermissions() {
     }
 
     fetchPermissions();
-  }, [isAuthenticated, user?.id, token]);
+  }, [isAuthenticated, user?.id, token, permissionsLoaded, setPermissions]);
 
   /**
    * Check if user has a specific permission
    * Supports wildcard matching (e.g., users:* matches users:create)
    */
   const hasPermission = (permissionCode: string): boolean => {
+    const permissions = cachedPermissions;
     if (!isAuthenticated || permissions.length === 0) {
       return false;
     }
@@ -89,7 +98,7 @@ export function usePermissions() {
   };
 
   return {
-    permissions,
+    permissions: cachedPermissions,
     loading,
     hasPermission,
     hasAnyPermission,

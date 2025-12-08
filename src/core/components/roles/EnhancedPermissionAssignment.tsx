@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/core/store/authStore';
 import { Button } from '@/core/components/ui/button';
@@ -26,10 +26,23 @@ interface ModulePermissions {
   moduleName: string;
   moduleCode: string;
   icon: string | null;
+  hasAccess?: boolean;
+  dataAccess?: 'none' | 'own' | 'team' | 'all';
   permissions: Permission[];
+  fields?: ModuleField[];
+}
+
+interface ModuleField {
+  fieldId: string;
+  fieldName: string;
+  fieldCode: string;
+  fieldLabel: string;
+  isVisible?: boolean;
+  isEditable?: boolean;
 }
 
 interface FieldPermission {
+  fieldId: string;
   fieldName: string;
   visible: boolean;
   editable: boolean;
@@ -81,8 +94,12 @@ export function EnhancedPermissionAssignment({
   });
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, ModuleConfig>>({});
+  const hasUnsavedChangesRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
 
   useEffect(() => {
+    initialLoadDoneRef.current = false;
+    hasUnsavedChangesRef.current = false;
     loadRolePermissions();
   }, [roleId, token]);
 
@@ -141,63 +158,162 @@ export function EnhancedPermissionAssignment({
       }
 
       const data = await response.json();
-      setModulePermissions(data.modulePermissions || []);
+      // Filter out profile module - it should be viewable and updatable by every user for their own profile
+      const filteredModules = (data.modulePermissions || []).filter(
+        (module: ModulePermissions) => module.moduleCode.toLowerCase() !== 'profile'
+      );
+      setModulePermissions(filteredModules);
 
-      // Initialize module configs
-      const configs: Record<string, ModuleConfig> = {};
-      data.modulePermissions?.forEach((module: ModulePermissions) => {
-        const grantedPerms = module.permissions.filter(p => p.granted);
-        const isSettings = module.moduleCode.toLowerCase() === 'settings';
-        
-        const config: ModuleConfig = {
-          moduleId: module.moduleId,
-          enabled: grantedPerms.length > 0,
-          dataAccess: 'team',
-          permissions: {
-            view: grantedPerms.some(p => p.action === 'read' && !p.code.includes(':')),
-            create: grantedPerms.some(p => p.action === 'create'),
-            update: grantedPerms.some(p => p.action === 'update' && !p.code.includes(':')),
-            delete: grantedPerms.some(p => p.action === 'delete'),
-            manage: grantedPerms.some(p => p.action === 'manage' || p.code.endsWith(':*')),
-          },
-          fieldPermissions: {},
-        };
+      // Initialize module configs - only on initial load or if no unsaved changes exist
+      // This prevents overwriting user's unsaved changes
+      if (!initialLoadDoneRef.current || !hasUnsavedChangesRef.current) {
+        const configs: Record<string, ModuleConfig> = {};
+        filteredModules.forEach((module: ModulePermissions) => {
+          const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
+          const grantedPerms = module.permissions.filter(p => p.granted);
+          const isSettings = normalizeCode(module.moduleCode).toLowerCase() === 'settings';
+          const moduleCodeLower = normalizeCode(module.moduleCode).toLowerCase();
+          const enabled = module.hasAccess ?? grantedPerms.length > 0;
 
-        // Add settings submenus configuration
-        if (isSettings) {
-          const submenus: Record<string, SettingsSubmenuConfig> = {
-            'general': {
-              enabled: grantedPerms.some(p => p.code.includes('settings:general')),
-              read: grantedPerms.some(p => p.code === 'settings:general:read'),
-              update: grantedPerms.some(p => p.code === 'settings:general:update'),
+          const fieldPermissions: Record<string, FieldPermission> = {};
+          (module.fields || []).forEach((field) => {
+            fieldPermissions[field.fieldId] = {
+              fieldId: field.fieldId,
+              fieldName: field.fieldLabel || field.fieldName,
+              visible: field.isVisible ?? false,
+              editable: (field.isEditable ?? false) && (field.isVisible ?? false),
+            };
+          });
+          
+          const config: ModuleConfig = {
+            moduleId: module.moduleId,
+            enabled,
+            dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
+            permissions: {
+              // Check for basic module read permission (e.g., notes:read) - not sub-resource permissions
+              view: grantedPerms.some(p => p.action === 'read' && p.code === `${moduleCodeLower}:read`),
+              create: grantedPerms.some(p => p.action === 'create'),
+              // Check for basic module update permission (e.g., notes:update) - not sub-resource permissions
+              update: grantedPerms.some(p => p.action === 'update' && normalizeCode(p.code) === `${moduleCodeLower}:update`),
+              delete: grantedPerms.some(p => p.action === 'delete'),
+              manage: grantedPerms.some(p => p.action === 'manage' || normalizeCode(p.code).endsWith(':*')),
             },
-            'registration': {
-              enabled: grantedPerms.some(p => p.code.includes('settings:registration')),
-              read: grantedPerms.some(p => p.code === 'settings:registration:read'),
-              update: grantedPerms.some(p => p.code === 'settings:registration:update'),
-            },
-            'notification-methods': {
-              enabled: grantedPerms.some(p => p.code.includes('settings:notification-methods')),
-              read: grantedPerms.some(p => p.code === 'settings:notification-methods:read'),
-              update: grantedPerms.some(p => p.code === 'settings:notification-methods:update'),
-            },
-            'smtp-settings': {
-              enabled: grantedPerms.some(p => p.code.includes('settings:smtp-settings')),
-              read: grantedPerms.some(p => p.code === 'settings:smtp-settings:read'),
-              update: grantedPerms.some(p => p.code === 'settings:smtp-settings:update'),
-            },
-            'custom-fields': {
-              enabled: grantedPerms.some(p => p.code.includes('settings:custom-fields')),
-              read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
-              update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
-            },
+            fieldPermissions,
           };
-          config.settingsSubmenus = submenus;
-        }
 
-        configs[module.moduleId] = config;
-      });
-      setModuleConfigs(configs);
+          // Add settings submenus configuration
+          if (isSettings) {
+            const submenus: Record<string, SettingsSubmenuConfig> = {
+              'general': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:general')),
+                read: grantedPerms.some(p => p.code === 'settings:general:read'),
+                update: grantedPerms.some(p => p.code === 'settings:general:update'),
+              },
+              'registration': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:registration')),
+                read: grantedPerms.some(p => p.code === 'settings:registration:read'),
+                update: grantedPerms.some(p => p.code === 'settings:registration:update'),
+              },
+              'notification-methods': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:notification-methods')),
+                read: grantedPerms.some(p => p.code === 'settings:notification-methods:read'),
+                update: grantedPerms.some(p => p.code === 'settings:notification-methods:update'),
+              },
+              'smtp-settings': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:smtp-settings')),
+                read: grantedPerms.some(p => p.code === 'settings:smtp-settings:read'),
+                update: grantedPerms.some(p => p.code === 'settings:smtp-settings:update'),
+              },
+              'custom-fields': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:custom-fields')),
+                read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
+                update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
+              },
+            };
+            config.settingsSubmenus = submenus;
+          }
+
+          configs[module.moduleId] = config;
+        });
+        setModuleConfigs(configs);
+      } else {
+        // If there are unsaved changes, only initialize configs for new modules that don't exist yet
+        setModuleConfigs(prev => {
+          const updated = { ...prev };
+          filteredModules.forEach((module: ModulePermissions) => {
+            // Only initialize if this module config doesn't exist yet
+            if (!updated[module.moduleId]) {
+              const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
+              const grantedPerms = module.permissions.filter(p => p.granted);
+              const isSettings = normalizeCode(module.moduleCode).toLowerCase() === 'settings';
+              const moduleCodeLower = normalizeCode(module.moduleCode).toLowerCase();
+              const enabled = module.hasAccess ?? grantedPerms.length > 0;
+
+              const fieldPermissions: Record<string, FieldPermission> = {};
+              (module.fields || []).forEach((field) => {
+                fieldPermissions[field.fieldId] = {
+                  fieldId: field.fieldId,
+                  fieldName: field.fieldLabel || field.fieldName,
+                  visible: field.isVisible ?? false,
+                  editable: (field.isEditable ?? false) && (field.isVisible ?? false),
+                };
+              });
+              
+              const config: ModuleConfig = {
+                moduleId: module.moduleId,
+                enabled,
+                dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
+                permissions: {
+                  // Check for basic module read permission (e.g., notes:read) - not sub-resource permissions
+                  view: grantedPerms.some(p => p.action === 'read' && p.code === `${moduleCodeLower}:read`),
+                  create: grantedPerms.some(p => p.action === 'create'),
+                  // Check for basic module update permission (e.g., notes:update) - not sub-resource permissions
+                  update: grantedPerms.some(p => p.action === 'update' && normalizeCode(p.code) === `${moduleCodeLower}:update`),
+                  delete: grantedPerms.some(p => p.action === 'delete'),
+                  manage: grantedPerms.some(p => p.action === 'manage' || normalizeCode(p.code).endsWith(':*')),
+                },
+                fieldPermissions,
+              };
+
+              if (isSettings) {
+                const submenus: Record<string, SettingsSubmenuConfig> = {
+                  'general': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:general')),
+                    read: grantedPerms.some(p => p.code === 'settings:general:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:general:update'),
+                  },
+                  'registration': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:registration')),
+                    read: grantedPerms.some(p => p.code === 'settings:registration:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:registration:update'),
+                  },
+                  'notification-methods': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:notification-methods')),
+                    read: grantedPerms.some(p => p.code === 'settings:notification-methods:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:notification-methods:update'),
+                  },
+                  'smtp-settings': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:smtp-settings')),
+                    read: grantedPerms.some(p => p.code === 'settings:smtp-settings:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:smtp-settings:update'),
+                  },
+                  'custom-fields': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:custom-fields')),
+                    read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
+                  },
+                };
+                config.settingsSubmenus = submenus;
+              }
+
+              updated[module.moduleId] = config;
+            }
+          });
+          return updated;
+        });
+      }
+
+      initialLoadDoneRef.current = true;
 
       // Don't auto-select here - let the useEffect handle it based on URL
       // This prevents overriding user's tab selection
@@ -217,13 +333,64 @@ export function EnhancedPermissionAssignment({
   };
 
   const updateModuleConfig = (moduleId: string, updates: Partial<ModuleConfig>) => {
-    setModuleConfigs(prev => ({
-      ...prev,
-      [moduleId]: {
-        ...prev[moduleId],
-        ...updates,
-      },
-    }));
+    hasUnsavedChangesRef.current = true;
+    setModuleConfigs(prev => {
+      const existingConfig = prev[moduleId];
+      const module = modulePermissions.find(m => m.moduleId === moduleId);
+      
+      // If config doesn't exist, initialize it with defaults
+      if (!existingConfig && module) {
+        const isSettings = module.moduleCode.toLowerCase() === 'settings';
+        const fieldPermissions: Record<string, FieldPermission> = {};
+        (module.fields || []).forEach((field) => {
+          fieldPermissions[field.fieldId] = {
+            fieldId: field.fieldId,
+            fieldName: field.fieldLabel || field.fieldName,
+            visible: false,
+            editable: false,
+          };
+        });
+        const baseConfig: ModuleConfig = {
+          moduleId: moduleId,
+          enabled: false,
+          dataAccess: 'none',
+          permissions: {
+            view: false,
+            create: false,
+            update: false,
+            delete: false,
+            manage: false,
+          },
+          fieldPermissions,
+        };
+        
+        if (isSettings) {
+          baseConfig.settingsSubmenus = {
+            'general': { enabled: false, read: false, update: false },
+            'registration': { enabled: false, read: false, update: false },
+            'notification-methods': { enabled: false, read: false, update: false },
+            'smtp-settings': { enabled: false, read: false, update: false },
+            'custom-fields': { enabled: false, read: false, update: false },
+          };
+        }
+        
+        return {
+          ...prev,
+          [moduleId]: {
+            ...baseConfig,
+            ...updates,
+          },
+        };
+      }
+      
+      return {
+        ...prev,
+        [moduleId]: {
+          ...existingConfig,
+          ...updates,
+        },
+      };
+    });
   };
 
   const toggleModuleEnabled = (moduleId: string) => {
@@ -247,16 +414,16 @@ export function EnhancedPermissionAssignment({
     updateModuleConfig(moduleId, { dataAccess: access });
   };
 
-  const toggleFieldPermission = (moduleId: string, fieldName: string, type: 'visible' | 'editable') => {
+  const toggleFieldPermission = (moduleId: string, fieldId: string, type: 'visible' | 'editable') => {
     const config = moduleConfigs[moduleId];
     if (!config) return;
 
-    const currentField = config.fieldPermissions[fieldName] || { visible: false, editable: false };
+    const currentField = config.fieldPermissions[fieldId] || { fieldId, fieldName: fieldId, visible: false, editable: false };
     
     updateModuleConfig(moduleId, {
       fieldPermissions: {
         ...config.fieldPermissions,
-        [fieldName]: {
+        [fieldId]: {
           ...currentField,
           [type]: !currentField[type],
           // If making editable, must also be visible
@@ -310,78 +477,113 @@ export function EnhancedPermissionAssignment({
 
     setSaving(true);
     try {
-      // Convert module configs to permission IDs
       const permissionIds: string[] = [];
-
-      Object.entries(moduleConfigs).forEach(([moduleId, config]) => {
-        if (!config.enabled) return;
-
+      const modulesPayload = Object.entries(moduleConfigs).map(([moduleId, config]) => {
         const module = modulePermissions.find(m => m.moduleId === moduleId);
-        if (!module) return;
+        if (!module) return null;
 
-        const isSettings = module.moduleCode.toLowerCase() === 'settings';
+        const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
+        const moduleCodeLower = normalizeCode(module.moduleCode).toLowerCase();
+        const isSettings = moduleCodeLower === 'settings';
 
-        // Add permissions based on config
-        module.permissions.forEach(perm => {
+        const permissionsPayload = module.permissions.map(perm => {
           let shouldGrant = false;
+          const permCode = normalizeCode(perm.code);
 
-          // Handle settings submenu permissions separately
-          if (isSettings && config.settingsSubmenus) {
-            // Check if this is a submenu permission
-            const submenuKeys = Object.keys(config.settingsSubmenus);
-            const isSubmenuPerm = submenuKeys.some(key => perm.code.includes(`settings:${key}`));
-            
-            if (isSubmenuPerm) {
-              // Check each submenu
-              for (const [submenuKey, submenuConfig] of Object.entries(config.settingsSubmenus)) {
-                if (submenuConfig.enabled) {
-                  if (perm.code === `settings:${submenuKey}:read` && submenuConfig.read) {
-                    shouldGrant = true;
-                    break;
+          if (config.enabled) {
+            // Handle settings submenu permissions separately
+            if (isSettings && config.settingsSubmenus) {
+              // Check if this is a submenu permission
+              const submenuKeys = Object.keys(config.settingsSubmenus);
+              const isSubmenuPerm = submenuKeys.some(key => permCode.includes(`settings:${key}`));
+              
+              if (isSubmenuPerm) {
+                // Check each submenu
+                for (const [submenuKey, submenuConfig] of Object.entries(config.settingsSubmenus)) {
+                  if (submenuConfig.enabled) {
+                    if (permCode === `settings:${submenuKey}:read` && submenuConfig.read) {
+                      shouldGrant = true;
+                      break;
+                    }
+                    if (permCode === `settings:${submenuKey}:update` && submenuConfig.update) {
+                      shouldGrant = true;
+                      break;
+                    }
                   }
-                  if (perm.code === `settings:${submenuKey}:update` && submenuConfig.update) {
+                }
+              } else {
+                // Handle main settings permissions (not submenu-specific)
+                // Main settings permissions are: settings:read, settings:update, settings:*
+                const isMainSettingsPerm = permCode === 'settings:read' || 
+                                          permCode === 'settings:update' || 
+                                          permCode === 'settings:*';
+                
+                if (isMainSettingsPerm) {
+                  if (config.permissions.manage && permCode === 'settings:*') {
                     shouldGrant = true;
-                    break;
+                  } else if (config.permissions.view && permCode === 'settings:read') {
+                    shouldGrant = true;
+                  } else if (config.permissions.update && permCode === 'settings:update') {
+                    shouldGrant = true;
                   }
                 }
               }
             } else {
-              // Handle main settings permissions (not submenu-specific)
-              // Main settings permissions are: settings:read, settings:update, settings:*
-              const isMainSettingsPerm = perm.code === 'settings:read' || 
-                                        perm.code === 'settings:update' || 
-                                        perm.code === 'settings:*';
-              
-              if (isMainSettingsPerm) {
-                if (config.permissions.manage && perm.code === 'settings:*') {
-                  shouldGrant = true;
-                } else if (config.permissions.view && perm.code === 'settings:read') {
-                  shouldGrant = true;
-                } else if (config.permissions.update && perm.code === 'settings:update') {
-                  shouldGrant = true;
-                }
+              // Handle non-settings modules
+              if (config.permissions.manage && (perm.action === 'manage' || permCode.endsWith(':*'))) {
+                shouldGrant = true;
+              } else if (config.permissions.view && perm.action === 'read' && permCode === `${moduleCodeLower}:read`) {
+                shouldGrant = true;
+              } else if (config.permissions.create && perm.action === 'create') {
+                shouldGrant = true;
+              } else if (config.permissions.update && perm.action === 'update' && permCode === `${moduleCodeLower}:update`) {
+                shouldGrant = true;
+              } else if (config.permissions.delete && perm.action === 'delete') {
+                shouldGrant = true;
               }
-            }
-          } else {
-            // Handle non-settings modules
-            if (config.permissions.manage && (perm.action === 'manage' || perm.code.endsWith(':*'))) {
-              shouldGrant = true;
-            } else if (config.permissions.view && perm.action === 'read') {
-              shouldGrant = true;
-            } else if (config.permissions.create && perm.action === 'create') {
-              shouldGrant = true;
-            } else if (config.permissions.update && perm.action === 'update') {
-              shouldGrant = true;
-            } else if (config.permissions.delete && perm.action === 'delete') {
-              shouldGrant = true;
             }
           }
 
           if (shouldGrant) {
             permissionIds.push(perm.id);
           }
+
+          return {
+            permissionId: perm.id,
+            granted: shouldGrant,
+          };
         });
-      });
+
+        const fieldsPayload = (module.fields || []).map((field) => {
+          const fieldConfig = config.fieldPermissions[field.fieldId] || {
+            fieldId: field.fieldId,
+            fieldName: field.fieldLabel || field.fieldName,
+            visible: false,
+            editable: false,
+          };
+          return {
+            fieldId: field.fieldId,
+            isVisible: config.enabled ? fieldConfig.visible : false,
+            isEditable: config.enabled ? (fieldConfig.editable && fieldConfig.visible) : false,
+          };
+        });
+
+        return {
+          moduleId,
+          hasAccess: config.enabled,
+          dataAccess: config.enabled ? config.dataAccess : 'none',
+          permissions: permissionsPayload,
+          fields: fieldsPayload,
+        };
+      }).filter(Boolean) as Array<{
+        moduleId: string;
+        hasAccess: boolean;
+        dataAccess: ModuleConfig['dataAccess'];
+        permissions: Array<{ permissionId: string; granted: boolean }>;
+        fields: Array<{ fieldId: string; isVisible: boolean; isEditable: boolean }>;
+      }>;
+
+      const uniquePermissionIds = Array.from(new Set(permissionIds));
 
       const response = await fetch(`/api/roles/${roleId}/permissions`, {
         method: 'PUT',
@@ -390,7 +592,8 @@ export function EnhancedPermissionAssignment({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          permissionIds,
+          modules: modulesPayload,
+          permissionIds: uniquePermissionIds,
         }),
       });
 
@@ -399,7 +602,20 @@ export function EnhancedPermissionAssignment({
       }
 
       toast.success('Permissions updated successfully');
-      onBack();
+      hasUnsavedChangesRef.current = false;
+      initialLoadDoneRef.current = false; // Allow reload after save
+      
+      // Preserve the currently selected module code before reloading
+      const currentSelectedModuleData = modulePermissions.find(m => m.moduleId === selectedModule);
+      const moduleCodeToPreserve = currentSelectedModuleData?.moduleCode;
+      
+      // Update URL first to ensure useEffect picks it up correctly
+      if (moduleCodeToPreserve) {
+        updateUrl(moduleCodeToPreserve);
+      }
+      
+      // Reload permissions to reflect the saved changes
+      await loadRolePermissions();
     } catch (error) {
       console.error('Failed to update permissions:', error);
       toast.error('Failed to update permissions');
@@ -429,16 +645,6 @@ export function EnhancedPermissionAssignment({
   //   //   moduleIds: modulePermissions.map(m => ({ id: m.moduleId, name: m.moduleName, code: m.moduleCode }))
   //   // });
   // }
-
-  // Sample fields for demonstration (in real app, fetch from module metadata)
-  const sampleFields = [
-    { name: 'title', label: 'Title' },
-    { name: 'description', label: 'Description' },
-    { name: 'status', label: 'Status' },
-    { name: 'priority', label: 'Priority' },
-    { name: 'assignee', label: 'Assignee' },
-    { name: 'dueDate', label: 'Due Date' },
-  ];
 
   return (
     <div className="space-y-6">
@@ -730,21 +936,30 @@ export function EnhancedPermissionAssignment({
                         </tr>
                       </thead>
                       <tbody className="bg-card divide-y divide-border">
-                        {sampleFields.map((field) => {
-                          const fieldPerm = selectedConfig.fieldPermissions[field.name] || {
+                        {(selectedModuleData.fields || []).length === 0 && (
+                          <tr>
+                            <td className="px-6 py-4 text-sm text-muted-foreground" colSpan={3}>
+                              No fields available for this module.
+                            </td>
+                          </tr>
+                        )}
+                        {(selectedModuleData.fields || []).map((field) => {
+                          const fieldPerm = selectedConfig.fieldPermissions[field.fieldId] || {
+                            fieldId: field.fieldId,
+                            fieldName: field.fieldLabel || field.fieldName,
                             visible: false,
                             editable: false,
                           };
                           return (
-                            <tr key={field.name}>
+                            <tr key={field.fieldId}>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
-                                {field.label}
+                                {field.fieldLabel || field.fieldName}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-center">
                                 <input
                                   type="checkbox"
                                   checked={fieldPerm.visible}
-                                  onChange={() => toggleFieldPermission(selectedModule!, field.name, 'visible')}
+                                  onChange={() => toggleFieldPermission(selectedModule!, field.fieldId, 'visible')}
                                   className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                                 />
                               </td>
@@ -752,7 +967,7 @@ export function EnhancedPermissionAssignment({
                                 <input
                                   type="checkbox"
                                   checked={fieldPerm.editable}
-                                  onChange={() => toggleFieldPermission(selectedModule!, field.name, 'editable')}
+                                  onChange={() => toggleFieldPermission(selectedModule!, field.fieldId, 'editable')}
                                   disabled={!fieldPerm.visible}
                                   className="w-4 h-4 text-primary border-border rounded focus:ring-primary disabled:opacity-50"
                                 />

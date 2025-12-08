@@ -23,7 +23,10 @@ interface AuthState {
   refreshToken: string | null;
   token: string | null; // Alias for accessToken for convenience
   _hasHydrated: boolean; // Internal flag to track hydration
+  permissions: string[]; // Cached permissions array
+  permissionsLoaded: boolean; // Flag to track if permissions have been loaded
   setUser: (user: User, accessToken: string, refreshToken?: string) => void;
+  setPermissions: (permissions: string[]) => void;
   logout: () => void;
   setHasHydrated: (state: boolean) => void;
 }
@@ -49,6 +52,8 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       token: null,
       _hasHydrated: false,
+      permissions: [],
+      permissionsLoaded: false,
       setUser: (user, accessToken, refreshToken) =>
         set({
           user,
@@ -57,6 +62,11 @@ export const useAuthStore = create<AuthState>()(
           token: accessToken,
           isAuthenticated: true,
         }),
+      setPermissions: (permissions) =>
+        set({
+          permissions,
+          permissionsLoaded: true,
+        }),
       logout: () =>
         set({
           user: null,
@@ -64,6 +74,8 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           token: null,
           isAuthenticated: false,
+          permissions: [],
+          permissionsLoaded: false,
         }),
       setHasHydrated: (state) => {
         set({
@@ -82,3 +94,8 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Convenience helper for non-hook callers (e.g., dynamic imports)
+export const setPermissions = (permissions: string[]) => {
+  useAuthStore.getState().setPermissions(permissions);
+};

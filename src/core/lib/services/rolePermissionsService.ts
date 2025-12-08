@@ -5,8 +5,8 @@ import {
   moduleFields, 
   roleFieldPermissions 
 } from '@/core/lib/db/permissionSchema';
-import { roles, modules, permissions } from '@/core/lib/db/baseSchema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { roles, modules, permissions, rolePermissions as legacyRolePermissions } from '@/core/lib/db/baseSchema';
+import { eq, and } from 'drizzle-orm';
 
 export type DataAccessLevel = 'none' | 'own' | 'team' | 'all';
 
@@ -14,6 +14,7 @@ export interface ModulePermission {
   moduleId: string;
   moduleName: string;
   moduleCode: string;
+  moduleIcon?: string | null;
   hasAccess: boolean;
   dataAccess: DataAccessLevel;
   permissions: Array<{
@@ -58,11 +59,19 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     .where(eq(modules.isActive, true))
     .orderBy(modules.sortOrder);
 
-  // Get all permissions (needed for Super Admin)
+  // Get all permissions (needed for Super Admin and to build full matrix)
   const allPermissions = await db
     .select()
     .from(permissions)
     .where(eq(permissions.isActive, true));
+
+  // Get legacy role permissions (role_permissions) for backward compatibility
+  const legacyPermissions = await db
+    .select()
+    .from(legacyRolePermissions)
+    .where(eq(legacyRolePermissions.roleId, roleId));
+
+  const legacyPermissionIds = new Set(legacyPermissions.map((p) => p.permissionId));
 
   // Get module access for this role
   const moduleAccess = await db
@@ -93,14 +102,16 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     .from(roleFieldPermissions)
     .where(eq(roleFieldPermissions.roleId, roleId));
 
-  // Build the result structure
-  const modulesData: ModulePermission[] = allModules.map((module) => {
+  // Build the result structure (exclude profile module - it should be viewable and updatable by every user for their own profile)
+  const modulesData: ModulePermission[] = allModules
+    .filter((module) => module.code.toLowerCase() !== 'profile')
+    .map((module) => {
     const access = moduleAccess.find((ma) => ma.moduleId === module.id);
     const modulePerms = modulePermissions.filter((mp) => mp.roleModulePermission.moduleId === module.id);
     const moduleFieldsList = allFields.filter((f) => f.moduleId === module.id);
     const fieldPerms = fieldPermissions.filter((fp) => fp.moduleId === module.id);
 
-    // For Super Admin: grant access to all modules and all permissions
+    // For Super Admin: grant access to all modules and all permissions/fields
     if (isSuperAdmin) {
       // Get all permissions for this module
       const moduleAllPermissions = allPermissions.filter((p) => p.module === module.code);
@@ -109,6 +120,7 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
         moduleId: module.id,
         moduleName: module.name,
         moduleCode: module.code,
+        moduleIcon: module.icon,
         hasAccess: true, // Super Admin has access to all modules
         dataAccess: 'all' as DataAccessLevel, // Super Admin can access all data
         permissions: moduleAllPermissions.map((p) => ({
@@ -129,18 +141,25 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     }
 
     // For other roles: use actual permissions from database
+    const moduleAllPermissions = allPermissions.filter((p) => p.module === module.code.toLowerCase());
+
     return {
       moduleId: module.id,
       moduleName: module.name,
       moduleCode: module.code,
-      hasAccess: access?.hasAccess || false,
-      dataAccess: (access?.dataAccess as DataAccessLevel) || 'none',
-      permissions: modulePerms.map((mp) => ({
-        permissionId: mp.permission.id,
-        permissionName: mp.permission.name,
-        permissionCode: mp.permission.code,
-        granted: mp.roleModulePermission.granted,
-      })),
+      moduleIcon: module.icon,
+      hasAccess: access?.hasAccess ?? moduleAllPermissions.some((p) => legacyPermissionIds.has(p.id)),
+      dataAccess: (access?.dataAccess as DataAccessLevel) || ((access?.hasAccess ?? moduleAllPermissions.some((p) => legacyPermissionIds.has(p.id))) ? 'team' : 'none'),
+      permissions: moduleAllPermissions.map((permission) => {
+        const modulePerm = modulePerms.find((mp) => mp.permission.id === permission.id);
+        const grantedFromLegacy = legacyPermissionIds.has(permission.id);
+        return {
+          permissionId: permission.id,
+          permissionName: permission.name,
+          permissionCode: permission.code,
+          granted: modulePerm?.roleModulePermission.granted ?? grantedFromLegacy,
+        };
+      }),
       fields: moduleFieldsList.map((field) => {
         const fieldPerm = fieldPerms.find((fp) => fp.fieldId === field.id);
         return {
@@ -229,6 +248,11 @@ export async function updateRoleModulePermissions(
 
   // Update permissions
   for (const perm of data.permissions) {
+    if (!perm.permissionId) {
+      console.warn('Skipping permission with missing permissionId');
+      continue;
+    }
+    
     const existing = await db
       .select()
       .from(roleModulePermissions)
@@ -266,6 +290,11 @@ export async function updateRoleModulePermissions(
 
   // Update field permissions
   for (const field of data.fields) {
+    if (!field.fieldId) {
+      console.warn('Skipping field with missing fieldId');
+      continue;
+    }
+    
     const existing = await db
       .select()
       .from(roleFieldPermissions)

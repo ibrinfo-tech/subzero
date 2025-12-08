@@ -16,11 +16,20 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear local state immediately
     logout();
-    // Clear cookie by making API call
-    fetch('/api/auth/logout', { method: 'POST' }).finally(() => {
-      router.push('/login');
+    
+    // Redirect immediately for better UX
+    router.push('/login');
+    
+    // Clear cookies via API call in the background (don't wait for it)
+    fetch('/api/auth/logout', { 
+      method: 'POST',
+      credentials: 'include',
+    }).catch((error) => {
+      // Silently fail - user is already logged out locally
+      console.error('Logout API error (non-critical):', error);
     });
   };
 
@@ -58,14 +67,57 @@ export function Topbar({ onMenuClick }: TopbarProps) {
     return user?.email?.substring(0, 2).toUpperCase() || 'U';
   };
 
-  // Get primary user role display (name or code). If none, return empty string.
+  // Get primary user role display (name or code). Matches ProfileSidebar pattern.
   const getUserRole = () => {
-    if (user?.roles && user.roles.length > 0) {
-      const primaryRole = user.roles[0];
-      return primaryRole.name || primaryRole.code || '';
-    }
-    return '';
+    return user?.roles?.[0]?.name || user?.roles?.[0]?.code || '';
   };
+
+  // Local fallbacks (when authStore user payload lacks latest data)
+  const [fetchedRole, setFetchedRole] = useState<string>('');
+  const [fetchedName, setFetchedName] = useState<string>('');
+
+  // Fetch profile (role + name) from profile API if not already present or updated
+  useEffect(() => {
+    // If role and name are already available in store, prefer those
+    const roleFromStore = getUserRole();
+    const nameFromStore = user?.fullName || '';
+    if (roleFromStore) setFetchedRole(roleFromStore);
+    if (nameFromStore) setFetchedName(nameFromStore);
+
+    let aborted = false;
+
+    const loadProfile = async () => {
+      try {
+        const res = await fetch('/api/auth/profile', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const roleName =
+          data?.user?.roles?.[0]?.name ||
+          data?.user?.roles?.[0]?.code ||
+          '';
+        const fullName = data?.user?.fullName || '';
+        if (!aborted) {
+          if (roleName) setFetchedRole(roleName);
+          if (fullName) setFetchedName(fullName);
+        }
+      } catch (err) {
+        console.error('[Topbar] Failed to load profile role', err);
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      aborted = true;
+    };
+  }, [user]);
+
+  // Prefer freshly fetched data over cached store values
+  const primaryRole = fetchedRole || getUserRole();
+  const displayName = fetchedName || user?.fullName || 'User';
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70 px-4 sm:px-6 py-3">
@@ -119,11 +171,11 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               {/* User info - hidden on mobile */}
               <div className="hidden sm:block text-left">
                 <div className="text-sm font-semibold text-foreground">
-                  {user?.fullName || 'User'}
+                  {displayName}
                 </div>
-                {getUserRole() && (
+                {primaryRole && (
                 <div className="text-xs text-muted-foreground">
-                  {getUserRole()}
+                  {primaryRole}
                 </div>
                 )}
               </div>
@@ -135,11 +187,11 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                 {/* User Info Header */}
                 <div className="px-4 py-3 border-b border-border/70">
                   <div className="font-semibold text-foreground">
-                    {user?.fullName || 'User'}
+                    {displayName}
                   </div>
-                  {getUserRole() && (
+                  {primaryRole && (
                   <div className="text-sm text-muted-foreground mt-0.5">
-                      {getUserRole()}
+                      {primaryRole}
                   </div>
                   )}
                   <div className="text-xs text-muted-foreground mt-1 truncate">

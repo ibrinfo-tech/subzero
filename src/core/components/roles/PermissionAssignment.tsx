@@ -150,7 +150,6 @@ export function PermissionAssignment({
       }
 
       toast.success('Permissions updated successfully');
-      onBack();
     } catch (error) {
       console.error('Failed to update permissions:', error);
       toast.error('Failed to update permissions');

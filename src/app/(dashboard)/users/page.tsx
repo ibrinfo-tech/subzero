@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 function UsersPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useAuthStore();
+  const { token, user: currentUser } = useAuthStore();
   const { canCreate, canUpdate, canDelete } = usePermissionProps('users');
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -204,6 +204,7 @@ function UsersPageContent() {
             onSubmit={handleCreate}
             onCancel={handleCancel}
             isLoading={isSubmitting}
+            currentUserId={currentUser?.id}
           />
         </FormDialog>
       </div>

@@ -126,14 +126,14 @@ export function UserTable({
               ]}
               className="flex-1 sm:w-40"
             />
+            {onCreate && (
+              <Button onClick={onCreate} className="whitespace-nowrap">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add User
+              </Button>
+            )}
           </div>
         </div>
-        {onCreate && (
-          <Button onClick={onCreate} className="w-full sm:w-auto sm:self-end whitespace-nowrap">
-            <UserPlus className="h-4 w-4 mr-2" />
-            Add User
-          </Button>
-        )}
       </div>
 
       {/* Desktop Table View - Hidden on mobile */}

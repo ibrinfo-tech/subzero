@@ -6,6 +6,7 @@ import { verifyPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
 import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
 import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
+import { getFirstAccessibleRoute } from '@/core/lib/utils/getAccessibleRoute';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -110,6 +111,15 @@ export async function POST(request: NextRequest) {
       refreshExpiresAt,
     });
     
+    // Get the first accessible route for the user
+    const redirectPath = await getFirstAccessibleRoute(user.id);
+    const defaultRedirect = redirectPath || '/dashboard'; // Fallback to dashboard if no accessible route
+    
+    console.log('[Login] User accessible route:', {
+      userId: user.id,
+      redirectPath: defaultRedirect,
+    });
+    
     // Create response with user data (without password) and tokens
     const response = NextResponse.json(
       {
@@ -124,6 +134,7 @@ export async function POST(request: NextRequest) {
         accessToken,
         refreshToken,
         expiresAt: accessExpiresAt.toISOString(),
+        redirectPath: defaultRedirect,
       },
       { status: 200 }
     );

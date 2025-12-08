@@ -19,6 +19,7 @@ interface UserFormProps {
   onSubmit: (data: CreateUserInput | UpdateUserInput) => Promise<void>;
   onCancel?: () => void;
   isLoading?: boolean;
+  currentUserId?: string; // Current logged-in user ID to prevent self-role changes
 }
 
 export function UserForm({
@@ -27,6 +28,7 @@ export function UserForm({
   onSubmit,
   onCancel,
   isLoading,
+  currentUserId,
 }: UserFormProps) {
   const [formData, setFormData] = useState<CreateUserInput | UpdateUserInput>({
     email: initialData?.email || '',
@@ -200,7 +202,10 @@ export function UserForm({
             label="Role"
             value={formData.roleId || ''}
             onChange={handleChange}
-            error={errors.roleId}
+            error={errors.roleId || (initialData && currentUserId && initialData.id === currentUserId 
+              ? 'You cannot change your own role' 
+              : undefined)}
+            disabled={!!(initialData && currentUserId && initialData.id === currentUserId)}
             options={[
               { value: '', label: 'Select a role' },
               ...roles.map((role) => ({

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserWithRoles, updateUser, deleteUser } from '@/core/lib/services/usersService';
-import { getUserTenantId, userHasPermission, userBelongsToTenant } from '@/core/lib/permissions';
+import { getUserTenantId, userHasPermission, userBelongsToTenant, getUserRoles } from '@/core/lib/permissions';
+import { getRoleById } from '@/core/lib/roles';
 import { db } from '@/core/lib/db';
 import { users } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -158,7 +159,64 @@ export async function PATCH(
     
     const data = validation.data;
     console.log('[User Update] Validated data:', data);
-    
+
+    // Prevent users from changing their own role
+    if (data.roleId !== undefined && id === userId) {
+      return NextResponse.json(
+        { error: 'You cannot change your own role' },
+        { status: 400 }
+      );
+    }
+
+    // Check if role is being changed and validate SUPER_ADMIN restrictions
+    if (data.roleId !== undefined) {
+      // Get the role being assigned
+      const targetRole = await getRoleById(data.roleId);
+      
+      if (!targetRole) {
+        return NextResponse.json(
+          { error: 'Invalid role specified' },
+          { status: 400 }
+        );
+      }
+
+      // Check if trying to assign/remove SUPER_ADMIN role
+      const isSuperAdminRole = targetRole.code === 'SUPER_ADMIN';
+      
+      if (isSuperAdminRole) {
+        // Only super admins can assign/remove SUPER_ADMIN role
+        const currentUserRoles = await getUserRoles(userId);
+        const isCurrentUserSuperAdmin = currentUserRoles.some(r => r.code === 'SUPER_ADMIN');
+        
+        if (!isCurrentUserSuperAdmin) {
+          return NextResponse.json(
+            { error: 'Only super admins can assign or remove super admin role' },
+            { status: 403 }
+          );
+        }
+      }
+
+      // Check if trying to remove SUPER_ADMIN from a user
+      const targetUserWithRoles = await getUserWithRoles(id);
+      if (targetUserWithRoles) {
+        const targetUserHasSuperAdmin = targetUserWithRoles.roles.some(r => r.code === 'SUPER_ADMIN');
+        
+        // If target user has SUPER_ADMIN and we're changing to a different role
+        if (targetUserHasSuperAdmin && !isSuperAdminRole) {
+          // Only super admins can remove SUPER_ADMIN role
+          const currentUserRoles = await getUserRoles(userId);
+          const isCurrentUserSuperAdmin = currentUserRoles.some(r => r.code === 'SUPER_ADMIN');
+          
+          if (!isCurrentUserSuperAdmin) {
+            return NextResponse.json(
+              { error: 'Only super admins can remove super admin role from users' },
+              { status: 403 }
+            );
+          }
+        }
+      }
+    }
+
     // Check if email is being changed and if it's already taken
     if (data.email) {
       const existingUser = await db
