@@ -15,6 +15,7 @@
 export const protectedRoutes: string[] = [
   // Core protected routes
   '/dashboard',
+  '/profile', // Profile (core feature)
   '/users', // User Management (core feature)
   '/roles', // Role Management (core feature)
   '/settings', // Settings area (core feature)

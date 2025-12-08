@@ -64,8 +64,9 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       },
     ];
 
-    // Only show submenus if user has the corresponding read permission
-    if (hasPermission('settings:general:read') || hasPermission('settings:*')) {
+    // Only show submenus if user has the corresponding explicit read permission
+    // We check for specific submenu permissions, not the wildcard, to respect granular control
+    if (hasPermission('settings:general:read')) {
       items.push({
         label: 'General',
         href: '/settings/general',
@@ -73,7 +74,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       });
     }
 
-    if (hasPermission('settings:registration:read') || hasPermission('settings:*')) {
+    if (hasPermission('settings:registration:read')) {
       items.push({
         label: 'Registration',
         href: '/settings/registration',
@@ -81,7 +82,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       });
     }
 
-    if (hasPermission('settings:notification-methods:read') || hasPermission('settings:*')) {
+    if (hasPermission('settings:notification-methods:read')) {
       items.push({
         label: 'Notification Methods',
         href: '/settings/notification-methods',
@@ -89,7 +90,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       });
     }
 
-    if (hasPermission('settings:smtp-settings:read') || hasPermission('settings:*')) {
+    if (hasPermission('settings:smtp-settings:read')) {
       items.push({
         label: 'SMTP Settings',
         href: '/settings/smtp-settings',
@@ -97,7 +98,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       });
     }
 
-    if (hasPermission('settings:custom-fields:read') || hasPermission('settings:*')) {
+    if (hasPermission('settings:custom-fields:read')) {
       items.push({
         label: 'Custom Fields',
         href: '/settings/custom-fields',

@@ -47,25 +47,26 @@ export async function GET(request: NextRequest) {
       .where(eq(modules.isActive, true))
       .orderBy(modules.sortOrder);
 
-    // Build navigation from modules
-    const navigationItems = allModules.map(module => {
-      const moduleCode = module.code.toLowerCase();
-      let path = `/${moduleCode}`;
-      
-      // Map core modules to their correct paths
-      if (moduleCode === 'dashboard') path = '/dashboard';
-      else if (moduleCode === 'profile') path = '/profile';
-      else if (moduleCode === 'users') path = '/users';
-      else if (moduleCode === 'roles') path = '/roles';
-      else if (moduleCode === 'settings') path = '/settings/general';
+    // Build navigation from modules (exclude profile module - it should be accessible to all users for their own profile)
+    const navigationItems = allModules
+      .filter(module => module.code.toLowerCase() !== 'profile')
+      .map(module => {
+        const moduleCode = module.code.toLowerCase();
+        let path = `/${moduleCode}`;
+        
+        // Map core modules to their correct paths
+        if (moduleCode === 'dashboard') path = '/dashboard';
+        else if (moduleCode === 'users') path = '/users';
+        else if (moduleCode === 'roles') path = '/roles';
+        else if (moduleCode === 'settings') path = '/settings/general';
 
-      return {
-        label: module.name,
-        path,
-        icon: module.icon || 'Box',
-        order: module.sortOrder || 999,
-      };
-    });
+        return {
+          label: module.name,
+          path,
+          icon: module.icon || 'Box',
+          order: module.sortOrder || 999,
+        };
+      });
 
     // If Super Admin, return all navigation
     if (isSuperAdmin) {

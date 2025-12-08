@@ -107,13 +107,14 @@ export function ExpandableRoleTable({
         // Transform the data to match the expected format - SHOW ALL MODULES
         const modules = data.modulePermissions.map((module: any) => {
           const grantedPermissions = module.permissions.filter((p: any) => p.granted);
+          const hasAccess = module.hasAccess ?? grantedPermissions.length > 0;
           
           return {
             moduleId: module.moduleId,
             moduleName: module.moduleName,
             moduleCode: module.moduleCode,
-            hasAccess: grantedPermissions.length > 0,
-            dataAccess: 'all' as const,
+            hasAccess,
+            dataAccess: (module.dataAccess as ModulePermission['dataAccess']) || (hasAccess ? 'team' : 'none'),
             permissions: grantedPermissions.map((p: any) => ({
               permissionId: p.id,
               permissionName: p.name,
@@ -335,7 +336,9 @@ export function ExpandableRoleTable({
                             </p>
                           ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in duration-300">
-                              {modules.map((module, index) => (
+                              {modules
+                                .filter(module => module.moduleCode.toLowerCase() !== 'profile')
+                                .map((module, index) => (
                                 <Card 
                                   key={module.moduleId} 
                                   className="bg-card animate-in fade-in slide-in-from-bottom-2 duration-300"

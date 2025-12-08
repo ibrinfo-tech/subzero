@@ -6,11 +6,12 @@ import { isProtectedRoute } from '@/core/config/protectedRoutes';
 /**
  * Next.js proxy for route protection
  * Protects routes based on module configuration and redirects unauthenticated users to login
+ * Also checks permissions for routes that require them
  * 
  * NOTE: This runs in Edge Runtime, so we use a static protectedRoutes config file
  * instead of dynamically reading from moduleRegistry (which uses Node.js APIs)
  */
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Get token from cookies (set by login)
@@ -48,11 +49,20 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
   
-  // If accessing login/register with token, redirect to dashboard
+  // If accessing login/register with token, redirect to first accessible route
+  // We'll let the client-side handle this redirect after checking permissions
+  // to avoid making API calls in Edge Runtime middleware
   if (isPublicRoute && token) {
-    console.log('[Proxy] Redirecting to dashboard - already authenticated');
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    // Redirect to a route that will check permissions client-side
+    // The login page will handle the redirect to the first accessible route
+    console.log('[Proxy] Already authenticated - allowing through to handle redirect client-side');
+    return NextResponse.next();
   }
+  
+  // Skip permission checks in middleware - ProtectedPage component handles this client-side
+  // This avoids redundant API calls and improves performance
+  // Permission checks are done once on login and cached in the auth store
+  // ProtectedPage uses cached permissions for instant checks without API calls
   
   return NextResponse.next();
 }

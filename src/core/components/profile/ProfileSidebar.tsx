@@ -21,7 +21,7 @@ export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
   };
 
   const skills = ['Photoshop', 'Figma', 'HTML', 'React', 'Tailwind CSS', 'CSS', 'Laravel', 'Node.js'];
-
+  console.log(profile);
   return (
     <div className="space-y-6">
       {/* Profile Card */}

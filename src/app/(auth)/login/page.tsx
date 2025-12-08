@@ -135,13 +135,36 @@ export default function LoginPage() {
       // Tokens are also set in cookies by the API response
       // No need to manually set them here as they're HTTP-only
 
-      console.log('[Login] Success - redirecting to dashboard', {
+      // Fetch and cache permissions immediately to avoid delays on page load
+      try {
+        const { setPermissions } = await import('@/core/store/authStore');
+        const permissionsResponse = await fetch('/api/auth/permissions', {
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+          credentials: 'include',
+        });
+        
+        if (permissionsResponse.ok) {
+          const permissionsData = await permissionsResponse.json();
+          setPermissions(permissionsData.permissions || []);
+        }
+      } catch (error) {
+        console.error('[Login] Failed to fetch permissions:', error);
+        // Continue with login even if permissions fetch fails
+      }
+
+      // Get redirect path from API response (first accessible route)
+      const redirectPath = data.redirectPath || '/dashboard';
+
+      console.log('[Login] Success - redirecting to:', {
         userId: data.user.id,
         email: data.user.email,
+        redirectPath,
       });
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Redirect to the first accessible route
+      router.push(redirectPath);
     } catch (error) {
       console.error('Login error:', error);
       setApiError('An error occurred. Please try again.');

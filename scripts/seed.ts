@@ -93,6 +93,7 @@ async function seed() {
     userRoles,
     authProviders,
   } = await import('../src/core/lib/db/baseSchema');
+  const { moduleFields } = await import('../src/core/lib/db/permissionSchema');
   const { hashPassword } = await import('../src/core/lib/utils');
 
   console.log('🌱 Starting database seed (aligned with core.sql)...\n');
@@ -222,6 +223,45 @@ async function seed() {
       console.log(`   Core modules: ${coreModuleData.length}, Dynamic modules: ${dynamicModuleData.length}`);
     } else {
       console.log(`ℹ️  All modules already exist (${existingModules.length} total)`);
+    }
+    console.log('');
+
+    // ============================================================================
+    // 2B. MODULE FIELDS (for field-level permissions)
+    // ============================================================================
+    console.log('🧩 Seeding module fields...');
+    const moduleByCode = new Map(seededModules.map((m) => [m.code, m]));
+    const notesModule = moduleByCode.get('NOTES');
+
+    if (notesModule) {
+      const noteFields = [
+        { name: 'Title', code: 'title', label: 'Title', fieldType: 'text', description: 'Note title', sortOrder: 1 },
+        { name: 'Content', code: 'content', label: 'Content', fieldType: 'text', description: 'Note content/body', sortOrder: 2 },
+        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Creation timestamp', sortOrder: 3 },
+        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Last updated timestamp', sortOrder: 4 },
+      ];
+
+      const existingFields = await db
+        .select()
+        .from(moduleFields)
+        .where(eq(moduleFields.moduleId, notesModule.id));
+
+      const existingFieldCodes = new Set(existingFields.map((f) => f.code));
+      const fieldsToInsert = noteFields
+        .filter((f) => !existingFieldCodes.has(f.code))
+        .map((f) => ({
+          ...f,
+          moduleId: notesModule.id,
+        }));
+
+      if (fieldsToInsert.length > 0) {
+        await db.insert(moduleFields).values(fieldsToInsert);
+        console.log(`✅ Added ${fieldsToInsert.length} field(s) to Notes module`);
+      } else {
+        console.log('ℹ️  Notes module fields already exist');
+      }
+    } else {
+      console.log('ℹ️  Notes module not found - skipping Notes field seeding');
     }
     console.log('');
 
@@ -603,7 +643,7 @@ async function seed() {
           .values({
             email: superAdminEmail,
             passwordHash,
-            fullName: 'Super Admin',
+            fullName: 'Super Administrator',
             tenantId: defaultTenant.id,
             status: 'active',
             isEmailVerified: true,

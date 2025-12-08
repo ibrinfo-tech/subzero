@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/core/hooks/usePermissions';
 import { useAuthStore } from '@/core/store/authStore';
@@ -34,6 +34,13 @@ export function ProtectedPage({
   const { isAuthenticated, _hasHydrated } = useAuthStore();
   const { hasPermission, hasAnyPermission, hasAllPermissions, loading } = usePermissions();
 
+  // Redirect to login if not authenticated (use useEffect to avoid render-time navigation)
+  useEffect(() => {
+    if (_hasHydrated && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [_hasHydrated, isAuthenticated, router]);
+
   // Show loading state while hydrating or checking permissions
   if (!_hasHydrated || loading) {
     if (!showLoader) {
@@ -55,9 +62,8 @@ export function ProtectedPage({
     );
   }
 
-  // Redirect to login if not authenticated
+  // Don't render content if not authenticated (redirect is handled in useEffect)
   if (!isAuthenticated) {
-    router.push('/login');
     return null;
   }
 
