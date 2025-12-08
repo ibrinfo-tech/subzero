@@ -158,17 +158,58 @@ export function EnhancedPermissionAssignment({
       }
 
       const data = await response.json();
-      // Filter out profile module - it should be viewable and updatable by every user for their own profile
-      const filteredModules = (data.modulePermissions || []).filter(
-        (module: ModulePermissions) => module.moduleCode.toLowerCase() !== 'profile'
-      );
-      setModulePermissions(filteredModules);
+
+      const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
+      const deriveAction = (code: string) => {
+        const parts = code.split(':');
+        return parts[parts.length - 1] || '';
+      };
+
+      const normalizedModules: ModulePermissions[] = (data.modulePermissions || [])
+        // Filter out profile module - it should be viewable and updatable by every user for their own profile
+        .filter((module: any) => normalizeCode(module.moduleCode || module.module_code).toLowerCase() !== 'profile')
+        .map((module: any) => {
+          const moduleCode = normalizeCode(module.moduleCode || module.code);
+          const moduleCodeLower = moduleCode.toLowerCase();
+          return {
+            moduleId: module.moduleId || module.module_id,
+            moduleName: module.moduleName || module.module_name || module.name,
+            moduleCode,
+            icon: module.icon ?? null,
+            hasAccess: Boolean(module.hasAccess ?? module.has_access),
+            dataAccess: (module.dataAccess ?? module.data_access ?? 'none') as ModuleConfig['dataAccess'],
+            permissions: (module.permissions || []).map((perm: any) => {
+              const code = normalizeCode(perm.permissionCode || perm.code).toLowerCase();
+              return {
+                id: perm.permissionId || perm.id,
+                code,
+                name: perm.permissionName || perm.name,
+                action: (perm.permissionAction || perm.action || deriveAction(code)).toLowerCase(),
+                resource: null,
+                isDangerous: false,
+                requiresMfa: false,
+                description: null,
+                granted: Boolean(perm.granted),
+              } as Permission;
+            }),
+            fields: (module.fields || []).map((field: any) => ({
+              fieldId: field.fieldId || field.id,
+              fieldName: field.fieldName || field.name,
+              fieldCode: field.fieldCode || field.code,
+              fieldLabel: field.fieldLabel || field.label || field.name,
+              isVisible: Boolean(field.isVisible),
+              isEditable: Boolean(field.isEditable),
+            })),
+          };
+        });
+
+      setModulePermissions(normalizedModules);
 
       // Initialize module configs - only on initial load or if no unsaved changes exist
       // This prevents overwriting user's unsaved changes
       if (!initialLoadDoneRef.current || !hasUnsavedChangesRef.current) {
         const configs: Record<string, ModuleConfig> = {};
-        filteredModules.forEach((module: ModulePermissions) => {
+        normalizedModules.forEach((module: ModulePermissions) => {
           const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
           const grantedPerms = module.permissions.filter(p => p.granted);
           const isSettings = normalizeCode(module.moduleCode).toLowerCase() === 'settings';
@@ -240,7 +281,7 @@ export function EnhancedPermissionAssignment({
         // If there are unsaved changes, only initialize configs for new modules that don't exist yet
         setModuleConfigs(prev => {
           const updated = { ...prev };
-          filteredModules.forEach((module: ModulePermissions) => {
+          normalizedModules.forEach((module: ModulePermissions) => {
             // Only initialize if this module config doesn't exist yet
             if (!updated[module.moduleId]) {
               const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
@@ -488,7 +529,8 @@ export function EnhancedPermissionAssignment({
 
         const permissionsPayload = module.permissions.map(perm => {
           let shouldGrant = false;
-          const permCode = normalizeCode(perm.code);
+          const permCode = normalizeCode(perm.code).toLowerCase();
+          const permId = perm.id || (perm as any).permissionId;
 
           if (config.enabled) {
             // Handle settings submenu permissions separately
@@ -530,13 +572,13 @@ export function EnhancedPermissionAssignment({
               }
             } else {
               // Handle non-settings modules
-              if (config.permissions.manage && (perm.action === 'manage' || permCode.endsWith(':*'))) {
+            if (config.permissions.manage && (perm.action === 'manage' || permCode.endsWith(':*'))) {
                 shouldGrant = true;
-              } else if (config.permissions.view && perm.action === 'read' && permCode === `${moduleCodeLower}:read`) {
+            } else if (config.permissions.view && perm.action === 'read' && permCode === `${moduleCodeLower}:read`) {
                 shouldGrant = true;
               } else if (config.permissions.create && perm.action === 'create') {
                 shouldGrant = true;
-              } else if (config.permissions.update && perm.action === 'update' && permCode === `${moduleCodeLower}:update`) {
+            } else if (config.permissions.update && perm.action === 'update' && permCode === `${moduleCodeLower}:update`) {
                 shouldGrant = true;
               } else if (config.permissions.delete && perm.action === 'delete') {
                 shouldGrant = true;
@@ -545,14 +587,16 @@ export function EnhancedPermissionAssignment({
           }
 
           if (shouldGrant) {
-            permissionIds.push(perm.id);
+            if (permId) {
+              permissionIds.push(permId);
+            }
           }
 
           return {
-            permissionId: perm.id,
+            permissionId: permId,
             granted: shouldGrant,
           };
-        });
+        }).filter(p => Boolean(p.permissionId));
 
         const fieldsPayload = (module.fields || []).map((field) => {
           const fieldConfig = config.fieldPermissions[field.fieldId] || {
