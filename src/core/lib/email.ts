@@ -1,27 +1,8 @@
 import nodemailer from 'nodemailer';
-
-// Email configuration from environment variables
-const SMTP_CONFIG = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-};
-
-const SMTP_FROM = process.env.SMTP_FROM || process.env.SMTP_USER;
-
-// Create reusable transporter
-let transporter: nodemailer.Transporter | null = null;
-
-function getTransporter() {
-  if (!transporter) {
-    transporter = nodemailer.createTransport(SMTP_CONFIG);
-  }
-  return transporter;
-}
+import {
+  getEffectiveSmtpSettings,
+  type EffectiveSmtpSettings,
+} from '@/core/lib/services/systemSettingsService';
 
 export interface SendEmailOptions {
   to: string;
@@ -30,15 +11,66 @@ export interface SendEmailOptions {
   text?: string;
 }
 
+type TransporterState = {
+  transporter: nodemailer.Transporter | null;
+  signature: string | null;
+};
+
+const transporterState: TransporterState = {
+  transporter: null,
+  signature: null,
+};
+
+function buildSignature(settings: EffectiveSmtpSettings): string {
+  return JSON.stringify({
+    host: settings.host,
+    port: settings.port,
+    secure: settings.secure,
+    user: settings.user,
+  });
+}
+
+function formatFrom(settings: EffectiveSmtpSettings): string | undefined {
+  if (!settings.fromEmail) {
+    return undefined;
+  }
+
+  return settings.fromName ? `${settings.fromName} <${settings.fromEmail}>` : settings.fromEmail;
+}
+
+async function getTransporterWithConfig(overrides?: Partial<EffectiveSmtpSettings>) {
+  const settings = await getEffectiveSmtpSettings(overrides);
+  const signature = buildSignature(settings);
+
+  if (!transporterState.transporter || transporterState.signature !== signature) {
+    transporterState.transporter = nodemailer.createTransport({
+      host: settings.host,
+      port: settings.port,
+      secure: settings.secure,
+      auth: settings.user
+        ? {
+            user: settings.user,
+            pass: settings.password,
+          }
+        : undefined,
+    });
+    transporterState.signature = signature;
+  }
+
+  const from = formatFrom(settings) || settings.user;
+
+  return { transporter: transporterState.transporter, from };
+}
+
 /**
  * Send an email using the configured SMTP settings
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
   try {
-    const transporter = getTransporter();
-    
+    const { transporter, from } = await getTransporterWithConfig();
+
     await transporter.sendMail({
-      from: SMTP_FROM,
+      from,
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -49,6 +81,31 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   } catch (error) {
     console.error('[Email] Failed to send email:', error);
     throw new Error('Failed to send email');
+  }
+}
+
+/**
+ * Send an email using provided SMTP overrides (used for testing)
+ */
+export async function sendEmailWithOverrides(
+  options: SendEmailOptions,
+  overrides?: Partial<EffectiveSmtpSettings>
+): Promise<void> {
+  try {
+    const { transporter, from } = await getTransporterWithConfig(overrides);
+
+    await transporter.sendMail({
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text || options.html.replace(/<[^>]*>/g, ''),
+    });
+
+    console.log(`[Email] Test email sent to ${options.to}`);
+  } catch (error) {
+    console.error('[Email] Failed to send test email:', error);
+    throw new Error('Failed to send test email');
   }
 }
 
@@ -320,9 +377,11 @@ export async function sendEmailVerificationEmail(
 /**
  * Verify SMTP configuration
  */
-export async function verifyEmailConfig(): Promise<boolean> {
+export async function verifyEmailConfig(
+  overrides?: Partial<EffectiveSmtpSettings>
+): Promise<boolean> {
   try {
-    const transporter = getTransporter();
+    const { transporter } = await getTransporterWithConfig(overrides);
     await transporter.verify();
     console.log('[Email] SMTP configuration verified successfully');
     return true;

@@ -347,6 +347,29 @@ export const auditLogs = pgTable('audit_logs', {
 }));
 
 // ============================================================================
+// 5. SYSTEM SETTINGS
+// ============================================================================
+
+export const systemSettings = pgTable('system_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  settingKey: text('setting_key').notNull(),
+  settingValue: text('setting_value').notNull(),
+  category: text('category').notNull(),
+  subcategory: text('subcategory'),
+  autoload: boolean('autoload').default(true).notNull(),
+  dataType: text('data_type').default('string'),
+  description: text('description'),
+  isSensitive: boolean('is_sensitive').default(false).notNull(),
+}, (table) => ({
+  settingKeyUnique: unique('system_settings_key_unique').on(table.settingKey),
+  categoryIdx: index('idx_system_settings_category').on(table.category),
+  autoloadIdx: index('idx_system_settings_autoload').on(table.autoload),
+  categorySubcategoryIdx: index('idx_system_settings_category_subcategory').on(table.category, table.subcategory),
+}));
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -507,3 +530,5 @@ export type TenantUser = typeof tenantUsers.$inferSelect;
 export type NewTenantUser = typeof tenantUsers.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type NewSystemSetting = typeof systemSettings.$inferInsert;
