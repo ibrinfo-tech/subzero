@@ -6,8 +6,10 @@ import {
   rolePermissions,
   userRoles,
   resourcePermissions,
+  modules,
 } from './db/baseSchema';
-import { eq, and, isNull, or, lte, gte, sql } from 'drizzle-orm';
+import { roleModuleAccess, roleModulePermissions } from './db/permissionSchema';
+import { eq, and, isNull, or, lte, gte, sql, inArray } from 'drizzle-orm';
 
 /**
  * Get all permissions for a user through their roles (with hierarchy support)
@@ -105,19 +107,77 @@ export async function getUserPermissions(userId: string, tenantId?: string): Pro
     return [];
   }
 
-  // Get permissions for all roles (including inherited)
-  const result = await db
+  // NEW PERMISSION SYSTEM: Check role_module_access and role_module_permissions first
+  // Get all modules that have entries in the new permission system for this role
+  const roleIdsArray = Array.from(allRoleIds);
+  const moduleAccessEntries = roleIdsArray.length > 0
+    ? await db
+        .select({
+          moduleId: roleModuleAccess.moduleId,
+          moduleCode: modules.code,
+          hasAccess: roleModuleAccess.hasAccess,
+        })
+        .from(roleModuleAccess)
+        .innerJoin(modules, eq(roleModuleAccess.moduleId, modules.id))
+        .where(inArray(roleModuleAccess.roleId, roleIdsArray))
+    : [];
+
+  // Only get permissions for modules where hasAccess is true
+  const accessibleModuleIds = moduleAccessEntries
+    .filter(m => m.hasAccess)
+    .map(m => m.moduleId);
+
+  // Get all granted permissions from the new system (only for accessible modules)
+  const newSystemPermissions = accessibleModuleIds.length > 0 && roleIdsArray.length > 0
+    ? await db
     .select({ code: permissions.code })
+        .from(roleModulePermissions)
+        .innerJoin(permissions, eq(roleModulePermissions.permissionId, permissions.id))
+        .where(
+          and(
+            inArray(roleModulePermissions.roleId, roleIdsArray),
+            inArray(roleModulePermissions.moduleId, accessibleModuleIds),
+            eq(roleModulePermissions.granted, true),
+            eq(permissions.isActive, true)
+          )
+        )
+    : [];
+
+  const newSystemPermissionCodes = new Set(newSystemPermissions.map(p => p.code));
+  // Track modules that have ANY entry in new system (even if hasAccess is false)
+  // This prevents legacy permissions from being used for these modules
+  const modulesWithNewSystem = new Set(moduleAccessEntries.map(m => m.moduleCode.toLowerCase()));
+
+  // LEGACY PERMISSION SYSTEM: Only use for modules NOT in the new system
+  // Get all permissions from legacy system
+  const legacyPermissions = roleIdsArray.length > 0
+    ? await db
+        .select({ 
+          code: permissions.code,
+          module: permissions.module,
+        })
     .from(rolePermissions)
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
     .where(
       and(
-        sql`${rolePermissions.roleId} IN (${sql.join(Array.from(allRoleIds).map(id => sql`${id}`), sql`, `)})`,
+            inArray(rolePermissions.roleId, roleIdsArray),
         eq(permissions.isActive, true)
       )
-    );
+        )
+    : [];
 
-  return result.map((r) => r.code);
+  // Filter legacy permissions: only include modules that DON'T have entries in new system
+  const legacyPermissionCodes = legacyPermissions
+    .filter(p => !modulesWithNewSystem.has(p.module.toLowerCase()))
+    .map(p => p.code);
+
+  // Combine: new system permissions + legacy permissions for modules not in new system
+  const allPermissionCodes = Array.from(new Set([
+    ...Array.from(newSystemPermissionCodes),
+    ...legacyPermissionCodes,
+  ]));
+
+  return allPermissionCodes;
 }
 
 /**

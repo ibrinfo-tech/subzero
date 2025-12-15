@@ -366,14 +366,26 @@ export function ExpandableRoleTable({
                                         </div>
                                         {module.permissions.length > 0 && (
                                           <div className="flex flex-wrap gap-1">
-                                            {module.permissions.map((perm) => (
-                                              <span
-                                                key={`${module.moduleId}-${perm.permissionId}`}
-                                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                                              >
-                                                {perm.permissionName}
-                                              </span>
-                                            ))}
+                                            {module.permissions.map((perm, permIndex) => {
+                                              const permKey =
+                                                perm.permissionId ||
+                                                perm.permissionCode ||
+                                                perm.permissionName ||
+                                                `${module.moduleId}-perm-${permIndex}`;
+                                              const permLabel =
+                                                perm.permissionName ||
+                                                perm.permissionCode ||
+                                                perm.permissionId ||
+                                                'permission';
+                                              return (
+                                                <span
+                                                  key={`${module.moduleId}-${permKey}`}
+                                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                >
+                                                  {permLabel}
+                                                </span>
+                                              );
+                                            })}
                                           </div>
                                         )}
                                       </>

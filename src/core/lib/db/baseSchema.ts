@@ -1,15 +1,16 @@
-import { 
-  pgTable, 
+import {
+  pgTable,
   uuid,
-  varchar, 
-  text, 
-  timestamp, 
+  varchar,
+  text,
+  timestamp,
   boolean,
   integer,
   jsonb,
   index,
   unique,
   date,
+  char,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -143,6 +144,20 @@ export const modules = pgTable('modules', {
   updatedBy: uuid('updated_by'),
 }, (table) => ({
   codeIdx: index('idx_modules_code').on(table.code),
+}));
+
+export const moduleLabels = pgTable('module_labels', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  moduleId: uuid('module_id').notNull().references(() => modules.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  color: varchar('color', { length: 20 }).notNull().default('#3b82f6'),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  moduleIdx: index('idx_module_labels_module').on(table.moduleId),
+  moduleNameUnique: unique('module_labels_module_name_unique').on(table.moduleId, table.name),
 }));
 
 // Permission groups (reusable permission sets) - from core.sql
@@ -508,6 +523,8 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Module = typeof modules.$inferSelect;
 export type NewModule = typeof modules.$inferInsert;
+export type ModuleLabel = typeof moduleLabels.$inferSelect;
+export type NewModuleLabel = typeof moduleLabels.$inferInsert;
 export type PermissionGroup = typeof permissionGroups.$inferSelect;
 export type NewPermissionGroup = typeof permissionGroups.$inferInsert;
 export type PermissionGroupItem = typeof permissionGroupItems.$inferSelect;

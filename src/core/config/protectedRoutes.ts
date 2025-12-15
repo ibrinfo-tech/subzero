@@ -22,7 +22,6 @@ export const protectedRoutes: string[] = [
   
   // Module routes with requiresAuth: true
   // Add routes here when modules have requiresAuth: true in their module.config.json
-  '/notes', // Notes module routes
 ];
 
 /**

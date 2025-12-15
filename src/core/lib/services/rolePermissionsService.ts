@@ -141,6 +141,8 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
     }
 
     // For other roles: use actual permissions from database
+    // NOTE: We do NOT use legacy permissions as fallback - permissions must be explicitly set
+    // in the new role_module_access and role_module_permissions tables
     const moduleAllPermissions = allPermissions.filter((p) => p.module === module.code.toLowerCase());
 
     return {
@@ -148,16 +150,19 @@ export async function getRolePermissions(roleId: string): Promise<RolePermission
       moduleName: module.name,
       moduleCode: module.code,
       moduleIcon: module.icon,
-      hasAccess: access?.hasAccess ?? moduleAllPermissions.some((p) => legacyPermissionIds.has(p.id)),
-      dataAccess: (access?.dataAccess as DataAccessLevel) || ((access?.hasAccess ?? moduleAllPermissions.some((p) => legacyPermissionIds.has(p.id))) ? 'team' : 'none'),
+      // Only grant access if explicitly set in role_module_access table
+      hasAccess: access?.hasAccess ?? false,
+      // Only set data access if explicitly configured, otherwise 'none'
+      dataAccess: (access?.dataAccess as DataAccessLevel) || (access?.hasAccess ? 'team' : 'none'),
       permissions: moduleAllPermissions.map((permission) => {
         const modulePerm = modulePerms.find((mp) => mp.permission.id === permission.id);
-        const grantedFromLegacy = legacyPermissionIds.has(permission.id);
+        // Only grant permission if explicitly set in role_module_permissions table
+        // Do NOT fall back to legacy permissions
         return {
           permissionId: permission.id,
           permissionName: permission.name,
           permissionCode: permission.code,
-          granted: modulePerm?.roleModulePermission.granted ?? grantedFromLegacy,
+          granted: modulePerm?.roleModulePermission.granted ?? false,
         };
       }),
       fields: moduleFieldsList.map((field) => {
@@ -212,6 +217,37 @@ export async function updateRoleModulePermissions(
   },
   updatedBy: string
 ): Promise<void> {
+  // Debug: log writes for Projects module only
+  try {
+    const moduleRow = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.id, moduleId))
+      .limit(1);
+    const moduleCodeLower = moduleRow?.[0]?.code?.toLowerCase?.();
+    if (moduleCodeLower === 'projects') {
+      // Also fetch how many active permissions exist for this module in DB
+      const availablePerms = await db
+        .select()
+        .from(permissions)
+        .where(and(eq(permissions.module, moduleCodeLower), eq(permissions.isActive, true)));
+
+      console.log('[RBAC Save][Projects] updateRoleModulePermissions', {
+        roleId,
+        moduleId,
+        moduleCode: moduleRow?.[0]?.code,
+        hasAccess: data.hasAccess,
+        dataAccess: data.dataAccess,
+        permissions: data.permissions,
+        fields: data.fields,
+        availablePermissionsInDb: availablePerms.length,
+        availablePermissionCodes: availablePerms.map((p) => p.code),
+      });
+    }
+  } catch (e) {
+    console.warn('[RBAC Save] failed to log module write', e);
+  }
+
   // Update or create module access
   const existingAccess = await db
     .select()
