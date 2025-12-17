@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { moduleRegistry } from '@/core/config/moduleRegistry';
+import { getAuthToken } from '@/core/middleware/auth';
 import { readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ModuleApiEndpoint } from '@/core/types/module';
@@ -12,14 +13,22 @@ const MODULES_DIR = join(process.cwd(), 'src', 'modules');
  * Get handler function from module
  */
 async function getHandler(moduleId: string, handlerName: string, method: string) {
-  const handlerPath = join(MODULES_DIR, moduleId, 'api', 'handlers', `${handlerName}.ts`);
+  // Support nested handler paths like "tasks/create"
+  const handlerSegments = handlerName.split('/').filter(Boolean);
+  const handlerPath = join(
+    MODULES_DIR,
+    moduleId,
+    'api',
+    'handlers',
+    ...handlerSegments
+  ) + '.ts';
   
   if (!existsSync(handlerPath)) {
     return null;
   }
 
   try {
-    const modulePath = `@/modules/${moduleId}/api/handlers/${handlerName}`;
+    const modulePath = `@/modules/${moduleId}/api/handlers/${handlerSegments.join('/')}`;
     const handlerModule = await import(modulePath);
     
     // Handlers export named functions like GET, POST, etc.
@@ -144,16 +153,7 @@ export async function routeApiRequest(
     console.log(`[API Router] Matched: ${moduleId} -> ${endpoint.handler}`);
   }
 
-  // Check authentication if required
-  if (endpoint.requiresAuth) {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-  }
+  // Auth is validated inside handlers (via verifyAuth) so we don't block here.
 
   // TODO: Add permission checks if endpoint.permissions is defined
   // TODO: Add middleware execution if endpoint.middleware is defined

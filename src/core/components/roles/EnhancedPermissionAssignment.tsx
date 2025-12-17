@@ -63,6 +63,10 @@ interface ModuleConfig {
     create: boolean;
     update: boolean;
     delete: boolean;
+    import?: boolean;
+    export?: boolean;
+    manage_labels?: boolean;
+    duplicate?: boolean;
     manage: boolean;
   };
   fieldPermissions: Record<string, FieldPermission>;
@@ -171,6 +175,8 @@ export function EnhancedPermissionAssignment({
         .map((module: any) => {
           const moduleCode = normalizeCode(module.moduleCode || module.code);
           const moduleCodeLower = moduleCode.toLowerCase();
+          
+          
           return {
             moduleId: module.moduleId || module.module_id,
             moduleName: module.moduleName || module.module_name || module.name,
@@ -231,13 +237,44 @@ export function EnhancedPermissionAssignment({
             enabled,
             dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
             permissions: {
-              // Check for basic module read permission (e.g., notes:read) - not sub-resource permissions
-              view: grantedPerms.some(p => p.action === 'read' && p.code === `${moduleCodeLower}:read`),
-              create: grantedPerms.some(p => p.action === 'create'),
-              // Check for basic module update permission (e.g., notes:update) - not sub-resource permissions
-              update: grantedPerms.some(p => p.action === 'update' && normalizeCode(p.code) === `${moduleCodeLower}:update`),
-              delete: grantedPerms.some(p => p.action === 'delete'),
-              manage: grantedPerms.some(p => p.action === 'manage' || normalizeCode(p.code).endsWith(':*')),
+              // Check for basic module read permission - match by action OR code pattern
+              view: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'read' || pCode === `${moduleCodeLower}:read`;
+              }),
+              create: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'create' || pCode === `${moduleCodeLower}:create`;
+              }),
+              // Check for basic module update permission - match by action OR code pattern
+              update: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'update' || pCode === `${moduleCodeLower}:update`;
+              }),
+              delete: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'delete' || pCode === `${moduleCodeLower}:delete`;
+              }),
+              import: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'import' || pCode === `${moduleCodeLower}:import`;
+              }),
+              export: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'export' || pCode === `${moduleCodeLower}:export`;
+              }),
+              manage_labels: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'manage_labels' || pCode === `${moduleCodeLower}:manage_labels`;
+              }),
+              duplicate: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'duplicate' || pCode === `${moduleCodeLower}:duplicate`;
+              }),
+              manage: grantedPerms.some(p => {
+                const pCode = normalizeCode(p.code).toLowerCase();
+                return p.action === 'manage' || pCode.endsWith(':*');
+              }),
             },
             fieldPermissions,
           };
@@ -305,13 +342,44 @@ export function EnhancedPermissionAssignment({
                 enabled,
                 dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
                 permissions: {
-                  // Check for basic module read permission (e.g., notes:read) - not sub-resource permissions
-                  view: grantedPerms.some(p => p.action === 'read' && p.code === `${moduleCodeLower}:read`),
-                  create: grantedPerms.some(p => p.action === 'create'),
-                  // Check for basic module update permission (e.g., notes:update) - not sub-resource permissions
-                  update: grantedPerms.some(p => p.action === 'update' && normalizeCode(p.code) === `${moduleCodeLower}:update`),
-                  delete: grantedPerms.some(p => p.action === 'delete'),
-                  manage: grantedPerms.some(p => p.action === 'manage' || normalizeCode(p.code).endsWith(':*')),
+                  // Check for basic module read permission - match by action OR code pattern
+                  view: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'read' || pCode === `${moduleCodeLower}:read`;
+                  }),
+                  create: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'create' || pCode === `${moduleCodeLower}:create`;
+                  }),
+                  // Check for basic module update permission - match by action OR code pattern
+                  update: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'update' || pCode === `${moduleCodeLower}:update`;
+                  }),
+                  delete: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'delete' || pCode === `${moduleCodeLower}:delete`;
+                  }),
+                  import: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'import' || pCode === `${moduleCodeLower}:import`;
+                  }),
+                  export: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'export' || pCode === `${moduleCodeLower}:export`;
+                  }),
+                  manage_labels: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'manage_labels' || pCode === `${moduleCodeLower}:manage_labels`;
+                  }),
+                  duplicate: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'duplicate' || pCode === `${moduleCodeLower}:duplicate`;
+                  }),
+                  manage: grantedPerms.some(p => {
+                    const pCode = normalizeCode(p.code).toLowerCase();
+                    return p.action === 'manage' || pCode.endsWith(':*');
+                  }),
                 },
                 fieldPermissions,
               };
@@ -400,6 +468,10 @@ export function EnhancedPermissionAssignment({
             create: false,
             update: false,
             delete: false,
+            import: false,
+            export: false,
+            manage_labels: false,
+            duplicate: false,
             manage: false,
           },
           fieldPermissions,
@@ -527,10 +599,17 @@ export function EnhancedPermissionAssignment({
         const moduleCodeLower = normalizeCode(module.moduleCode).toLowerCase();
         const isSettings = moduleCodeLower === 'settings';
 
+        // Include ALL permissions for this module, not just the ones that should be granted
+        // This ensures the API can properly update all permissions
         const permissionsPayload = module.permissions.map(perm => {
           let shouldGrant = false;
           const permCode = normalizeCode(perm.code).toLowerCase();
           const permId = perm.id || (perm as any).permissionId;
+
+          if (!permId) {
+            // Skip permissions without IDs
+            return null;
+          }
 
           if (config.enabled) {
             // Handle settings submenu permissions separately
@@ -572,31 +651,42 @@ export function EnhancedPermissionAssignment({
               }
             } else {
               // Handle non-settings modules
+              // Check manage first - if manage is enabled, grant all permissions for this module
             if (config.permissions.manage && (perm.action === 'manage' || permCode.endsWith(':*'))) {
                 shouldGrant = true;
-            } else if (config.permissions.view && perm.action === 'read' && permCode === `${moduleCodeLower}:read`) {
+              } else {
+                // Check individual permissions - match by action OR exact code pattern
+                if (config.permissions.view && (perm.action === 'read' || permCode === `${moduleCodeLower}:read`)) {
                 shouldGrant = true;
-              } else if (config.permissions.create && perm.action === 'create') {
+              } else if (config.permissions.create && (perm.action === 'create' || permCode === `${moduleCodeLower}:create`)) {
                 shouldGrant = true;
-            } else if (config.permissions.update && perm.action === 'update' && permCode === `${moduleCodeLower}:update`) {
+            } else if (config.permissions.update && (perm.action === 'update' || permCode === `${moduleCodeLower}:update`)) {
                 shouldGrant = true;
-              } else if (config.permissions.delete && perm.action === 'delete') {
+              } else if (config.permissions.delete && (perm.action === 'delete' || permCode === `${moduleCodeLower}:delete`)) {
                 shouldGrant = true;
+              } else if (config.permissions.import && (perm.action === 'import' || permCode === `${moduleCodeLower}:import`)) {
+                shouldGrant = true;
+              } else if (config.permissions.export && (perm.action === 'export' || permCode === `${moduleCodeLower}:export`)) {
+                shouldGrant = true;
+              } else if (config.permissions.manage_labels && (perm.action === 'manage_labels' || permCode === `${moduleCodeLower}:manage_labels`)) {
+                shouldGrant = true;
+              } else if (config.permissions.duplicate && (perm.action === 'duplicate' || permCode === `${moduleCodeLower}:duplicate`)) {
+                shouldGrant = true;
+                }
               }
             }
           }
 
+          // Collect permission IDs for legacy role_permissions table
           if (shouldGrant) {
-            if (permId) {
               permissionIds.push(permId);
-            }
           }
 
           return {
             permissionId: permId,
             granted: shouldGrant,
           };
-        }).filter(p => Boolean(p.permissionId));
+        }).filter((p): p is { permissionId: string; granted: boolean } => p !== null && !!p.permissionId);
 
         const fieldsPayload = (module.fields || []).map((field) => {
           const fieldConfig = config.fieldPermissions[field.fieldId] || {
@@ -642,7 +732,9 @@ export function EnhancedPermissionAssignment({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update permissions');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[Save Error]', errorData);
+        throw new Error(errorData.error || 'Failed to update permissions');
       }
 
       toast.success('Permissions updated successfully');
@@ -659,6 +751,7 @@ export function EnhancedPermissionAssignment({
       }
       
       // Reload permissions to reflect the saved changes
+      // This ensures the UI shows the actual saved state from the database
       await loadRolePermissions();
     } catch (error) {
       console.error('Failed to update permissions:', error);
@@ -757,7 +850,7 @@ export function EnhancedPermissionAssignment({
                 {selectedConfig.enabled && (
                   <div>
                     <p className="text-sm text-muted-foreground mb-3">Granular Permissions:</p>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -794,6 +887,50 @@ export function EnhancedPermissionAssignment({
                         />
                         <span className="text-sm text-foreground">Delete</span>
                       </label>
+                      {selectedConfig.permissions.import !== undefined && (
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedConfig.permissions.import}
+                            onChange={() => togglePermission(selectedModule!, 'import')}
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground">Import</span>
+                        </label>
+                      )}
+                      {selectedConfig.permissions.export !== undefined && (
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedConfig.permissions.export}
+                            onChange={() => togglePermission(selectedModule!, 'export')}
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground">Export</span>
+                        </label>
+                      )}
+                      {selectedConfig.permissions.manage_labels !== undefined && (
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedConfig.permissions.manage_labels}
+                            onChange={() => togglePermission(selectedModule!, 'manage_labels')}
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground">Manage Labels</span>
+                        </label>
+                      )}
+                      {selectedConfig.permissions.duplicate !== undefined && (
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedConfig.permissions.duplicate}
+                            onChange={() => togglePermission(selectedModule!, 'duplicate')}
+                            className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground">Duplicate</span>
+                        </label>
+                      )}
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"

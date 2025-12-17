@@ -93,7 +93,7 @@ async function seed() {
     userRoles,
     authProviders,
   } = await import('../src/core/lib/db/baseSchema');
-  const { moduleFields } = await import('../src/core/lib/db/permissionSchema');
+  const { moduleFields, roleModuleAccess } = await import('../src/core/lib/db/permissionSchema');
   const { hashPassword } = await import('../src/core/lib/utils');
 
   console.log('🌱 Starting database seed (aligned with core.sql)...\n');
@@ -242,13 +242,6 @@ async function seed() {
     };
 
     const moduleFieldDefinitions: Record<string, ModuleFieldSeed[]> = {
-      // Dynamic example module (Notes)
-      NOTES: [
-        { name: 'Title', code: 'title', label: 'Title', fieldType: 'text', description: 'Note title', sortOrder: 1 },
-        { name: 'Content', code: 'content', label: 'Content', fieldType: 'text', description: 'Note content/body', sortOrder: 2 },
-        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Creation timestamp', sortOrder: 3 },
-        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Last updated timestamp', sortOrder: 4 },
-      ],
       // Core module fields derived from schema expectations
       USERS: [
         { name: 'Full Name', code: 'full_name', label: 'Full Name', fieldType: 'text', description: 'User full name', sortOrder: 1 },
@@ -372,13 +365,16 @@ async function seed() {
     ];
 
     // Generate permissions for dynamic modules
+    // For consistency, we now seed ALL discovered modules (including projects)
+    // based on their module.config.json permissions. Modules with their own
+    // registration will simply be de-duplicated by existingPermissionCodes.
     const dynamicPermissions = [];
     for (const moduleId of discoveredModuleIds) {
       const config = loadModuleConfig(moduleId);
       if (config && config.enabled !== false && config.permissions) {
         const moduleName = config.id.toLowerCase();
         const moduleDisplayName = config.name;
-        
+
         // If module has custom permissions defined, use them
         if (typeof config.permissions === 'object') {
           for (const [action, code] of Object.entries(config.permissions)) {
@@ -409,8 +405,20 @@ async function seed() {
       }
     }
 
-    const permissionData = [...corePermissions, ...dynamicPermissions];
-    console.log(`   Generated ${corePermissions.length} core permissions + ${dynamicPermissions.length} dynamic permissions`);
+    // Deduplicate permissions by code (module.config may already include a wildcard we also add)
+    const permissionDataAll = [...corePermissions, ...dynamicPermissions];
+    const permissionMap = new Map<string, typeof permissionDataAll[number]>();
+    for (const perm of permissionDataAll) {
+      if (!permissionMap.has(perm.code)) {
+        permissionMap.set(perm.code, perm);
+      }
+    }
+
+    const permissionData = Array.from(permissionMap.values());
+
+    console.log(
+      `   Generated ${corePermissions.length} core permissions + ${dynamicPermissions.length} dynamic permissions (deduped to ${permissionData.length} total)`,
+    );
 
     const existingPermissions = await db.select().from(permissions);
     const existingPermissionCodes = new Set(existingPermissions.map((p) => p.code));
@@ -660,6 +668,72 @@ async function seed() {
     console.log(`✅ Assigned ${viewerCount} new permissions to Viewer\n`);
 
     // ============================================================================
+    // 5b. ROLE MODULE ACCESS (New permission system - takes precedence over legacy)
+    // ============================================================================
+    console.log('🔐 Setting up new permission system (role_module_access)...');
+    
+    // Get all modules and roles
+    const allModulesForAccess = await db.select().from(modules).where(eq(modules.isActive, true));
+    const allRolesForAccess = seededRoles;
+    
+    // Check existing entries
+    const existingModuleAccess = await db.select().from(roleModuleAccess);
+    const existingAccessKeys = new Set(
+      existingModuleAccess.map(ma => `${ma.roleId}-${ma.moduleId}`)
+    );
+    
+    const moduleAccessToInsert: Array<{
+      roleId: string;
+      moduleId: string;
+      hasAccess: boolean;
+      dataAccess: 'none' | 'own' | 'team' | 'all';
+    }> = [];
+    
+    // For each role and module combination, set default access
+    for (const role of allRolesForAccess) {
+      for (const module of allModulesForAccess) {
+        const key = `${role.id}-${module.id}`;
+        if (existingAccessKeys.has(key)) continue;
+        
+        let hasAccess = false;
+        let dataAccess: 'none' | 'own' | 'team' | 'all' = 'none';
+        
+        // Super Admin: full access to all modules
+        if (role.code === 'SUPER_ADMIN') {
+          hasAccess = true;
+          dataAccess = 'all';
+        }
+        // Tenant Admin: NO access by default (must be explicitly granted)
+        // This ensures the new permission system takes precedence
+        else if (role.code === 'TENANT_ADMIN') {
+          hasAccess = false; // Explicitly set to false - Super Admin must enable
+          dataAccess = 'none';
+        }
+        // Other roles: no access by default
+        else {
+          hasAccess = false;
+          dataAccess = 'none';
+        }
+        
+        moduleAccessToInsert.push({
+          roleId: role.id,
+          moduleId: module.id,
+          hasAccess,
+          dataAccess,
+        });
+      }
+    }
+    
+    if (moduleAccessToInsert.length > 0) {
+      await db.insert(roleModuleAccess).values(moduleAccessToInsert);
+      console.log(`✅ Created ${moduleAccessToInsert.length} role-module access entries`);
+      console.log(`   ℹ️  All modules are set to 'no access' by default for non-Super Admin roles`);
+      console.log(`   ℹ️  Super Admin must explicitly enable access through Role Management UI\n`);
+    } else {
+      console.log(`ℹ️  All role-module access entries already exist\n`);
+    }
+
+    // ============================================================================
     // 6. SUPER ADMIN USER (create only if no users exist)
     // ============================================================================
     console.log('👤 Seeding Super Admin user (if none exist)...');
@@ -729,6 +803,27 @@ async function seed() {
     // ============================================================================
     // SUMMARY
     // ============================================================================
+    // ============================================================================
+    // 7. MODULE-SPECIFIC REGISTRATION (Register permissions and fields for modules with own registration)
+    // ============================================================================
+    console.log('📦 Running module-specific registrations...');
+    try {
+      // Register projects module permissions and fields
+      const projectsModule = seededModules.find(m => m.code.toLowerCase() === 'projects');
+      if (projectsModule) {
+        try {
+          const { registerProjectsModule } = await import('../src/modules/projects/utils/moduleRegistration');
+          await registerProjectsModule();
+          console.log('   ✅ Registered Projects module permissions and fields');
+        } catch (error) {
+          console.error('   ⚠️  Failed to register Projects module:', error);
+        }
+      }
+    } catch (error) {
+      console.error('   ⚠️  Error during module registrations:', error);
+    }
+    console.log('');
+
     console.log('✨ Seed completed successfully!\n');
     console.log('📊 Summary:');
     console.log(`   - ${seededTenants.length} tenant(s) - Default tenant for new registrations`);

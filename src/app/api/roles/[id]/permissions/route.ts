@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { userHasPermission } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
-import { roles, rolePermissions } from '@/core/lib/db/baseSchema';
+import { roles, rolePermissions, modules } from '@/core/lib/db/baseSchema';
 import { getRolePermissions, updateRoleModulePermissions } from '@/core/lib/services/rolePermissionsService';
 import { eq } from 'drizzle-orm';
 
@@ -104,6 +104,41 @@ export async function PUT(
         continue;
       }
 
+      // Debug: log incoming payload for Projects module only
+      try {
+        const moduleRow = await db
+          .select()
+          .from(modules)
+          .where(eq(modules.id, moduleData.moduleId))
+          .limit(1);
+        const moduleCodeLower = moduleRow?.[0]?.code?.toLowerCase?.();
+        if (moduleCodeLower === 'projects') {
+          console.log('[RBAC Save][Projects] incoming module payload', {
+            moduleId: moduleData.moduleId,
+            moduleCode: moduleRow?.[0]?.code,
+            hasAccess: moduleData.hasAccess,
+            dataAccess: moduleData.dataAccess,
+            permissionsCount: Array.isArray(moduleData.permissions) ? moduleData.permissions.length : 0,
+            permissions: Array.isArray(moduleData.permissions)
+              ? moduleData.permissions.map((p: any) => ({
+                  permissionId: p.permissionId,
+                  granted: p.granted,
+                }))
+              : null,
+            fieldsCount: Array.isArray(moduleData.fields) ? moduleData.fields.length : 0,
+            fields: Array.isArray(moduleData.fields)
+              ? moduleData.fields.map((f: any) => ({
+                  fieldId: f.fieldId,
+                  isVisible: f.isVisible,
+                  isEditable: f.isEditable,
+                }))
+              : null,
+          });
+        }
+      } catch (e) {
+        console.warn('[RBAC Save] failed to log module payload', e);
+      }
+
       const permissionsArray = Array.isArray(moduleData.permissions) ? moduleData.permissions : [];
       const fieldsArray = Array.isArray(moduleData.fields) ? moduleData.fields : [];
 
@@ -123,6 +158,18 @@ export async function PUT(
           permissionId: p.permissionId as string,
           granted: Boolean(p.granted),
         }));
+
+      // Debug logging for projects module
+      const module = await db.select().from(modules).where(eq(modules.id, moduleData.moduleId)).limit(1);
+      if (module.length > 0 && module[0].code.toLowerCase() === 'projects') {
+        console.log('[API Debug] Projects module permissions being saved:', {
+          moduleId: moduleData.moduleId,
+          hasAccess,
+          dataAccess,
+          permissionsCount: normalizedPermissions.length,
+          permissions: normalizedPermissions,
+        });
+      }
 
       const normalizedFields = fieldsArray
         .filter((f: any) => f?.fieldId)

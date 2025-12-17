@@ -102,8 +102,19 @@ export default async function DynamicModulePage({ params }: PageProps) {
       notFound();
     }
 
-    console.log(`[DynamicRoute] Successfully loaded component for ${route.path}`);
-    return <Component />;
+    // Build params object for dynamic segments (e.g., /projects/:id)
+    const paramsObj: Record<string, string> = {};
+    const routeSegments = route.path.split('/').filter(Boolean);
+    const pathSegments = routePath.split('/').filter(Boolean);
+    routeSegments.forEach((seg, idx) => {
+      if (seg.startsWith(':')) {
+        const key = seg.slice(1);
+        paramsObj[key] = pathSegments[idx] || '';
+      }
+    });
+
+    console.log(`[DynamicRoute] Successfully loaded component for ${route.path} with params`, paramsObj);
+    return <Component params={paramsObj} />;
   } catch (error) {
     console.error(`[DynamicRoute] Failed to load component for route ${route.path}:`, error);
     notFound();
