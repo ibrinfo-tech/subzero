@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCcw, Search, Trash2, Pencil, Star, StarOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, RefreshCcw, Search, Star, StarOff, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { Button } from '@/core/components/ui/button';
@@ -19,7 +19,9 @@ import {
 } from '@/core/components/ui/table';
 import { Select } from '@/core/components/ui/select';
 import { Checkbox } from '@/core/components/ui/checkbox';
+import { TableActions } from '@/core/components/common/TableActions';
 import { usePermissions } from '@/core/hooks/usePermissions';
+import { useDebounce } from '@/core/hooks/useDebounce';
 import { formatApiError } from '@/core/lib/utils';
 import { useNoteLabels, type NoteLabel } from '../hooks/useNoteLabels';
 import { NoteLabelsDialog } from '../components/NoteLabelsDialog';
@@ -65,6 +67,9 @@ export default function NotesPage() {
   const { hasPermission } = usePermissions();
   const { labels, createLabel, deleteLabel } = useNoteLabels();
 
+  // Debounce search to avoid API call on every keystroke
+  const debouncedSearch = useDebounce(search, 300);
+
   const canCreate = hasPermission('notes:create') || hasPermission('notes:*');
   const canUpdate = hasPermission('notes:update') || hasPermission('notes:*');
   const canDelete = hasPermission('notes:delete') || hasPermission('notes:*');
@@ -93,27 +98,11 @@ export default function NotesPage() {
     );
   };
 
-  const filtered = useMemo(() => {
-    return notes.filter((note) => {
-      const matchesSearch =
-        !search ||
-        note.title.toLowerCase().includes(search.toLowerCase()) ||
-        (note.description ?? '').toLowerCase().includes(search.toLowerCase());
-      const matchesStatus =
-        status === 'all' || (note.status ?? 'active').toLowerCase() === status;
-      const matchesPinned =
-        pinned === 'all' ||
-        (pinned === 'pinned' && note.isPinned) ||
-        (pinned === 'unpinned' && !note.isPinned);
-      return matchesSearch && matchesStatus && matchesPinned;
-    });
-  }, [notes, search, status, pinned]);
-
   const fetchNotes = async (page = pagination.page, pageSize = pagination.pageSize) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (status !== 'all') params.set('status', status);
       if (pinned === 'pinned') params.set('pinned', 'true');
       if (pinned === 'unpinned') params.set('pinned', 'false');
@@ -145,9 +134,9 @@ export default function NotesPage() {
   };
 
   useEffect(() => {
-    fetchNotes();
+    fetchNotes(1, pagination.pageSize); // Reset to page 1 when filters change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [debouncedSearch, status, pinned]); // Refetch when filters change (search is debounced)
 
   const resetForm = () => {
     setForm(defaultForm);
@@ -272,7 +261,7 @@ export default function NotesPage() {
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filtered.map((n) => n.id)));
+      setSelectedIds(new Set(notes.map((n) => n.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -428,8 +417,8 @@ export default function NotesPage() {
                     <TableHead className="w-10">
                       <Checkbox
                         checked={
-                          filtered.length > 0 &&
-                          filtered.every((n) => selectedIds.has(n.id))
+                          notes.length > 0 &&
+                          notes.every((n) => selectedIds.has(n.id))
                         }
                         onCheckedChange={(checked) => toggleSelectAll(checked)}
                         aria-label="Select all notes"
@@ -443,7 +432,7 @@ export default function NotesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((note) => (
+                  {notes.map((note) => (
                     <TableRow key={note.id}>
                       <TableCell>
                         <Checkbox
@@ -499,32 +488,18 @@ export default function NotesPage() {
                           : '-'}
                       </TableCell>
                       {showActions && (
-                        <TableCell className="text-right space-x-2">
-                          {canUpdate && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEdit(note)}
-                              aria-label="Edit note"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteNoteById(note.id)}
-                              aria-label="Delete note"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                        <TableCell className="text-right">
+                          <TableActions
+                            item={note}
+                            onEdit={canUpdate ? openEdit : undefined}
+                            onDelete={canDelete ? (() => deleteNoteById(note.id)) : undefined}
+                            showDuplicate={false}
+                          />
                         </TableCell>
                       )}
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && (
+                  {notes.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={showActions ? 6 : 5} className="text-center text-muted-foreground">
                         {loading ? 'Loading...' : 'No notes found'}
@@ -565,11 +540,11 @@ export default function NotesPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg p-6 space-y-4">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit note' : 'Add note'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="px-6 py-4 space-y-4">
             <div className="space-y-2">
               <Label>Title</Label>
               <Input
@@ -669,7 +644,7 @@ export default function NotesPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>

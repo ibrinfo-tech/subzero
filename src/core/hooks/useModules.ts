@@ -1,66 +1,83 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/core/store/authStore';
 
-interface Permission {
-  id: string;
-  code: string;
-  name: string;
-  action: string;
-  resource: string | null;
-  isDangerous: boolean;
-  requiresMfa: boolean;
-  description: string | null;
-}
-
 interface Module {
   id: string;
-  name: string;
   code: string;
-  description: string | null;
-  icon: string | null;
-  sortOrder: number;
+  name: string;
+  description?: string;
   isActive: boolean;
-  permissions: Permission[];
 }
 
+// Global cache to avoid refetching
+let modulesCache: Module[] | null = null;
+let modulesCachePromise: Promise<Module[]> | null = null;
+
 export function useModules() {
-  const { token } = useAuthStore();
-  const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [modules, setModules] = useState<Module[]>(modulesCache || []);
+  const [loading, setLoading] = useState(!modulesCache);
+  const { accessToken } = useAuthStore();
 
   useEffect(() => {
-    if (!token) {
+    if (!accessToken) return;
+
+    // If we already have cached data, use it immediately
+    if (modulesCache) {
+      setModules(modulesCache);
       setLoading(false);
       return;
     }
 
+    // If a fetch is already in progress, reuse that promise
+    if (modulesCachePromise) {
+      modulesCachePromise.then((data) => {
+        setModules(data);
+        setLoading(false);
+      });
+      return;
+    }
+
     const fetchModules = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const response = await fetch('/api/modules', {
+        const res = await fetch('/api/modules', {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch modules');
+        if (!res.ok) {
+          throw new Error('Failed to load modules');
         }
 
-        const data = await response.json();
-        setModules(data.modules || []);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch modules');
+        const data = await res.json();
+        const modulesList = data.modules || [];
+        
+        // Cache the result
+        modulesCache = modulesList;
+        setModules(modulesList);
+        
+        return modulesList;
+      } catch (error) {
+        console.error('Error fetching modules:', error);
+        return [];
       } finally {
         setLoading(false);
+        modulesCachePromise = null;
       }
     };
 
-    fetchModules();
-  }, [token]);
+    modulesCachePromise = fetchModules();
+  }, [accessToken]);
 
-  return { modules, loading, error };
+  const findModuleByCode = (code: string) => {
+    return modules.find((m) => m.code === code || m.code === code.toUpperCase() || m.code === code.toLowerCase());
+  };
+
+  const clearCache = () => {
+    modulesCache = null;
+    modulesCachePromise = null;
+  };
+
+  return { modules, loading, findModuleByCode, clearCache };
 }
-

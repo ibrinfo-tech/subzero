@@ -1,22 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { Button } from '@/core/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/core/components/ui/dialog';
-import { Select } from '@/core/components/ui/select';
 import { useAuthStore } from '@/core/store/authStore';
 import { usePermissions } from '@/core/hooks/usePermissions';
-import { PermissionGate } from '@/core/components/common/PermissionGate';
-import { useProjects } from '../hooks/useProjects';
-import { useProjectFilters } from '../hooks/useProjectFilters';
-import { useProjectSort } from '../hooks/useProjectSort';
+import { useDebounce } from '@/core/hooks/useDebounce';
 import { useProjectLabels } from '../hooks/useProjectLabels';
 import { ProjectFilters } from '../components/ProjectFilters';
 import { ProjectTable } from '../components/ProjectTable';
+import type { ProjectFilters as Filters } from '../hooks/useProjectFilters';
+import type { SortField } from '../hooks/useProjectSort';
 import { ProjectForm } from '../components/ProjectForm';
 import { LabelsDialog } from '../components/LabelsDialog';
 import { ImportDialog } from '../components/ImportDialog';
@@ -42,12 +40,32 @@ const defaultForm: CreateProjectInput = {
 };
 
 export default function ProjectsPage() {
-  const { projects, loading, refetch } = useProjects();
-  const { filters, filteredProjects, updateFilter } = useProjectFilters(projects);
-  const { sortConfig, sortedProjects, handleSort } = useProjectSort(filteredProjects);
-  const { labels, createLabel, deleteLabel, fetchLabels } = useProjectLabels();
   const { accessToken } = useAuthStore();
   const { hasPermission } = usePermissions();
+  const { labels, createLabel, deleteLabel, fetchLabels } = useProjectLabels();
+  
+  // State for filters and sorting
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<Filters>({
+    search: '',
+    status: 'all',
+    priority: 'all',
+    quickFilter: 'all',
+    advancedFilters: [],
+    estimatedHours: 'all',
+    createdAt: '',
+  });
+  const [sortConfig, setSortConfig] = useState<{
+    field: SortField | null;
+    direction: 'asc' | 'desc';
+  }>({
+    field: null,
+    direction: 'asc',
+  });
+
+  // Debounce search to avoid API call on every keystroke
+  const debouncedSearch = useDebounce(filters.search, 300);
   
   // Permission checks
   const canCreate = hasPermission('projects:create') || hasPermission('projects:*');
@@ -67,6 +85,59 @@ export default function ProjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateProjectInput>(defaultForm);
   const [saving, setSaving] = useState(false);
+
+  // Fetch projects with filters and sorting
+  const fetchProjects = async () => {
+    if (!accessToken) return;
+    
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (filters.status !== 'all') params.set('status', filters.status);
+      if (filters.priority !== 'all') params.set('priority', filters.priority);
+      if (filters.quickFilter !== 'all') params.set('labelId', filters.quickFilter);
+      if (sortConfig.field) {
+        params.set('sortField', sortConfig.field);
+        params.set('sortDirection', sortConfig.direction);
+      }
+
+      const query = params.toString();
+      const url = query ? `/api/projects?${query}` : '/api/projects';
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setProjects(json.data ?? []);
+      }
+    } catch (error) {
+      console.error('Fetch projects error:', error);
+      toast.error('Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refetch when filters or sorting changes
+  useEffect(() => {
+    fetchProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, filters.status, filters.priority, filters.quickFilter, sortConfig, accessToken]); // Search is debounced
+
+  const updateFilter = <K extends keyof typeof filters>(key: K, value: typeof filters[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSort = (field: SortField) => {
+    setSortConfig((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
 
   const resetForm = () => {
     setForm(defaultForm);
@@ -162,7 +233,7 @@ export default function ProjectsPage() {
       }
       setDialogOpen(false);
       resetForm();
-      refetch();
+      fetchProjects();
       fetchLabels(); // Refresh labels in case new ones were added
       toast.success(editingId ? 'Project updated successfully' : 'Project created successfully');
     } catch (error) {
@@ -201,7 +272,7 @@ export default function ProjectsPage() {
           const json = await res.json();
           throw new Error(json.error || 'Failed to delete project');
         }
-        refetch();
+        fetchProjects();
       })(),
       {
         loading: 'Deleting project...',
@@ -233,7 +304,7 @@ export default function ProjectsPage() {
         if (!res.ok) {
           throw new Error(json.error || 'Failed to duplicate project');
         }
-        refetch();
+        fetchProjects();
       })(),
       {
         loading: 'Duplicating project...',
@@ -244,11 +315,11 @@ export default function ProjectsPage() {
   };
 
   const handleExport = () => {
-    exportToExcel(sortedProjects, 'projects.xlsx');
+    exportToExcel(projects, 'projects.xlsx');
   };
 
   const handlePrint = () => {
-    printProjects(sortedProjects);
+    printProjects(projects);
   };
 
   const handleImport = async (file: File) => {
@@ -364,7 +435,7 @@ export default function ProjectsPage() {
       toast.success(`Successfully imported ${successCount} projects.`);
     }
 
-    refetch();
+    fetchProjects();
   };
 
   const openLabelsDialog = () => {
@@ -415,7 +486,7 @@ export default function ProjectsPage() {
 
             {view === 'list' ? (
               <ProjectTable
-                projects={sortedProjects}
+                projects={projects}
                 loading={loading}
                 sortField={sortConfig.field}
                 sortDirection={sortConfig.direction}
@@ -437,17 +508,19 @@ export default function ProjectsPage() {
         </Card>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl p-6 space-y-4">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingId ? 'Edit project' : 'Add project'}</DialogTitle>
             </DialogHeader>
-            <ProjectForm
-              form={form}
-              onChange={setForm}
-              labels={labels}
-              onAddLabel={showManageLabels ? openLabelsDialog : undefined}
-            />
-            <DialogFooter className="flex justify-end gap-2">
+            <div className="px-6 py-4">
+              <ProjectForm
+                form={form}
+                onChange={setForm}
+                labels={labels}
+                onAddLabel={showManageLabels ? openLabelsDialog : undefined}
+              />
+            </div>
+            <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                 Cancel
               </Button>

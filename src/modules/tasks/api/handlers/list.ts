@@ -23,7 +23,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
     }
 
-    const taskList = await listTasksForTenant(tenantId);
+    // Extract filter parameters from URL
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || undefined;
+    const status = searchParams.get('status') || undefined;
+    const priority = searchParams.get('priority') || undefined;
+
+    const taskList = await listTasksForTenant(tenantId, {
+      search,
+      status,
+      priority,
+    });
 
     return NextResponse.json(
       {

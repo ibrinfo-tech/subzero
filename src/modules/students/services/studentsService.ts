@@ -1,6 +1,8 @@
-import { and, desc, eq, ilike, isNull } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { db } from '@/core/lib/db';
 import { students } from '../schemas/studentsSchema';
+import { moduleFields } from '@/core/lib/db/permissionSchema';
+import { modules } from '@/core/lib/db/baseSchema';
 import type { NewStudent, Student } from '../schemas/studentsSchema';
 import type { CreateStudentInput, UpdateStudentInput } from '../schemas/studentsValidation';
 
@@ -34,7 +36,54 @@ export async function listStudentsForTenant(
 
   if (filters.search) {
     const searchTerm = `%${filters.search}%`;
-    conditions.push(ilike(students.fullName, searchTerm));
+    
+    // Get searchable custom fields (text-based types only)
+    const searchableFieldTypes = ['text', 'email', 'url', 'textarea', 'select', 'number'];
+    
+    // Get the Students module
+    const studentsModule = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.code, 'STUDENTS'))
+      .limit(1);
+    
+    let searchConditions = [
+      ilike(students.rollNumber, searchTerm),
+      ilike(students.fullName, searchTerm),
+      ilike(students.email, searchTerm),
+      ilike(students.phone, searchTerm),
+    ];
+    
+    // Add custom field search if module exists
+    if (studentsModule.length > 0) {
+      const customFields = await db
+        .select()
+        .from(moduleFields)
+        .where(
+          and(
+            eq(moduleFields.moduleId, studentsModule[0].id),
+            eq(moduleFields.isActive, true)
+          )
+        );
+      
+      // Filter to only searchable field types
+      const searchableFields = customFields.filter(field => 
+        field.fieldType && searchableFieldTypes.includes(field.fieldType)
+      );
+      
+      // Add search conditions for each searchable custom field
+      for (const field of searchableFields) {
+        // Use JSONB operator to search in custom_fields
+        searchConditions.push(
+          sql`${students.customFields}->>${field.code} ILIKE ${searchTerm}`
+        );
+      }
+    }
+    
+    const searchCondition = or(...searchConditions);
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
   }
 
   return db

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, ilike, or, sql } from 'drizzle-orm';
 import { db } from '@/core/lib/db';
 import { projects } from '../schemas/projectsSchema';
 import type { NewProject, Project } from '../schemas/projectsSchema';
@@ -42,12 +42,69 @@ const toDateString = (value?: string): string | null | undefined => {
   return parsed.toISOString().split('T')[0];
 };
 
-export async function listProjectsForTenant(tenantId: string): Promise<Project[]> {
-  return db
-    .select()
-    .from(projects)
-    .where(and(eq(projects.tenantId, tenantId), isNull(projects.deletedAt)))
-    .orderBy(desc(projects.createdAt));
+export interface ProjectListFilters {
+  search?: string;
+  status?: string;
+  priority?: string;
+  labelId?: string; // For quick filter by label
+  sortField?: 'title' | 'price' | 'startDate' | 'deadline' | 'createdAt';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export async function listProjectsForTenant(
+  tenantId: string,
+  filters: ProjectListFilters = {},
+): Promise<Project[]> {
+  const conditions = [eq(projects.tenantId, tenantId), isNull(projects.deletedAt)];
+
+  // Search filter (title, description, projectCode)
+  if (filters.search) {
+    const searchTerm = `%${filters.search}%`;
+    conditions.push(
+      or(
+        ilike(projects.title, searchTerm),
+        ilike(projects.description ?? '', searchTerm),
+        ilike(projects.projectCode ?? '', searchTerm),
+      )!,
+    );
+  }
+
+  // Status filter
+  if (filters.status && filters.status !== 'all') {
+    conditions.push(eq(projects.status, filters.status));
+  }
+
+  // Priority filter
+  if (filters.priority && filters.priority !== 'all') {
+    conditions.push(eq(projects.priority, filters.priority));
+  }
+
+  // Label filter (check if labelId is in the labelIds JSON array)
+  if (filters.labelId && filters.labelId !== 'all') {
+    conditions.push(sql`${projects.labelIds}::jsonb @> ${JSON.stringify([filters.labelId])}::jsonb`);
+  }
+
+  // Build query with conditions
+  let query = db.select().from(projects).where(and(...conditions));
+
+  // Apply sorting
+  const sortField = filters.sortField || 'createdAt';
+  const sortDirection = filters.sortDirection || 'desc';
+  
+  const orderByColumn = sortField === 'createdAt' ? projects.createdAt 
+    : sortField === 'title' ? projects.title
+    : sortField === 'price' ? projects.price
+    : sortField === 'startDate' ? projects.startDate
+    : sortField === 'deadline' ? projects.deadline
+    : projects.createdAt;
+
+  if (sortDirection === 'asc') {
+    query = query.orderBy(asc(orderByColumn)) as any;
+  } else {
+    query = query.orderBy(desc(orderByColumn)) as any;
+  }
+
+  return query;
 }
 
 export async function getProjectById(projectId: string, tenantId: string): Promise<Project | null> {

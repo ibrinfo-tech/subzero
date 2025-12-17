@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, ilike, or } from 'drizzle-orm';
 import { db } from '@/core/lib/db';
 import { tasks } from '../schemas/tasksSchema';
 import type { NewTask, Task } from '../schemas/tasksSchema';
@@ -22,11 +22,40 @@ const toDate = (value?: string): Date | null | undefined => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-export async function listTasksForTenant(tenantId: string): Promise<Task[]> {
+export interface TaskListFilters {
+  search?: string;
+  status?: string;
+  priority?: string;
+}
+
+export async function listTasksForTenant(
+  tenantId: string,
+  filters: TaskListFilters = {},
+): Promise<Task[]> {
+  const conditions = [eq(tasks.tenantId, tenantId), isNull(tasks.deletedAt)];
+
+  if (filters.search) {
+    const searchTerm = `%${filters.search}%`;
+    conditions.push(
+      or(
+        ilike(tasks.title, searchTerm),
+        ilike(tasks.description ?? '', searchTerm),
+      )!,
+    );
+  }
+
+  if (filters.status && filters.status !== 'all') {
+    conditions.push(eq(tasks.status, filters.status));
+  }
+
+  if (filters.priority && filters.priority !== 'all') {
+    conditions.push(eq(tasks.priority, filters.priority));
+  }
+
   return db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), isNull(tasks.deletedAt)))
+    .where(and(...conditions))
     .orderBy(desc(tasks.createdAt));
 }
 

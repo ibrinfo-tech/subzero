@@ -69,11 +69,11 @@ export function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-6 space-y-4">
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Import Projects</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="px-6 py-4 space-y-4">
           <div>
             <Label>Select CSV or Excel file</Label>
             <div className="mt-2">
@@ -122,7 +122,7 @@ export function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps
             <p>Title, Description, Status, Priority, Start Date, Deadline, Progress, Price, Currency</p>
           </div>
         </div>
-        <DialogFooter className="flex justify-end gap-2">
+        <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={importing}>
             Cancel
           </Button>

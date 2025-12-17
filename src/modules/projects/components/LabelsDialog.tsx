@@ -58,11 +58,11 @@ export function LabelsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl p-6 space-y-4">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Manage labels</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="px-6 py-4 space-y-4">
           <div>
             <Label>Color</Label>
             <div className="flex flex-wrap gap-2 mt-2">

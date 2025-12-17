@@ -1,7 +1,6 @@
 'use client';
 
-import { ArrowUpDown, Copy, Pencil, Trash2, MoreVertical } from 'lucide-react';
-import { Button } from '@/core/components/ui/button';
+import { ArrowUpDown } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -10,6 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/core/components/ui/table';
+import { TableActions } from '@/core/components/common/TableActions';
+import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import type { Project } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { formatDate, formatCurrency, getDeadlineColor } from '../utils/formatting';
@@ -30,6 +31,15 @@ interface ProjectTableProps {
   onLabelFilter?: (labelId: string) => void;
 }
 
+// Define visible columns with their field codes for permission checking
+const COLUMN_DEFS = [
+  { code: 'title', label: 'Title', sortable: true as const },
+  { code: 'price', label: 'Price', sortable: true as const },
+  { code: 'startDate', label: 'Start date', sortable: true as const },
+  { code: 'deadline', label: 'Deadline', sortable: true as const },
+  { code: 'status', label: 'Status', sortable: false },
+] as const;
+
 export function ProjectTable({
   projects,
   loading = false,
@@ -44,7 +54,11 @@ export function ProjectTable({
   quickFilter = 'all',
   onLabelFilter,
 }: ProjectTableProps) {
+  const { isFieldVisible, loading: loadingPermissions } = useFieldPermissions('projects');
   const getLabelById = (id: string) => labels.find((l) => l.id === id);
+  
+  // Filter columns based on field permissions
+  const visibleColumns = COLUMN_DEFS.filter(col => isFieldVisible('projects', col.code));
   const renderLabelBadge = (label: { id: string; name: string; color: string }) => {
     const color = label.color || '#94a3b8';
     const isActive = quickFilter === label.id;
@@ -86,30 +100,45 @@ export function ProjectTable({
     );
   };
 
+  const colCount = visibleColumns.length + (showActions ? 1 : 0);
+
+  if (loading || loadingPermissions) {
+    return (
+      <div className="border rounded-md overflow-hidden">
+        <Table>
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={colCount} className="text-center text-muted-foreground">
+                Loading...
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
+
   return (
     <div className="border rounded-md overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-16">ID</TableHead>
-            <SortableHeader field="title">Title</SortableHeader>
-            <SortableHeader field="price">Price</SortableHeader>
-            <SortableHeader field="startDate">Start date</SortableHeader>
-            <SortableHeader field="deadline">Deadline</SortableHeader>
-            <TableHead>Status</TableHead>
+            {visibleColumns.map((col) => 
+              col.sortable && onSort ? (
+                <SortableHeader key={col.code} field={col.code as SortField}>
+                  {col.label}
+                </SortableHeader>
+              ) : (
+                <TableHead key={col.code}>{col.label}</TableHead>
+              )
+            )}
             {showActions && <TableHead className="w-24 text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loading ? (
+          {projects.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground">
-                Loading...
-              </TableCell>
-            </TableRow>
-          ) : projects.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={showActions ? 7 : 6} className="text-center text-muted-foreground">
+              <TableCell colSpan={colCount} className="text-center text-muted-foreground">
                 No projects found
               </TableCell>
             </TableRow>
@@ -121,65 +150,63 @@ export function ProjectTable({
 
               return (
                 <TableRow key={project.id}>
-                  <TableCell className="font-mono text-xs">{project.id.slice(0, 8)}</TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex flex-col gap-1">
-                      <a
-                        href={`/projects/${project.id}`}
-                        className="text-left font-semibold leading-tight text-foreground hover:text-primary transition-colors cursor-pointer"
-                        aria-label={`Open ${project.title}`}
-                      >
-                        {project.title}
-                      </a>
-                      {projectLabels.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {projectLabels.map(renderLabelBadge)}
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{formatCurrency(project.price, project.currency)}</TableCell>
-                  <TableCell>{formatDate(project.startDate)}</TableCell>
-                  <TableCell className={getDeadlineColor(project.deadline)}>
-                    {formatDate(project.deadline)}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={project.status} />
-                  </TableCell>
+                  {visibleColumns.map((col) => {
+                    switch (col.code) {
+                      case 'title':
+                        return (
+                          <TableCell key={col.code} className="font-medium">
+                            <div className="flex flex-col gap-1">
+                              <a
+                                href={`/projects/${project.id}`}
+                                className="text-left font-semibold leading-tight text-foreground hover:text-primary transition-colors cursor-pointer"
+                                aria-label={`Open ${project.title}`}
+                              >
+                                {project.title}
+                              </a>
+                              {projectLabels.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {projectLabels.map(renderLabelBadge)}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        );
+                      case 'price':
+                        return (
+                          <TableCell key={col.code}>
+                            {formatCurrency(project.price, project.currency)}
+                          </TableCell>
+                        );
+                      case 'startDate':
+                        return (
+                          <TableCell key={col.code}>
+                            {formatDate(project.startDate)}
+                          </TableCell>
+                        );
+                      case 'deadline':
+                        return (
+                          <TableCell key={col.code} className={getDeadlineColor(project.deadline)}>
+                            {formatDate(project.deadline)}
+                          </TableCell>
+                        );
+                      case 'status':
+                        return (
+                          <TableCell key={col.code}>
+                            <StatusBadge status={project.status} />
+                          </TableCell>
+                        );
+                      default:
+                        return <TableCell key={(col as typeof COLUMN_DEFS[number]).code}>-</TableCell>;
+                    }
+                  })}
                   {showActions && (
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        {onDuplicate && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDuplicate(project)}
-                            title="Duplicate"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {onEdit && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEdit(project)}
-                            title="Edit"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {onDelete && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDelete(project)}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        )}
-                      </div>
+                      <TableActions
+                        item={project}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onDuplicate={onDuplicate}
+                      />
                     </TableCell>
                   )}
                 </TableRow>

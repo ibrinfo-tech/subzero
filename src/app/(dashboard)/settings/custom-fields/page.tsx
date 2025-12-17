@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, RefreshCw, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Search, RefreshCw, Upload, X, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/core/store/authStore';
+import { useCustomFieldsStore } from '@/core/store/customFieldsStore';
 import { Button } from '@/core/components/ui/button';
 import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
@@ -64,6 +65,7 @@ const FIELD_TYPES: Array<{ value: CustomFieldType; label: string }> = [
 
 export default function CustomFieldsSettingsPage() {
   const { accessToken } = useAuthStore();
+  const { invalidateCache } = useCustomFieldsStore();
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState<ModuleWithFields[]>([]);
   const [selectedModule, setSelectedModule] = useState<string>('');
@@ -78,11 +80,8 @@ export default function CustomFieldsSettingsPage() {
     code: '',
     label: '',
     fieldType: 'text' as CustomFieldType,
-    description: '',
     isRequired: false,
     showInTable: false,
-    isFilterable: false,
-    defaultValue: '',
     options: '', // For select fields, comma-separated
   });
 
@@ -173,11 +172,8 @@ export default function CustomFieldsSettingsPage() {
       code: '',
       label: '',
       fieldType: 'text',
-      description: '',
       isRequired: false,
       showInTable: false,
-      isFilterable: false,
-      defaultValue: '',
       options: '',
     });
     setEditingField(null);
@@ -196,11 +192,8 @@ export default function CustomFieldsSettingsPage() {
       code: field.code,
       label: field.label,
       fieldType: field.fieldType,
-      description: field.description || '',
       isRequired: field.metadata?.isRequired || false,
       showInTable: field.metadata?.showInTable || false,
-      isFilterable: field.metadata?.isFilterable || false,
-      defaultValue: field.metadata?.defaultValue?.toString() || '',
       options: field.metadata?.options?.join(', ') || '',
     });
     setDialogOpen(true);
@@ -226,6 +219,10 @@ export default function CustomFieldsSettingsPage() {
       }
 
       toast.success('Custom field deleted successfully');
+      
+      // Invalidate custom fields cache for students module
+      invalidateCache('students');
+      
       loadFieldsForModule(selectedModule);
     } catch (error) {
       console.error('Delete error:', error);
@@ -239,29 +236,31 @@ export default function CustomFieldsSettingsPage() {
       return;
     }
 
-    if (!form.moduleId || !form.name || !form.code || !form.fieldType) {
+    if (!form.moduleId || !form.name || !form.fieldType) {
       toast.error('Please fill in all required fields');
       return;
     }
 
+    // Auto-generate code from name
+    const code = form.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    
+    // Auto-generate label from name
+    const label = form.name.trim();
+
     // Validate field code format
-    if (!/^[a-zA-Z0-9_]+$/.test(form.code)) {
-      toast.error('Field code must contain only letters, numbers, and underscores');
+    if (!/^[a-zA-Z0-9_]+$/.test(code)) {
+      toast.error('Field name contains invalid characters. Please use only letters, numbers, and spaces.');
       return;
     }
-
-    // Auto-generate code from name if not provided
-    const code = form.code || form.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 
     setSaving(true);
     try {
       const metadata: CustomFieldMetadata = {
         isRequired: form.isRequired,
         showInTable: form.showInTable,
-        isFilterable: form.isFilterable,
-        defaultValue: form.defaultValue || undefined,
       };
 
+      // Add options for select fields
       if (form.fieldType === 'select' && form.options) {
         metadata.options = form.options.split(',').map(o => o.trim()).filter(Boolean);
       }
@@ -270,9 +269,8 @@ export default function CustomFieldsSettingsPage() {
         moduleId: form.moduleId,
         name: form.name.trim(),
         code: code.trim(),
-        label: form.label.trim() || form.name.trim(),
+        label: label,
         fieldType: form.fieldType,
-        description: form.description.trim() || undefined,
         metadata,
       };
 
@@ -296,6 +294,10 @@ export default function CustomFieldsSettingsPage() {
       }
 
       toast.success(editingField ? 'Custom field updated successfully' : 'Custom field created successfully');
+      
+      // Invalidate custom fields cache for students module
+      invalidateCache('students');
+      
       setDialogOpen(false);
       resetForm();
       loadFieldsForModule(selectedModule);
@@ -394,6 +396,7 @@ export default function CustomFieldsSettingsPage() {
                         <TableHead>BELONGS TO</TableHead>
                         <TableHead>TYPE</TableHead>
                         <TableHead>REQUIRED</TableHead>
+                        <TableHead>SHOW IN TABLE</TableHead>
                         <TableHead className="text-right">ACTIONS</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -412,15 +415,34 @@ export default function CustomFieldsSettingsPage() {
                               <span className="text-muted-foreground">No</span>
                             )}
                           </TableCell>
+                          <TableCell>
+                            {field.metadata?.showInTable ? (
+                              <Badge variant="default" className="bg-blue-500">
+                                Yes
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">No</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(field.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEdit(field)}
+                                className="hover:bg-accent"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(field.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -441,7 +463,7 @@ export default function CustomFieldsSettingsPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="px-6 py-4 space-y-4">
             <div>
               <Select
                 label="Belongs to"
@@ -462,27 +484,16 @@ export default function CustomFieldsSettingsPage() {
                 value={form.name}
                 onChange={(e) => {
                   const name = e.target.value;
+                  // Auto-generate code and label from name
+                  const autoCode = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
                   setForm({
                     ...form,
                     name,
-                    code: editingField ? form.code : name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
-                    label: form.label || name,
+                    code: editingField ? form.code : autoCode,
+                    label: name, // Always sync label with name
                   });
                 }}
               />
-            </div>
-
-            <div>
-              <Input
-                label="Field Code"
-                placeholder="e.g., client_email"
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                disabled={!!editingField}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Used internally. Only letters, numbers, and underscores allowed.
-              </p>
             </div>
 
             <div>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCcw, Search, Trash2, Pencil, SlidersHorizontal, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, RefreshCcw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { Button } from '@/core/components/ui/button';
@@ -11,7 +11,9 @@ import { Input } from '@/core/components/ui/input';
 import { Label } from '@/core/components/ui/label';
 import { Select } from '@/core/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/core/components/ui/table';
+import { TableActions } from '@/core/components/common/TableActions';
 import { usePermissions } from '@/core/hooks/usePermissions';
+import { useDebounce } from '@/core/hooks/useDebounce';
 import { formatApiError } from '@/core/lib/utils';
 import type { Task, CreateTaskInput } from '../types';
 
@@ -72,6 +74,10 @@ export default function TasksPage() {
   const [labelSaving, setLabelSaving] = useState(false);
   const [moduleId, setModuleId] = useState<string | null>(null);
   const { hasPermission } = usePermissions();
+  
+  // Debounce search to avoid API call on every keystroke
+  const debouncedSearch = useDebounce(search, 300);
+  
   const getLabelById = (id: string) => labels.find((l) => l.id === id);
   const renderLabelBadge = (label: ModuleLabel) => {
     const color = label.color || '#94a3b8';
@@ -96,22 +102,18 @@ export default function TasksPage() {
   const canDelete = hasPermission('tasks:delete') || hasPermission('tasks:*');
   const showActions = canUpdate || canDelete;
 
-  const filtered = useMemo(() => {
-    return tasks.filter((t) => {
-      const matchesSearch =
-        !search ||
-        t.title.toLowerCase().includes(search.toLowerCase()) ||
-        (t.description ?? '').toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = status === 'all' || (t.status ?? '').toLowerCase() === status;
-      const matchesPriority = priority === 'all' || (t.priority ?? '').toLowerCase() === priority;
-      return matchesSearch && matchesStatus && matchesPriority;
-    });
-  }, [tasks, search, status, priority]);
-
   const fetchTasks = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tasks', { method: 'GET' });
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (status !== 'all') params.set('status', status);
+      if (priority !== 'all') params.set('priority', priority);
+
+      const query = params.toString();
+      const url = query ? `/api/tasks?${query}` : '/api/tasks';
+
+      const res = await fetch(url, { method: 'GET' });
       const json = await res.json();
       if (res.ok) {
         setTasks(json.data ?? []);
@@ -124,7 +126,8 @@ export default function TasksPage() {
   useEffect(() => {
     fetchTasks();
     resolveModuleId();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, status, priority]); // Refetch when filters change (search is debounced)
 
   const resetForm = () => {
     setForm(defaultForm);
@@ -357,7 +360,7 @@ export default function TasksPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((t) => (
+                  {tasks.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium">
                         <div className="flex flex-col gap-1">
@@ -384,22 +387,18 @@ export default function TasksPage() {
                       <TableCell>{t.startDate ?? '-'}</TableCell>
                       <TableCell>{t.deadline ?? '-'}</TableCell>
                       {showActions && (
-                        <TableCell className="text-right space-x-2">
-                          {canUpdate && (
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="sm" onClick={() => deleteTask(t.id)}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
+                        <TableCell className="text-right">
+                          <TableActions
+                            item={t}
+                            onEdit={canUpdate ? openEdit : undefined}
+                            onDelete={canDelete ? (() => deleteTask(t.id)) : undefined}
+                            showDuplicate={false}
+                          />
                         </TableCell>
                       )}
                     </TableRow>
                   ))}
-                  {filtered.length === 0 && (
+                  {tasks.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={showActions ? 6 : 5} className="text-center text-muted-foreground">
                         {loading ? 'Loading...' : 'No tasks found'}
@@ -414,11 +413,12 @@ export default function TasksPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl p-6 space-y-4">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit task' : 'Add task'}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="px-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <Label>Title</Label>
               <Input
@@ -523,8 +523,9 @@ export default function TasksPage() {
                 onChange={(e) => setForm((f) => ({ ...f, points: Number(e.target.value) }))}
               />
             </div>
+            </div>
           </div>
-          <DialogFooter className="flex justify-end gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancel
             </Button>
@@ -536,11 +537,12 @@ export default function TasksPage() {
       </Dialog>
 
       <Dialog open={labelsDialogOpen} onOpenChange={setLabelsDialogOpen}>
-        <DialogContent className="max-w-3xl p-6 space-y-4">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Manage labels</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-wrap gap-2">
+          <div className="px-6 py-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
             {labelPalette.map((color) => (
               <button
                 key={color}
@@ -576,6 +578,7 @@ export default function TasksPage() {
               </span>
             ))}
             {labels.length === 0 && <span className="text-muted-foreground text-sm">No labels yet</span>}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
