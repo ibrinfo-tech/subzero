@@ -8,7 +8,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/core/components/ui/table';
-import { Button } from '@/core/components/ui/button';
+import { TableActions } from '@/core/components/common/TableActions';
+import { useStudentCustomFields } from '../hooks/useStudentCustomFields';
+import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import type { Student } from '../types';
 
 interface StudentsTableProps {
@@ -20,6 +22,17 @@ interface StudentsTableProps {
   showActions?: boolean;
 }
 
+// Define standard fields with their display config
+const STANDARD_FIELDS = [
+  { code: 'rollNumber', label: 'Roll #', render: (s: Student) => s.rollNumber },
+  { code: 'fullName', label: 'Name', render: (s: Student) => s.fullName },
+  { code: 'email', label: 'Email', render: (s: Student) => s.email },
+  { code: 'phone', label: 'Phone', render: (s: Student) => s.phone },
+  { code: 'course', label: 'Course', render: (s: Student) => s.course },
+  { code: 'semester', label: 'Semester', render: (s: Student) => s.semester },
+  { code: 'status', label: 'Status', render: (s: Student) => s.status, className: 'capitalize' },
+] as const;
+
 export function StudentsTable({
   students,
   loading = false,
@@ -28,7 +41,19 @@ export function StudentsTable({
   onDuplicate,
   showActions = true,
 }: StudentsTableProps) {
-  if (loading) {
+  const { customFields } = useStudentCustomFields();
+  const { isFieldVisible, loading: loadingPermissions } = useFieldPermissions('students');
+  
+  // Filter standard fields based on visibility permissions
+  const visibleStandardFields = STANDARD_FIELDS.filter(field => 
+    isFieldVisible('students', field.code)
+  );
+  
+  // Filter custom fields that should be shown in table AND are visible per permissions
+  const visibleCustomFields = customFields.filter(field => 
+    field.metadata?.showInTable && isFieldVisible('students', field.code)
+  );
+  if (loading || loadingPermissions) {
     return (
       <div className="py-8 text-center text-muted-foreground">
         Loading students...
@@ -49,52 +74,56 @@ export function StudentsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Roll #</TableHead>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Phone</TableHead>
-            <TableHead>Course</TableHead>
-            <TableHead>Semester</TableHead>
-            <TableHead>Status</TableHead>
+            {visibleStandardFields.map((field) => (
+              <TableHead key={field.code}>{field.label}</TableHead>
+            ))}
+            {visibleCustomFields.map((field) => (
+              <TableHead key={field.id}>{field.label}</TableHead>
+            ))}
             {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {students.map((student) => (
             <TableRow key={student.id}>
-              <TableCell className="font-medium">{student.rollNumber}</TableCell>
-              <TableCell>{student.fullName}</TableCell>
-              <TableCell>{student.email}</TableCell>
-              <TableCell>{student.phone}</TableCell>
-              <TableCell>{student.course}</TableCell>
-              <TableCell>{student.semester}</TableCell>
-              <TableCell className="capitalize">{student.status}</TableCell>
+              {visibleStandardFields.map((field) => (
+                <TableCell 
+                  key={field.code} 
+                  className={field.code === 'rollNumber' ? 'font-medium' : ('className' in field ? field.className : '')}
+                >
+                  {field.render(student)}
+                </TableCell>
+              ))}
+              {visibleCustomFields.map((field) => {
+                const value = student.customFields?.[field.code];
+                let displayValue: string = '-';
+                
+                // Format value based on field type
+                if (value !== null && value !== undefined) {
+                  switch (field.fieldType) {
+                    case 'boolean':
+                      displayValue = value ? 'Yes' : 'No';
+                      break;
+                    case 'date':
+                      displayValue = new Date(value as string).toLocaleDateString();
+                      break;
+                    default:
+                      displayValue = String(value);
+                  }
+                }
+                
+                return (
+                  <TableCell key={field.id}>{displayValue}</TableCell>
+                );
+              })}
               {showActions && (
-                <TableCell className="text-right space-x-2">
-                  {onEdit && (
-                    <Button variant="outline" size="sm" onClick={() => onEdit(student)}>
-                      Edit
-                    </Button>
-                  )}
-                  {onDuplicate && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onDuplicate(student)}
-                    >
-                      Duplicate
-                    </Button>
-                  )}
-                  {onDelete && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => onDelete(student)}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                <TableCell className="text-right">
+                  <TableActions
+                    item={student}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onDuplicate={onDuplicate}
+                  />
                 </TableCell>
               )}
             </TableRow>

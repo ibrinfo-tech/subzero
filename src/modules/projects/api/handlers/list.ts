@@ -23,7 +23,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
     }
 
-    const projectList = await listProjectsForTenant(tenantId);
+    // Extract filter and sort parameters from URL
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search') || undefined;
+    const status = searchParams.get('status') || undefined;
+    const priority = searchParams.get('priority') || undefined;
+    const labelId = searchParams.get('labelId') || undefined;
+    const sortField = searchParams.get('sortField') as any || undefined;
+    const sortDirection = searchParams.get('sortDirection') as 'asc' | 'desc' | undefined;
+
+    const projectList = await listProjectsForTenant(tenantId, {
+      search,
+      status,
+      priority,
+      labelId,
+      sortField,
+      sortDirection,
+    });
 
     return NextResponse.json(
       {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, RefreshCcw, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
@@ -16,11 +16,13 @@ import {
 import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
 import { usePermissions } from '@/core/hooks/usePermissions';
+import { useDebounce } from '@/core/hooks/useDebounce';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { StudentsForm } from '../components/StudentsForm';
 import { StudentsTable } from '../components/StudentsTable';
 import type { Student, CreateStudentInput } from '../types';
 import { useStudentLabels } from '../hooks/useStudentLabels';
+import { useStudentCustomFields } from '../hooks/useStudentCustomFields';
 import { LabelsDialog } from '@/modules/projects/components/LabelsDialog';
 
 type StatusFilter = 'all' | string;
@@ -53,6 +55,11 @@ export default function StudentsPage() {
 
   const { hasPermission } = usePermissions();
   const { labels, createLabel, deleteLabel } = useStudentLabels();
+  // Preload custom fields for instant access when dialog opens
+  const { customFields } = useStudentCustomFields();
+
+  // Debounce search to avoid API call on every keystroke
+  const debouncedSearch = useDebounce(search, 300);
 
   const canCreate = hasPermission('students:create') || hasPermission('students:*');
   const canUpdate = hasPermission('students:update') || hasPermission('students:*');
@@ -64,25 +71,11 @@ export default function StudentsPage() {
 
   const showActions = canUpdate || canDelete || canDuplicate;
 
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const matchesSearch =
-        !search ||
-        s.fullName.toLowerCase().includes(search.toLowerCase()) ||
-        s.rollNumber.toLowerCase().includes(search.toLowerCase()) ||
-        (s.email ?? '').toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = status === 'all' || (s.status ?? '').toLowerCase() === status;
-      const matchesCourse = course === 'all' || (s.course ?? '').toLowerCase() === course;
-      const matchesSemester = semester === 'all' || (s.semester ?? '').toLowerCase() === semester;
-      return matchesSearch && matchesStatus && matchesCourse && matchesSemester;
-    });
-  }, [students, search, status, course, semester]);
-
   const fetchStudents = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (status !== 'all') params.set('status', status);
       if (course !== 'all') params.set('course', course);
       if (semester !== 'all') params.set('semester', semester);
@@ -108,7 +101,7 @@ export default function StudentsPage() {
   useEffect(() => {
     fetchStudents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [debouncedSearch, status, course, semester]); // Refetch when filters change (search is debounced)
 
   const resetForm = () => {
     setForm(defaultForm);
@@ -247,10 +240,12 @@ export default function StudentsPage() {
       toast.error('You do not have permission to export students');
       return;
     }
-    if (!filteredStudents.length) {
+    if (!students.length) {
       toast.info('No students to export');
       return;
     }
+
+    const exportableFields = customFields.filter(field => field.metadata?.showInTable);
 
     const headers = [
       'Roll Number',
@@ -261,17 +256,32 @@ export default function StudentsPage() {
       'Semester',
       'Admission Date',
       'Status',
+      ...exportableFields.map(field => field.label),
     ];
-    const rows = filteredStudents.map((s) => [
-      s.rollNumber,
-      s.fullName,
-      s.email ?? '',
-      s.phone ?? '',
-      s.course ?? '',
-      s.semester ?? '',
-      s.admissionDate ? new Date(s.admissionDate as unknown as string).toISOString().split('T')[0] : '',
-      s.status ?? '',
-    ]);
+    
+    const rows = students.map((s) => {
+      const baseRow = [
+        s.rollNumber,
+        s.fullName,
+        s.email ?? '',
+        s.phone ?? '',
+        s.course ?? '',
+        s.semester ?? '',
+        s.admissionDate ? new Date(s.admissionDate as unknown as string).toISOString().split('T')[0] : '',
+        s.status ?? '',
+      ];
+      
+      // Add custom field values
+      const customFieldValues = exportableFields.map(field => {
+        const value = s.customFields?.[field.code];
+        if (value === null || value === undefined) return '';
+        if (field.fieldType === 'boolean') return value ? 'Yes' : 'No';
+        if (field.fieldType === 'date') return new Date(value as string).toISOString().split('T')[0];
+        return String(value);
+      });
+      
+      return [...baseRow, ...customFieldValues];
+    });
 
     const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -483,7 +493,7 @@ export default function StudentsPage() {
               </div>
             ) : (
               <StudentsTable
-                students={filteredStudents}
+                students={students}
                 onEdit={canUpdate ? openEdit : undefined}
                 onDelete={canDelete ? deleteStudent : undefined}
                 onDuplicate={canDuplicate ? duplicateStudentRow : undefined}
@@ -498,7 +508,7 @@ export default function StudentsPage() {
             <DialogHeader>
               <DialogTitle>{editingId ? 'Edit student' : 'New student'}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="px-6 py-4">
               <StudentsForm form={form} onChange={setForm} />
             </div>
             <DialogFooter>
@@ -513,11 +523,11 @@ export default function StudentsPage() {
         </Dialog>
 
         <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-          <DialogContent className="max-w-md p-6 space-y-4">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Import students</DialogTitle>
             </DialogHeader>
-            <CardContent className="space-y-2 p-0">
+            <div className="px-6 py-4 space-y-4">
               <p className="text-sm text-muted-foreground">
                 Upload a CSV file with columns:
                 <br />
@@ -543,7 +553,7 @@ export default function StudentsPage() {
                   }
                 }}
               />
-            </CardContent>
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
                 Close

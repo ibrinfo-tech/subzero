@@ -135,7 +135,7 @@ export function DialogHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left p-6 pb-4', className)}>
+    <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left px-6 pt-6 pb-2', className)}>
       {children}
     </div>
   );
@@ -149,7 +149,7 @@ export function DialogFooter({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 p-6 pt-4', className)}>
+    <div className={cn('flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 px-6 pb-6 pt-4', className)}>
       {children}
     </div>
   );
