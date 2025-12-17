@@ -148,6 +148,7 @@ export const modules = pgTable('modules', {
 
 export const moduleLabels = pgTable('module_labels', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   moduleId: uuid('module_id').notNull().references(() => modules.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
   color: varchar('color', { length: 20 }).notNull().default('#3b82f6'),
@@ -157,7 +158,8 @@ export const moduleLabels = pgTable('module_labels', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   moduleIdx: index('idx_module_labels_module').on(table.moduleId),
-  moduleNameUnique: unique('module_labels_module_name_unique').on(table.moduleId, table.name),
+  tenantIdx: index('idx_module_labels_tenant').on(table.tenantId),
+  tenantModuleNameUnique: unique('module_labels_tenant_module_name_unique').on(table.tenantId, table.moduleId, table.name),
 }));
 
 // Permission groups (reusable permission sets) - from core.sql

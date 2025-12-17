@@ -106,7 +106,7 @@ export default async function DynamicModulePage({ params }: PageProps) {
     const paramsObj: Record<string, string> = {};
     const routeSegments = route.path.split('/').filter(Boolean);
     const pathSegments = routePath.split('/').filter(Boolean);
-    routeSegments.forEach((seg, idx) => {
+    routeSegments.forEach((seg: string, idx: number) => {
       if (seg.startsWith(':')) {
         const key = seg.slice(1);
         paramsObj[key] = pathSegments[idx] || '';

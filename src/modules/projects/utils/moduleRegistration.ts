@@ -76,6 +76,7 @@ export async function registerProjectFields(moduleId: string, userId?: string): 
         label: fieldDef.label,
         fieldType: fieldDef.fieldType,
         description: fieldDef.description,
+        isSystemField: true, // Mark as system field (default/core field)
         isActive: true,
         sortOrder: fieldDef.sortOrder,
         createdBy: userId,

@@ -79,7 +79,8 @@ export function useProjectFilters(projects: Project[]) {
       return !isEmpty;
     }
 
-    if (isEmpty && operator !== 'is_empty' && operator !== 'is_not_empty') {
+    // If field is empty and we reached here, none of the operators can match
+    if (isEmpty) {
       return false;
     }
 
@@ -184,6 +185,8 @@ export function useProjectFilters(projects: Project[]) {
       priority: 'all',
       quickFilter: 'all',
       advancedFilters: [],
+      estimatedHours: 'all',
+      createdAt: '',
     });
   };
 

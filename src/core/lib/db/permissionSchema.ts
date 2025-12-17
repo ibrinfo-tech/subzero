@@ -65,6 +65,7 @@ export const moduleFields = pgTable('module_fields', {
   label: varchar('label', { length: 255 }),
   fieldType: varchar('field_type', { length: 50 }), // 'text', 'number', 'email', etc.
   description: text('description'),
+  isSystemField: boolean('is_system_field').default(false).notNull(), // true for default/core fields, false for custom fields
   isActive: boolean('is_active').default(true).notNull(),
   sortOrder: integer('sort_order').default(0).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

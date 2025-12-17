@@ -801,26 +801,68 @@ async function seed() {
     console.log('');
 
     // ============================================================================
-    // SUMMARY
+    // 7. MODULE-SPECIFIC SEEDS / REGISTRATION
+    //    Use per-module seeds when they exist (Projects, Tasks, Notes, etc.)
     // ============================================================================
-    // ============================================================================
-    // 7. MODULE-SPECIFIC REGISTRATION (Register permissions and fields for modules with own registration)
-    // ============================================================================
-    console.log('📦 Running module-specific registrations...');
+    console.log('📦 Running module-specific seeds/registrations...');
     try {
-      // Register projects module permissions and fields
-      const projectsModule = seededModules.find(m => m.code.toLowerCase() === 'projects');
+      // Projects: register permissions and fields via moduleRegistration helper
+      const projectsModule = seededModules.find((m) => m.code.toLowerCase() === 'projects');
       if (projectsModule) {
         try {
-          const { registerProjectsModule } = await import('../src/modules/projects/utils/moduleRegistration');
+          const { registerProjectsModule } = await import(
+            '../src/modules/projects/utils/moduleRegistration'
+          );
           await registerProjectsModule();
           console.log('   ✅ Registered Projects module permissions and fields');
         } catch (error) {
           console.error('   ⚠️  Failed to register Projects module:', error);
         }
       }
+
+      // Tasks: legacy-style module seed for permissions + module_fields
+      const hasTasksModule = seededModules.some((m) => m.code.toLowerCase() === 'tasks');
+      if (hasTasksModule) {
+        try {
+          const { default: seedTasksModule } = await import(
+            '../src/modules/tasks/seeds/seed'
+          );
+          await seedTasksModule(db);
+          console.log('   ✅ Ran Tasks module seed (permissions + fields)');
+        } catch (error) {
+          console.error('   ⚠️  Failed to seed Tasks module:', error);
+        }
+      }
+
+      // Notes: module seed for permissions + module_fields
+      const hasNotesModule = seededModules.some((m) => m.code.toLowerCase() === 'notes');
+      if (hasNotesModule) {
+        try {
+          const { default: seedNotesModule } = await import(
+            '../src/modules/notes/seeds/seed'
+          );
+          await seedNotesModule(db);
+          console.log('   ✅ Ran Notes module seed (permissions + fields)');
+        } catch (error) {
+          console.error('   ⚠️  Failed to seed Notes module:', error);
+        }
+      }
+
+      // Students: module seed for permissions + module_fields
+      const hasStudentsModule = seededModules.some((m) => m.code.toLowerCase() === 'students');
+      if (hasStudentsModule) {
+        try {
+          const { default: seedStudentsModule } = await import(
+            '../src/modules/students/seeds/seed'
+          );
+          await seedStudentsModule(db);
+          console.log('   ✅ Ran Students module seed (permissions + fields)');
+        } catch (error) {
+          console.error('   ⚠️  Failed to seed Students module:', error);
+        }
+      }
     } catch (error) {
-      console.error('   ⚠️  Error during module registrations:', error);
+      console.error('   ⚠️  Error during module-specific seeds/registrations:', error);
     }
     console.log('');
 

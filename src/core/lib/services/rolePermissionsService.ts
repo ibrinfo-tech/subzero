@@ -6,7 +6,7 @@ import {
   roleFieldPermissions 
 } from '@/core/lib/db/permissionSchema';
 import { roles, modules, permissions, rolePermissions as legacyRolePermissions } from '@/core/lib/db/baseSchema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 export type DataAccessLevel = 'none' | 'own' | 'team' | 'all';
 
@@ -198,6 +198,7 @@ export async function getRoleModulePermissions(
 
 /**
  * Update role module access and permissions
+ * OPTIMIZED VERSION: Uses bulk operations, transactions, and upserts for better performance
  */
 export async function updateRoleModulePermissions(
   roleId: string,
@@ -217,156 +218,97 @@ export async function updateRoleModulePermissions(
   },
   updatedBy: string
 ): Promise<void> {
-  // Debug: log writes for Projects module only
-  try {
-    const moduleRow = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.id, moduleId))
-      .limit(1);
-    const moduleCodeLower = moduleRow?.[0]?.code?.toLowerCase?.();
-    if (moduleCodeLower === 'projects') {
-      // Also fetch how many active permissions exist for this module in DB
-      const availablePerms = await db
-        .select()
-        .from(permissions)
-        .where(and(eq(permissions.module, moduleCodeLower), eq(permissions.isActive, true)));
-
-      console.log('[RBAC Save][Projects] updateRoleModulePermissions', {
+  const now = new Date();
+  
+  // Use a transaction to ensure atomicity and better performance
+  await db.transaction(async (tx) => {
+    // 1. Upsert module access (single operation using onConflictDoUpdate)
+    await tx
+      .insert(roleModuleAccess)
+      .values({
         roleId,
         moduleId,
-        moduleCode: moduleRow?.[0]?.code,
         hasAccess: data.hasAccess,
         dataAccess: data.dataAccess,
-        permissions: data.permissions,
-        fields: data.fields,
-        availablePermissionsInDb: availablePerms.length,
-        availablePermissionCodes: availablePerms.map((p) => p.code),
-      });
-    }
-  } catch (e) {
-    console.warn('[RBAC Save] failed to log module write', e);
-  }
-
-  // Update or create module access
-  const existingAccess = await db
-    .select()
-    .from(roleModuleAccess)
-    .where(and(
-      eq(roleModuleAccess.roleId, roleId),
-      eq(roleModuleAccess.moduleId, moduleId)
-    ))
-    .limit(1);
-
-  if (existingAccess.length > 0) {
-    await db
-      .update(roleModuleAccess)
-      .set({
-        hasAccess: data.hasAccess,
-        dataAccess: data.dataAccess,
-        updatedAt: new Date(),
+        createdBy: updatedBy,
         updatedBy,
+        createdAt: now,
+        updatedAt: now,
       })
-      .where(and(
-        eq(roleModuleAccess.roleId, roleId),
-        eq(roleModuleAccess.moduleId, moduleId)
-      ));
-  } else {
-    await db.insert(roleModuleAccess).values({
-      roleId,
-      moduleId,
-      hasAccess: data.hasAccess,
-      dataAccess: data.dataAccess,
-      createdBy: updatedBy,
-      updatedBy,
-    });
-  }
-
-  // Update permissions
-  for (const perm of data.permissions) {
-    if (!perm.permissionId) {
-      console.warn('Skipping permission with missing permissionId');
-      continue;
-    }
-    
-    const existing = await db
-      .select()
-      .from(roleModulePermissions)
-      .where(and(
-        eq(roleModulePermissions.roleId, roleId),
-        eq(roleModulePermissions.moduleId, moduleId),
-        eq(roleModulePermissions.permissionId, perm.permissionId)
-      ))
-      .limit(1);
-
-    if (existing.length > 0) {
-      await db
-        .update(roleModulePermissions)
-        .set({
-          granted: perm.granted,
-          updatedAt: new Date(),
+      .onConflictDoUpdate({
+        target: [roleModuleAccess.roleId, roleModuleAccess.moduleId],
+        set: {
+          hasAccess: data.hasAccess,
+          dataAccess: data.dataAccess,
+          updatedAt: now,
           updatedBy,
-        })
-        .where(and(
+        },
+      });
+
+    // 2. Bulk update permissions: Delete all existing, then bulk insert
+    // This is faster than checking each one individually
+    const validPermissions = data.permissions.filter((p) => p?.permissionId);
+    
+    // Delete all existing permissions for this role+module
+    await tx
+      .delete(roleModulePermissions)
+      .where(
+        and(
           eq(roleModulePermissions.roleId, roleId),
-          eq(roleModulePermissions.moduleId, moduleId),
-          eq(roleModulePermissions.permissionId, perm.permissionId)
-        ));
-    } else {
-      await db.insert(roleModulePermissions).values({
-        roleId,
-        moduleId,
-        permissionId: perm.permissionId,
-        granted: perm.granted,
-        createdBy: updatedBy,
-        updatedBy,
-      });
-    }
-  }
+          eq(roleModulePermissions.moduleId, moduleId)
+        )
+      );
 
-  // Update field permissions
-  for (const field of data.fields) {
-    if (!field.fieldId) {
-      console.warn('Skipping field with missing fieldId');
-      continue;
-    }
-    
-    const existing = await db
-      .select()
-      .from(roleFieldPermissions)
-      .where(and(
-        eq(roleFieldPermissions.roleId, roleId),
-        eq(roleFieldPermissions.moduleId, moduleId),
-        eq(roleFieldPermissions.fieldId, field.fieldId)
-      ))
-      .limit(1);
-
-    if (existing.length > 0) {
-      await db
-        .update(roleFieldPermissions)
-        .set({
-          isVisible: field.isVisible,
-          isEditable: field.isEditable,
-          updatedAt: new Date(),
+    // Bulk insert only granted permissions
+    if (validPermissions.length > 0) {
+      const permissionsToInsert = validPermissions
+        .filter((p) => p.granted)
+        .map((p) => ({
+          roleId,
+          moduleId,
+          permissionId: p.permissionId,
+          granted: true,
+          createdBy: updatedBy,
           updatedBy,
-        })
-        .where(and(
+          createdAt: now,
+          updatedAt: now,
+        }));
+
+      if (permissionsToInsert.length > 0) {
+        await tx.insert(roleModulePermissions).values(permissionsToInsert);
+      }
+    }
+
+    // 3. Bulk update field permissions: Delete all existing, then bulk insert
+    const validFields = data.fields.filter((f) => f?.fieldId);
+    
+    // Delete all existing field permissions for this role+module
+    await tx
+      .delete(roleFieldPermissions)
+      .where(
+        and(
           eq(roleFieldPermissions.roleId, roleId),
-          eq(roleFieldPermissions.moduleId, moduleId),
-          eq(roleFieldPermissions.fieldId, field.fieldId)
-        ));
-    } else {
-      await db.insert(roleFieldPermissions).values({
+          eq(roleFieldPermissions.moduleId, moduleId)
+        )
+      );
+
+    // Bulk insert all field permissions (if any)
+    if (validFields.length > 0) {
+      const fieldsToInsert = validFields.map((f) => ({
         roleId,
         moduleId,
-        fieldId: field.fieldId,
-        isVisible: field.isVisible,
-        isEditable: field.isEditable,
+        fieldId: f.fieldId,
+        isVisible: f.isVisible,
+        isEditable: f.isEditable && f.isVisible, // Editable requires visible
         createdBy: updatedBy,
         updatedBy,
-      });
+        createdAt: now,
+        updatedAt: now,
+      }));
+
+      await tx.insert(roleFieldPermissions).values(fieldsToInsert);
     }
-  }
+  });
 }
 
 /**

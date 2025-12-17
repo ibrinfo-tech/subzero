@@ -64,7 +64,7 @@ export default function ProjectDetailPage({ params }: { params?: { id?: string }
               <div className="text-xl font-semibold">{headerTitle}</div>
               {project && (
                 <div className="text-sm text-muted-foreground">
-                  {project.clientName || project.projectType || project.status}
+                  {project.projectType || project.status}
                 </div>
               )}
             </div>

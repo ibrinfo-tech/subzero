@@ -63,7 +63,8 @@
     "manage_labels": "tasks:manage_labels",
     "duplicate": "tasks:duplicate",
     "manage": "tasks:*"
-  }
+  },
+  "custom_field": false
 }
 
 

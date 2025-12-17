@@ -329,7 +329,7 @@ export default function NotesPage() {
    - Bad: `action1`, `do_thing`
 
 3. **Provide user feedback**
-   - Show toast messages when actions are blocked
+   - Always use Sonner `toast` notifications for success, error, and blocked actions (no `alert`)
    - Display "Access Denied" pages clearly
 
 4. **Handle loading states**

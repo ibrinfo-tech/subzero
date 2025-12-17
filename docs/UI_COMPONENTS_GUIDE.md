@@ -208,7 +208,13 @@ Both components automatically adapt to dark mode:
    - Appropriate placeholder text
    - Disabled state when loading
 
-4. **Accessibility:**
+4. **User-facing feedback:**
+   - **Do not use native `alert` / `confirm` / `prompt` dialogs anywhere in the app**
+   - Use `toast` notifications (from `sonner`) for errors, warnings, and success feedback
+   - Use in-app dialogs (e.g. `Dialog` component) or explicit secondary actions for confirmations (delete, destructive actions, etc.)
+   - Keep error messages specific (e.g. “Title is required”) instead of generic (“Validation failed”)
+
+5. **Accessibility:**
    - Both components are keyboard accessible
    - Use descriptive labels
    - Provide error messages for screen readers

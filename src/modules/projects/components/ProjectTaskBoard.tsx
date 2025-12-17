@@ -97,12 +97,12 @@ export function ProjectTaskBoard({ tasks, loading, saving, onSave, onDelete }: P
                       <div className="text-xs text-muted-foreground line-clamp-2">{task.description}</div>
                     )}
                     <div className="flex items-center gap-2 justify-end">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(task)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7" onClick={() => openEdit(task)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="sm"
                         className="h-7 w-7 text-destructive"
                         onClick={() => onDelete(task.id)}
                       >

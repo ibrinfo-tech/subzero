@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCcw, Search, Trash2, Pencil, SlidersHorizontal, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ProtectedPage } from '@/core/components/common/ProtectedPage';
 import { Button } from '@/core/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/core/components/ui/card';
@@ -11,6 +12,7 @@ import { Label } from '@/core/components/ui/label';
 import { Select } from '@/core/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/core/components/ui/table';
 import { usePermissions } from '@/core/hooks/usePermissions';
+import { formatApiError } from '@/core/lib/utils';
 import type { Task, CreateTaskInput } from '../types';
 
 type StatusFilter = 'all' | string;
@@ -131,7 +133,7 @@ export default function TasksPage() {
 
   const openCreate = () => {
     if (!canCreate) {
-      alert('You do not have permission to create tasks');
+      toast.error('You do not have permission to create tasks');
       return;
     }
     resetForm();
@@ -140,7 +142,7 @@ export default function TasksPage() {
 
   const openEdit = (task: Task) => {
     if (!canUpdate) {
-      alert('You do not have permission to edit tasks');
+      toast.error('You do not have permission to edit tasks');
       return;
     }
     setEditingId(task.id);
@@ -164,31 +166,44 @@ export default function TasksPage() {
 
   const saveTask = async () => {
     if (editingId && !canUpdate) {
-      alert('You do not have permission to update tasks');
+      toast.error('You do not have permission to update tasks');
       return;
     }
     if (!editingId && !canCreate) {
-      alert('You do not have permission to create tasks');
+      toast.error('You do not have permission to create tasks');
+      return;
+    }
+    const trimmedTitle = form.title.trim();
+    if (!trimmedTitle) {
+      toast.error('Title is required');
       return;
     }
     setSaving(true);
     try {
       const method = editingId ? 'PATCH' : 'POST';
       const url = editingId ? `/api/tasks/${editingId}` : '/api/tasks';
+      const payload = { ...form, title: trimmedTitle };
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error || 'Failed to save task');
+        throw new Error(formatApiError(json, 'Failed to save task'));
       }
       setDialogOpen(false);
       resetForm();
       fetchTasks();
+      toast.success(editingId ? 'Task updated successfully' : 'Task created successfully');
     } catch (error) {
-      console.error(error);
+      console.error('Save task error:', error);
+      const message = error instanceof Error ? error.message : 'Failed to save task';
+      const [title, ...rest] = message.split('\n').map((line) => line.trim()).filter(Boolean);
+      toast.error(title || 'Failed to save task', {
+        description: rest.length ? rest.join('\n') : undefined,
+        duration: 5000,
+      });
     } finally {
       setSaving(false);
     }
@@ -265,10 +280,9 @@ export default function TasksPage() {
 
   const deleteTask = async (id: string) => {
     if (!canDelete) {
-      alert('You do not have permission to delete tasks');
+      toast.error('You do not have permission to delete tasks');
       return;
     }
-    if (!confirm('Delete this task?')) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
@@ -372,12 +386,12 @@ export default function TasksPage() {
                       {showActions && (
                         <TableCell className="text-right space-x-2">
                           {canUpdate && (
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                            <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
                           )}
                           {canDelete && (
-                            <Button variant="ghost" size="icon" onClick={() => deleteTask(t.id)}>
+                            <Button variant="ghost" size="sm" onClick={() => deleteTask(t.id)}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           )}
