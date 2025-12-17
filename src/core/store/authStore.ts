@@ -91,6 +91,21 @@ export const useAuthStore = create<AuthState>()(
       },
       // Skip hydration during SSR
       skipHydration: typeof window === 'undefined',
+      /**
+       * Only persist authentication-related fields.
+       *
+       * Permissions are intentionally NOT persisted so that a full page reload
+       * will always result in a fresh permissions fetch from the API.
+       * This ensures that role/permission changes made from Role Management
+       * take effect after a browser refresh, without requiring the user to log out.
+       */
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        token: state.token,
+      }),
     }
   )
 );

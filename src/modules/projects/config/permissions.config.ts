@@ -12,7 +12,7 @@
 export interface ModulePermissionDefinition {
   code: string;
   name: string;
-  action: 'create' | 'read' | 'update' | 'delete' | 'import' | 'export' | 'manage_labels' | 'manage';
+  action: 'create' | 'read' | 'update' | 'delete' | 'import' | 'export' | 'duplicate' | 'manage_labels' | 'manage';
   description: string;
   isDangerous?: boolean;
   requiresMfa?: boolean;

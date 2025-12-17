@@ -587,11 +587,16 @@ export function EnhancedPermissionAssignment({
 
   const handleSave = async () => {
     if (!token) return;
+    if (!selectedModule) return;
 
     setSaving(true);
     try {
       const permissionIds: string[] = [];
-      const modulesPayload = Object.entries(moduleConfigs).map(([moduleId, config]) => {
+
+      // Only save the currently selected module's configuration.
+      const modulesPayload = Object.entries(moduleConfigs)
+        .filter(([moduleId]) => moduleId === selectedModule)
+        .map(([moduleId, config]) => {
         const module = modulePermissions.find(m => m.moduleId === moduleId);
         if (!module) return null;
 
@@ -709,7 +714,7 @@ export function EnhancedPermissionAssignment({
           permissions: permissionsPayload,
           fields: fieldsPayload,
         };
-      }).filter(Boolean) as Array<{
+        }).filter(Boolean) as Array<{
         moduleId: string;
         hasAccess: boolean;
         dataAccess: ModuleConfig['dataAccess'];
@@ -719,7 +724,7 @@ export function EnhancedPermissionAssignment({
 
       const uniquePermissionIds = Array.from(new Set(permissionIds));
 
-      const response = await fetch(`/api/roles/${roleId}/permissions`, {
+      const response = await fetch(`/api/roles/${roleId}/permissions/module`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -2,15 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { db } from '@/core/lib/db';
 import { moduleLabels, modules } from '@/core/lib/db/baseSchema';
+import { getUserTenantId } from '@/core/lib/permissions';
 import { eq, and } from 'drizzle-orm';
 
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * GET /api/modules/labels?moduleId=uuid
- * Returns labels for the given module id
+ * Returns labels for the given module id, scoped to the authenticated user's tenant
  */
 export async function GET(request: NextRequest) {
+  const auth = requireAuth();
+  const authResult = await auth(request);
+  if (authResult instanceof NextResponse) {
+    return authResult;
+  }
+
+  const userId = authResult;
+  const tenantId = await getUserTenantId(userId);
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+  }
+
   const { searchParams } = new URL(request.url);
   const moduleId = searchParams.get('moduleId');
 
@@ -22,7 +36,13 @@ export async function GET(request: NextRequest) {
     const labels = await db
       .select()
       .from(moduleLabels)
-      .where(and(eq(moduleLabels.moduleId, moduleId), eq(moduleLabels.isActive, true)))
+      .where(
+        and(
+          eq(moduleLabels.moduleId, moduleId),
+          eq(moduleLabels.tenantId, tenantId),
+          eq(moduleLabels.isActive, true),
+        ),
+      )
       .orderBy(moduleLabels.sortOrder, moduleLabels.name);
 
     return NextResponse.json({ success: true, data: labels });
@@ -43,6 +63,13 @@ export async function POST(request: NextRequest) {
     return authResult;
   }
 
+  const userId = authResult;
+  const tenantId = await getUserTenantId(userId);
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+  }
+
   try {
     const body = await request.json();
     const { moduleId, name, color, sortOrder } = body || {};
@@ -59,6 +86,7 @@ export async function POST(request: NextRequest) {
     const [label] = await db
       .insert(moduleLabels)
       .values({
+        tenantId,
         moduleId,
         name,
         color: color || '#3b82f6',
@@ -84,6 +112,13 @@ export async function PATCH(request: NextRequest) {
     return authResult;
   }
 
+  const userId = authResult;
+  const tenantId = await getUserTenantId(userId);
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+  }
+
   try {
     const body = await request.json();
     const { id, name, color, sortOrder, isActive } = body || {};
@@ -101,7 +136,7 @@ export async function PATCH(request: NextRequest) {
     const [updated] = await db
       .update(moduleLabels)
       .set({ ...updates, updatedAt: new Date() })
-      .where(eq(moduleLabels.id, id))
+      .where(and(eq(moduleLabels.id, id), eq(moduleLabels.tenantId, tenantId)))
       .returning();
 
     if (!updated) {
@@ -126,6 +161,13 @@ export async function DELETE(request: NextRequest) {
     return authResult;
   }
 
+  const userId = authResult;
+  const tenantId = await getUserTenantId(userId);
+
+  if (!tenantId) {
+    return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+  }
+
   try {
     const body = await request.json();
     const { id } = body || {};
@@ -136,7 +178,7 @@ export async function DELETE(request: NextRequest) {
 
     const [deleted] = await db
       .delete(moduleLabels)
-      .where(eq(moduleLabels.id, id))
+      .where(and(eq(moduleLabels.id, id), eq(moduleLabels.tenantId, tenantId)))
       .returning();
 
     if (!deleted) {

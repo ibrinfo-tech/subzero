@@ -1,13 +1,28 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
+import { db as appDb } from '@/core/lib/db';
 import { modules, permissions } from '@/core/lib/db/baseSchema';
 import { moduleFields } from '@/core/lib/db/permissionSchema';
 import tasksConfig from '../module.config.json';
 
+type AppDb = typeof appDb;
+
 /**
  * Seed the Tasks module record into the core modules table so it shows in navigation.
  */
-export default async function seedTasksModule(db: any) {
-  const existing = await db.select().from(modules).where(eq(modules.code, 'tasks')).limit(1);
+export default async function seedTasksModule(db: AppDb) {
+  // Modules are also discovered dynamically in scripts/seed.ts using config.id.toUpperCase(),
+  // so the canonical tasks row might have code 'TASKS' or 'tasks'. Handle both to avoid
+  // inserting a second module row and hitting the unique name constraint.
+  const existing = await db
+    .select()
+    .from(modules)
+    .where(
+      or(
+        eq(modules.code, 'tasks'),
+        eq(modules.code, 'TASKS'),
+      ),
+    )
+    .limit(1);
 
   let moduleId: string;
 
@@ -87,6 +102,7 @@ export default async function seedTasksModule(db: any) {
           label: field.label,
           fieldType: field.fieldType,
           description: field.label,
+          isSystemField: true, // Mark as system field (default/core field)
           isActive: true,
           sortOrder: field.sortOrder,
         });

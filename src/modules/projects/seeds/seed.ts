@@ -1,12 +1,15 @@
 import { eq, or } from 'drizzle-orm';
+import { db as appDb } from '@/core/lib/db';
 import { modules } from '@/core/lib/db/baseSchema';
 import { registerProjectsModule } from '../utils/moduleRegistration';
+
+type AppDb = typeof appDb;
 
 /**
  * Seed the Projects module record into the core modules table so it shows in navigation.
  * Also registers all permissions and fields for the module.
  */
-export default async function seedProjectsModule(db: any) {
+export default async function seedProjectsModule(db: AppDb) {
   const existing = await db
     .select()
     .from(modules)

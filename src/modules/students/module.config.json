@@ -1,0 +1,80 @@
+{
+  "id": "students",
+  "name": "Students",
+  "version": "1.0.0",
+  "description": "Student records management module",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/students",
+      "component": "index",
+      "title": "Students",
+      "requiresAuth": true
+    }
+  ],
+  "api": {
+    "basePath": "/api/students",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "",
+        "handler": "list",
+        "requiresAuth": true
+      },
+      {
+        "method": "POST",
+        "path": "",
+        "handler": "create",
+        "requiresAuth": true
+      },
+      {
+        "method": "GET",
+        "path": "/:id",
+        "handler": "getById",
+        "requiresAuth": true
+      },
+      {
+        "method": "PATCH",
+        "path": "/:id",
+        "handler": "update",
+        "requiresAuth": true
+      },
+      {
+        "method": "DELETE",
+        "path": "/:id",
+        "handler": "delete",
+        "requiresAuth": true
+      },
+      {
+        "method": "POST",
+        "path": "/:id/duplicate",
+        "handler": "duplicate",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "navigation": {
+    "label": "Students",
+    "icon": "UserRound",
+    "path": "/students",
+    "order": 6
+  },
+  "permissions": {
+    "create": "students:create",
+    "read": "students:read",
+    "update": "students:update",
+    "delete": "students:delete",
+    "import": "students:import",
+    "export": "students:export",
+    "manage_labels": "students:manage_labels",
+    "duplicate": "students:duplicate",
+    "manage": "students:*"
+  },
+  "fields": {
+    "enabled": true,
+    "configPath": "./config/fields.config.ts"
+  },
+  "custom_field": true
+}
+
+

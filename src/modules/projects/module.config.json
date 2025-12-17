@@ -103,7 +103,8 @@
   "fields": {
     "enabled": true,
     "configPath": "./config/fields.config.ts"
-  }
+  },
+  "custom_field": false
 }
 
 

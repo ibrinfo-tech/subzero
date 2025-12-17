@@ -19,16 +19,18 @@ export function formatDate(date: string | Date | null | undefined): string {
  */
 export function formatCurrency(
   amount: number | string | null | undefined,
-  currency: string = 'USD'
+  currency: string | null | undefined = 'USD'
 ): string {
   if (amount === null || amount === undefined || amount === '') return '-';
   
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (isNaN(num)) return '-';
   
+  const currencyCode = currency || 'USD';
+  
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: currency,
+    currency: currencyCode,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(num);

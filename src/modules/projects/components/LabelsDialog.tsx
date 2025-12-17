@@ -37,7 +37,7 @@ export function LabelsDialog({
   onDeleteLabel,
 }: LabelsDialogProps) {
   const [labelName, setLabelName] = useState('');
-  const [labelColor, setLabelColor] = useState(LABEL_PALETTE[0]);
+  const [labelColor, setLabelColor] = useState<typeof LABEL_PALETTE[number]>(LABEL_PALETTE[0]);
   const [saving, setSaving] = useState(false);
 
   const handleCreate = async () => {
