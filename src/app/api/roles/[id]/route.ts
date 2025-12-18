@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { requirePermission } from '@/core/middleware/permissions';
-import { getRoleWithUserCount, updateRole, deleteRole } from '@/core/lib/services/rolesService';
+import { getRoleWithUserCount, updateRole, deleteRole, getRoleById } from '@/core/lib/services/rolesService';
+import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { Role, roles } from '@/core/lib/db/baseSchema';
 import { eq } from 'drizzle-orm';
@@ -10,6 +11,7 @@ import { eq } from 'drizzle-orm';
  * GET /api/roles/:id
  * Get a single role by ID
  * Requires: roles:read permission
+ * Note: Super Admin role is only accessible to Super Admin users
  */
 export async function GET(
   request: NextRequest,
@@ -23,6 +25,8 @@ export async function GET(
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
     }
+    
+    const userId = authResult;
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:read');
@@ -42,6 +46,17 @@ export async function GET(
         { error: 'Role not found' },
         { status: 404 }
       );
+    }
+    
+    // Check if this is Super Admin role and user is not Super Admin
+    if (result.role.code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Role not found' },
+          { status: 404 }
+        );
+      }
     }
     
     return NextResponse.json(
@@ -64,6 +79,7 @@ export async function GET(
  * PATCH /api/roles/:id
  * Update a role
  * Requires: roles:update permission
+ * Note: Super Admin role can only be updated by Super Admin users
  */
 export async function PATCH(
   request: NextRequest,
@@ -89,6 +105,18 @@ export async function PATCH(
     }
     
     const { id } = await params;
+    
+    // Check if this is Super Admin role and user is not Super Admin
+    const targetRole = await getRoleById(id);
+    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admins can modify the Super Admin role' },
+          { status: 403 }
+        );
+      }
+    }
     
     // Parse and validate request body
     const body = await request.json();
@@ -164,6 +192,7 @@ export async function PATCH(
  * DELETE /api/roles/:id
  * Delete a role (soft delete)
  * Requires: roles:delete permission
+ * Note: Super Admin role can only be deleted by Super Admin users (though it's a system role and cannot be deleted)
  */
 export async function DELETE(
   request: NextRequest,
@@ -189,6 +218,18 @@ export async function DELETE(
     }
     
     const { id } = await params;
+    
+    // Check if this is Super Admin role and user is not Super Admin
+    const targetRole = await getRoleById(id);
+    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admins can delete the Super Admin role' },
+          { status: 403 }
+        );
+      }
+    }
     
     // Delete role
     try {

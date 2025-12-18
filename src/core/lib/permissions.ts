@@ -349,6 +349,14 @@ export async function getUserRoles(userId: string, tenantId?: string): Promise<A
 }
 
 /**
+ * Check if user is a Super Admin
+ */
+export async function isUserSuperAdmin(userId: string): Promise<boolean> {
+  const userRolesList = await getUserRoles(userId);
+  return userRolesList.some(role => role.code === 'SUPER_ADMIN');
+}
+
+/**
  * Get user's primary role (highest priority)
  */
 export async function getUserRole(userId: string, tenantId?: string): Promise<{ id: string; name: string; code: string; priority: number } | null> {

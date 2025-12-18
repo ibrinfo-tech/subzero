@@ -116,9 +116,9 @@ export function ExpandableRoleTable({
             hasAccess,
             dataAccess: (module.dataAccess as ModulePermission['dataAccess']) || (hasAccess ? 'team' : 'none'),
             permissions: grantedPermissions.map((p: any) => ({
-              permissionId: p.id,
-              permissionName: p.name,
-              permissionCode: p.code,
+              permissionId: p.permissionId,
+              permissionName: p.permissionName,
+              permissionCode: p.permissionCode,
               granted: true,
             })),
             totalPermissions: module.permissions.length,

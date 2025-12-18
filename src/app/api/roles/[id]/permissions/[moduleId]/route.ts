@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { requirePermission } from '@/core/middleware/permissions';
+import { isUserSuperAdmin } from '@/core/lib/permissions';
+import { getRoleById } from '@/core/lib/services/rolesService';
 import { 
   getRoleModulePermissions, 
   updateRoleModulePermissions,
@@ -12,6 +14,7 @@ import {
  * GET /api/roles/:id/permissions/:moduleId
  * Get permissions for a specific role and module
  * Requires: roles:read permission
+ * Note: Super Admin role permissions are only accessible to Super Admin users
  */
 export async function GET(
   request: NextRequest,
@@ -26,6 +29,8 @@ export async function GET(
       return authResult;
     }
     
+    const userId = authResult;
+    
     // Check permission
     const permissionMiddleware = requirePermission('roles:read');
     const permissionResult = await permissionMiddleware(request);
@@ -35,6 +40,18 @@ export async function GET(
     }
     
     const { id, moduleId } = await params;
+    
+    // Check if this is Super Admin role and user is not Super Admin
+    const targetRole = await getRoleById(id);
+    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Role not found' },
+          { status: 404 }
+        );
+      }
+    }
     
     // Get role module permissions
     const roleModulePerms = await getRoleModulePermissions(id, moduleId);
@@ -69,6 +86,7 @@ export async function GET(
  * PATCH /api/roles/:id/permissions/:moduleId
  * Update permissions for a specific role and module
  * Requires: roles:update permission
+ * Note: Super Admin role permissions can only be updated by Super Admin users
  */
 export async function PATCH(
   request: NextRequest,
@@ -94,6 +112,18 @@ export async function PATCH(
     }
     
     const { id, moduleId } = await params;
+    
+    // Check if this is Super Admin role and user is not Super Admin
+    const targetRole = await getRoleById(id);
+    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admins can modify Super Admin role permissions' },
+          { status: 403 }
+        );
+      }
+    }
     
     // Parse request body
     const body = await request.json();
