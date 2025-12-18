@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
-import { userHasPermission } from '@/core/lib/permissions';
+import { userHasPermission, isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { roles, rolePermissions, modules } from '@/core/lib/db/baseSchema';
 import { getRolePermissions, updateRoleModulePermissions } from '@/core/lib/services/rolePermissionsService';
@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 /**
  * GET /api/roles/:id/permissions
  * Get all permissions for a specific role grouped by module
+ * Note: Super Admin role permissions are only accessible to Super Admin users
  */
 export async function GET(
   request: NextRequest,
@@ -45,6 +46,17 @@ export async function GET(
       );
     }
 
+    // Check if this is Super Admin role and user is not Super Admin
+    if (role[0].code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Role not found' },
+          { status: 404 }
+        );
+      }
+    }
+
     const permissionsData = await getRolePermissions(roleId);
 
     return NextResponse.json({
@@ -68,6 +80,7 @@ export async function GET(
 /**
  * PUT /api/roles/:id/permissions
  * Update permissions for a role
+ * Note: Super Admin role permissions can only be updated by Super Admin users
  */
 export async function PUT(
   request: NextRequest,
@@ -89,6 +102,23 @@ export async function PUT(
     }
 
     const { id: roleId } = await params;
+
+    // Check if this is Super Admin role and user is not Super Admin
+    const role = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.id, roleId))
+      .limit(1);
+
+    if (role.length > 0 && role[0].code === 'SUPER_ADMIN') {
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admins can modify Super Admin role permissions' },
+          { status: 403 }
+        );
+      }
+    }
     const body = await request.json();
     const modulesPayload = Array.isArray(body.modules) ? body.modules : [];
     const legacyPermissionIds = Array.isArray(body.permissionIds) ? body.permissionIds : null;

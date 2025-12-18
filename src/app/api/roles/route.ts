@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { requirePermission } from '@/core/middleware/permissions';
 import { getRoles, getRoleUserCount } from '@/core/lib/services/rolesService';
+import { isUserSuperAdmin } from '@/core/lib/permissions';
 
 /**
  * GET /api/roles
  * Get all roles (with optional filtering)
  * Requires: roles:read permission
+ * Note: Super Admin role is only visible to Super Admin users
  */
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +20,8 @@ export async function GET(request: NextRequest) {
       return authResult; // Unauthorized response
     }
     
+    const userId = authResult; // userId is returned from requireAuth
+    
     // Check permission
     const permissionMiddleware = requirePermission('roles:read');
     const permissionResult = await permissionMiddleware(request);
@@ -26,6 +30,9 @@ export async function GET(request: NextRequest) {
       return permissionResult; // Forbidden response
     }
     
+    // Check if user is Super Admin
+    const isSuperAdmin = await isUserSuperAdmin(userId);
+    
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || undefined;
@@ -33,12 +40,13 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined;
     
-    // Get roles
+    // Get roles - exclude Super Admin role if user is not Super Admin
     const result = await getRoles({
       search,
       status,
       limit,
       offset,
+      excludeSuperAdmin: !isSuperAdmin,
     });
     
     // Get user counts for each role

@@ -1,6 +1,6 @@
 import { db } from '@/core/lib/db';
 import { roles, userRoles } from '@/core/lib/db/baseSchema';
-import { eq, and, or, like, isNull, desc, count, lte, gte, sql } from 'drizzle-orm';
+import { eq, and, or, like, isNull, desc, count, lte, gte, sql, ne } from 'drizzle-orm';
 import type { Role, NewRole } from '@/core/lib/db/baseSchema';
 import type { CreateRoleInput, UpdateRoleInput } from '@/core/lib/validations/roles';
 
@@ -13,8 +13,9 @@ export async function getRoles(options?: {
   status?: string;
   limit?: number;
   offset?: number;
+  excludeSuperAdmin?: boolean;
 }): Promise<{ roles: Role[]; total: number }> {
-  const { search, tenantId, status, limit = 100, offset = 0 } = options || {};
+  const { search, tenantId, status, limit = 100, offset = 0, excludeSuperAdmin = false } = options || {};
 
   // Build where conditions
   const conditions = [];
@@ -39,6 +40,11 @@ export async function getRoles(options?: {
   
   if (status) {
     conditions.push(eq(roles.status, status));
+  }
+
+  // Exclude Super Admin role if requested
+  if (excludeSuperAdmin) {
+    conditions.push(ne(roles.code, 'SUPER_ADMIN'));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
