@@ -365,9 +365,9 @@ async function seed() {
     ];
 
     // Generate permissions for dynamic modules
-    // For consistency, we now seed ALL discovered modules (including projects)
-    // based on their module.config.json permissions. Modules with their own
-    // registration will simply be de-duplicated by existingPermissionCodes.
+    // For consistency, we seed ALL discovered modules based on their
+    // module.config.json permissions. Modules with their own registration will
+    // simply be de-duplicated by existingPermissionCodes.
     const dynamicPermissions = [];
     for (const moduleId of discoveredModuleIds) {
       const config = loadModuleConfig(moduleId);
@@ -468,7 +468,7 @@ async function seed() {
         tenantId: null, // System role
         name: 'Manager',
         code: 'MANAGER',
-        description: 'Team management capabilities. Can create and manage projects, view users.',
+        description: 'Team management capabilities. Can manage teams and users.',
         isSystem: true,
         isDefault: false,
         priority: 60,
@@ -480,7 +480,7 @@ async function seed() {
         tenantId: null, // System role
         name: 'Editor',
         code: 'EDITOR',
-        description: 'Content editing capabilities. Can create and edit projects.',
+        description: 'Content editing capabilities.',
         isSystem: true,
         isDefault: false,
         priority: 40,
@@ -504,7 +504,7 @@ async function seed() {
         tenantId: null, // System role
         name: 'Viewer',
         code: 'VIEWER',
-        description: 'Read-only access to projects and users.',
+        description: 'Read-only access to users and billing data.',
         isSystem: true,
         isDefault: false,
         priority: 20,
@@ -600,13 +600,7 @@ async function seed() {
     // Tenant Admin gets all permissions except system:* and admin:*
     const tenantAdminCount = await insertRolePermissions(
       tenantAdminRole,
-      [
-        'users:*',
-        'roles:*',
-        'projects:*',
-        'billing:*',
-        'audit:read',
-      ],
+      ['users:*', 'roles:*', 'billing:*', 'audit:read'],
       'Tenant Admin'
     );
 
@@ -619,7 +613,6 @@ async function seed() {
         'users:update',
         'roles:read',
         'roles:assign',
-        'projects:*',
         'billing:read',
       ],
       'Manager'
@@ -628,35 +621,21 @@ async function seed() {
     // Editor gets project editing permissions
     const editorCount = await insertRolePermissions(
       editorRole,
-      [
-        'users:read',
-        'projects:create',
-        'projects:read',
-        'projects:update',
-      ],
+      ['users:read'],
       'Editor'
     );
 
     // User gets basic access (dashboard, profile, read own data)
     const userCount = await insertRolePermissions(
       userRole,
-      [
-        'dashboard:read',
-        'profile:read',
-        'profile:update',
-        'projects:read',
-      ],
+      ['dashboard:read', 'profile:read', 'profile:update'],
       'User'
     );
 
     // Viewer gets read-only permissions
     const viewerCount = await insertRolePermissions(
       viewerRole,
-      [
-        'users:read',
-        'projects:read',
-        'billing:read',
-      ],
+      ['users:read', 'billing:read'],
       'Viewer'
     );
 
@@ -800,72 +779,6 @@ async function seed() {
     }
     console.log('');
 
-    // ============================================================================
-    // 7. MODULE-SPECIFIC SEEDS / REGISTRATION
-    //    Use per-module seeds when they exist (Projects, Tasks, Notes, etc.)
-    // ============================================================================
-    console.log('📦 Running module-specific seeds/registrations...');
-    try {
-      // Projects: register permissions and fields via moduleRegistration helper
-      const projectsModule = seededModules.find((m) => m.code.toLowerCase() === 'projects');
-      if (projectsModule) {
-        try {
-          const { registerProjectsModule } = await import(
-            '../src/modules/projects/utils/moduleRegistration'
-          );
-          await registerProjectsModule();
-          console.log('   ✅ Registered Projects module permissions and fields');
-        } catch (error) {
-          console.error('   ⚠️  Failed to register Projects module:', error);
-        }
-      }
-
-      // Tasks: legacy-style module seed for permissions + module_fields
-      const hasTasksModule = seededModules.some((m) => m.code.toLowerCase() === 'tasks');
-      if (hasTasksModule) {
-        try {
-          const { default: seedTasksModule } = await import(
-            '../src/modules/tasks/seeds/seed'
-          );
-          await seedTasksModule(db);
-          console.log('   ✅ Ran Tasks module seed (permissions + fields)');
-        } catch (error) {
-          console.error('   ⚠️  Failed to seed Tasks module:', error);
-        }
-      }
-
-      // Notes: module seed for permissions + module_fields
-      const hasNotesModule = seededModules.some((m) => m.code.toLowerCase() === 'notes');
-      if (hasNotesModule) {
-        try {
-          const { default: seedNotesModule } = await import(
-            '../src/modules/notes/seeds/seed'
-          );
-          await seedNotesModule(db);
-          console.log('   ✅ Ran Notes module seed (permissions + fields)');
-        } catch (error) {
-          console.error('   ⚠️  Failed to seed Notes module:', error);
-        }
-      }
-
-      // Students: module seed for permissions + module_fields
-      const hasStudentsModule = seededModules.some((m) => m.code.toLowerCase() === 'students');
-      if (hasStudentsModule) {
-        try {
-          const { default: seedStudentsModule } = await import(
-            '../src/modules/students/seeds/seed'
-          );
-          await seedStudentsModule(db);
-          console.log('   ✅ Ran Students module seed (permissions + fields)');
-        } catch (error) {
-          console.error('   ⚠️  Failed to seed Students module:', error);
-        }
-      }
-    } catch (error) {
-      console.error('   ⚠️  Error during module-specific seeds/registrations:', error);
-    }
-    console.log('');
-
     console.log('✨ Seed completed successfully!\n');
     console.log('📊 Summary:');
     console.log(`   - ${seededTenants.length} tenant(s) - Default tenant for new registrations`);
@@ -879,18 +792,18 @@ async function seed() {
     console.log('   - Users can register via the registration form\n');
     
     console.log('📋 Permission System:');
-    console.log('   - Format: module:action (e.g., users:create, projects:read)');
+    console.log('   - Format: module:action (e.g., users:create)');
     console.log('   - Wildcards: users:* grants all user permissions');
     console.log('   - admin:* grants ALL permissions (Super Admin only)');
     console.log('   - Supports role hierarchy and temporal access\n');
     
     console.log('🎯 Role Structure:');
     console.log('   1. Super Admin: admin:* (everything)');
-    console.log('   2. Tenant Admin: Full tenant management (users:*, roles:*, projects:*, billing:*)');
-    console.log('   3. Manager: Team management (users:read/create/update, projects:*, roles:read/assign)');
-    console.log('   4. Editor: Content editing (projects:create/read/update, users:read)');
-    console.log('   5. User: Basic access (dashboard, profile, read projects) - DEFAULT ROLE');
-    console.log('   6. Viewer: Read-only (users:read, projects:read, billing:read)\n');
+    console.log('   2. Tenant Admin: Full tenant management (users:*, roles:*, billing:*)');
+    console.log('   3. Manager: Team management (users:read/create/update, roles:read/assign)');
+    console.log('   4. Editor: Content editing (users:read)');
+    console.log('   5. User: Basic access (dashboard, profile)');
+    console.log('   6. Viewer: Read-only (users:read, billing:read)\n');
   } catch (error) {
     console.error('❌ Seed failed:', error);
     throw error;

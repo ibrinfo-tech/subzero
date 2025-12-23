@@ -102,7 +102,7 @@ export default async function DynamicModulePage({ params }: PageProps) {
       notFound();
     }
 
-    // Build params object for dynamic segments (e.g., /projects/:id)
+    // Build params object for dynamic segments (e.g., /module/:id)
     const paramsObj: Record<string, string> = {};
     const routeSegments = route.path.split('/').filter(Boolean);
     const pathSegments = routePath.split('/').filter(Boolean);

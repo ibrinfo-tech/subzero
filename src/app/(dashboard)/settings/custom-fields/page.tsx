@@ -219,10 +219,12 @@ export default function CustomFieldsSettingsPage() {
       }
 
       toast.success('Custom field deleted successfully');
-      
-      // Invalidate custom fields cache for students module
-      invalidateCache('students');
-      
+
+      // Invalidate cache for the active module
+      if (selectedModule) {
+        invalidateCache(selectedModule);
+      }
+
       loadFieldsForModule(selectedModule);
     } catch (error) {
       console.error('Delete error:', error);
@@ -294,10 +296,13 @@ export default function CustomFieldsSettingsPage() {
       }
 
       toast.success(editingField ? 'Custom field updated successfully' : 'Custom field created successfully');
-      
-      // Invalidate custom fields cache for students module
-      invalidateCache('students');
-      
+
+      // Invalidate cache for the affected module
+      const cacheTarget = form.moduleId || selectedModule;
+      if (cacheTarget) {
+        invalidateCache(cacheTarget);
+      }
+
       setDialogOpen(false);
       resetForm();
       loadFieldsForModule(selectedModule);
