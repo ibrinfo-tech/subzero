@@ -5,10 +5,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { DashboardSkeleton } from '../common/DashboardSkeleton';
 import { Toaster } from '../ui/toaster';
-
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+import type { DashboardLayoutProps } from '@/core/types/components/layout';
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [navigationLoaded, setNavigationLoaded] = useState(false);

@@ -7,12 +7,7 @@ import { cn } from '@/core/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import type { ModuleNavigation } from '@/core/types/module';
 import { useAuthStore } from '@/core/store/authStore';
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon?: React.ReactNode;
-}
+import type { SidebarProps, NavItem } from '@/core/types/components/layout';
 
 // Static navigation items are now loaded from API and filtered by permissions
 
@@ -28,12 +23,6 @@ function getIconComponent(iconName?: string): React.ReactNode {
   
   // Fallback to FileText if icon not found
   return <LucideIcons.FileText className="w-5 h-5" />;
-}
-
-interface SidebarProps {
-  onNavigationLoaded?: () => void;
-  isOpen?: boolean;
-  onClose?: () => void;
 }
 
 export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: SidebarProps = {}) {

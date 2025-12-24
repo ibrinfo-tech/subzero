@@ -5,34 +5,10 @@ import { Lock, Key } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
 import { Input } from '@/core/components/ui/input';
 import { Textarea } from '@/core/components/ui/textarea';
-
-interface OverviewTabProfile {
-  id: string;
-  email: string;
-  fullName: string | null;
-  timezone?: string | null;
-  locale?: string | null;
-  phoneNumber?: string | null;
-  jobTitle?: string | null;
-  department?: string | null;
-  companyName?: string | null;
-  dateOfBirth?: string | Date | null;
-  bio?: string | null;
-  addressLine1?: string | null;
-  addressLine2?: string | null;
-  city?: string | null;
-  state?: string | null;
-  postalCode?: string | null;
-  country?: string | null;
-}
-
-interface OverviewTabProps {
-  profile: OverviewTabProfile;
-  onProfileUpdated: (profile: OverviewTabProfile) => void;
-  onSavingChange?: (saving: boolean) => void;
-  isSaving?: boolean;
-  onChangePassword: () => void;
-}
+import type {
+  OverviewTabProfile,
+  OverviewTabProps,
+} from '@/core/types/components/profile';
 
 export function OverviewTab({
   profile,

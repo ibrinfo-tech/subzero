@@ -2,10 +2,7 @@
 
 import { Lock, Shield, Key } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
-
-interface SecurityTabProps {
-  onChangePassword: () => void;
-}
+import type { SecurityTabProps } from '@/core/types/components/profile';
 
 export function SecurityTab({ onChangePassword }: SecurityTabProps) {
   return (

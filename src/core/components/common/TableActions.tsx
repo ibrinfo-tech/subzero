@@ -2,16 +2,7 @@
 
 import { Copy, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/core/components/ui/button';
-
-interface TableActionsProps<T = any> {
-  item: T;
-  onEdit?: (item: T) => void;
-  onDelete?: (item: T) => void;
-  onDuplicate?: (item: T) => void;
-  showEdit?: boolean;
-  showDelete?: boolean;
-  showDuplicate?: boolean;
-}
+import type { TableActionsProps } from '@/core/types/components/common';
 
 export function TableActions<T>({
   item,

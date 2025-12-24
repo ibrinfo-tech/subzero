@@ -15,18 +15,7 @@ import { Select } from '@/core/components/ui/select';
 import { Edit, Trash2, Search, UserPlus } from 'lucide-react';
 import type { User } from '@/core/lib/db/baseSchema';
 import { useAuthStore } from '@/core/store/authStore';
-
-interface UserTableProps {
-  users: User[];
-  roles?: Array<{ id: string; name: string; code: string }>;
-  isLoading?: boolean;
-  onEdit?: (user: User) => void;
-  onDelete?: (user: User) => void;
-  onCreate?: () => void;
-  onSearch?: (search: string) => void;
-  onRoleFilter?: (roleId: string) => void;
-  onStatusFilter?: (status: string) => void;
-}
+import type { UserTableProps } from '@/core/types/components/users';
 
 export function UserTable({
   users,

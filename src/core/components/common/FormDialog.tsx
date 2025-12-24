@@ -4,16 +4,7 @@ import React from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/core/lib/utils';
 import { FormSkeleton } from '@/core/components/ui/skeleton';
-
-interface FormDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
-  isLoading?: boolean;
-}
+import type { FormDialogProps } from '@/core/types/components/common';
 
 const maxWidthClasses = {
   sm: 'max-w-sm',

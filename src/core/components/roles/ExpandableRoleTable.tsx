@@ -17,32 +17,10 @@ import { Edit, Trash2, Search, ShieldPlus, ChevronRight, Settings } from 'lucide
 import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/card';
 import type { Role } from '@/core/lib/db/baseSchema';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
-
-interface ModulePermission {
-  moduleId: string;
-  moduleName: string;
-  moduleCode: string;
-  hasAccess: boolean;
-  dataAccess: 'none' | 'own' | 'team' | 'all';
-  permissions: Array<{
-    permissionId: string;
-    permissionName: string;
-    permissionCode: string;
-    granted: boolean;
-  }>;
-  totalPermissions?: number;
-}
-
-interface ExpandableRoleTableProps {
-  roles: Array<Role & { userCount?: number }>;
-  isLoading?: boolean;
-  onEdit?: (role: Role) => void;
-  onDelete?: (role: Role) => void;
-  onCreate?: () => void;
-  onSearch?: (search: string) => void;
-  onStatusFilter?: (status: string) => void;
-  onConfigurePermissions?: (role: Role, moduleCode?: string) => void;
-}
+import type {
+  ModulePermission,
+  ExpandableRoleTableProps,
+} from '@/core/types/components/roles';
 
 export function ExpandableRoleTable({
   roles,

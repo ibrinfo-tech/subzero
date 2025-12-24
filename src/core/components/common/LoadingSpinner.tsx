@@ -1,7 +1,4 @@
-interface LoadingSpinnerProps {
-  label?: string;
-  size?: 'sm' | 'md' | 'lg';
-}
+import type { LoadingSpinnerProps } from '@/core/types/components/common';
 
 export function LoadingSpinner({ label = 'Loading...', size = 'md' }: LoadingSpinnerProps) {
   const sizeClasses =

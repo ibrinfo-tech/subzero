@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Input } from '@/core/components/ui/input';
 import { Button } from '@/core/components/ui/button';
 import { useAuthStore } from '@/core/store/authStore';
 import { loginSchema, type LoginInput } from '@/core/lib/validations/auth';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setUser = useAuthStore((state) => state.setUser);
+  const { isAuthenticated, _hasHydrated, token } = useAuthStore();
   
   const [formData, setFormData] = useState<LoginInput>({
     email: '',
@@ -22,6 +24,50 @@ export default function LoginPage() {
   const [showRegisterLink, setShowRegisterLink] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  // Redirect authenticated users away from login page
+  useEffect(() => {
+    if (!_hasHydrated) return;
+
+    if (isAuthenticated) {
+      // Get redirect path from URL query parameter (set by middleware when redirecting to login)
+      const redirectPath = searchParams.get('redirect');
+      
+      if (redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('/login')) {
+        // Redirect to the page they were trying to access
+        router.replace(redirectPath);
+        return;
+      }
+
+      // If no redirect parameter, get the first accessible route
+      const getAccessibleRoute = async () => {
+        try {
+          const response = await fetch('/api/modules/navigation', {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: 'include',
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.navigation && data.navigation.length > 0) {
+              const firstRoute = data.navigation[0]?.path || '/profile';
+              router.replace(firstRoute);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('[Login] Error fetching accessible route:', error);
+        }
+
+        // Fallback to profile (always accessible to authenticated users)
+        router.replace('/profile');
+      };
+
+      getAccessibleRoute();
+    }
+  }, [_hasHydrated, isAuthenticated, router, token, searchParams]);
 
   // Fetch auth config to determine if register link should be shown
   useEffect(() => {
@@ -154,8 +200,11 @@ export default function LoginPage() {
         // Continue with login even if permissions fetch fails
       }
 
-      // Get redirect path from API response (first accessible route)
-      const redirectPath = data.redirectPath || '/dashboard';
+      // Get redirect path - prefer URL query parameter, then API response, then default
+      const redirectFromUrl = searchParams.get('redirect');
+      const redirectPath = redirectFromUrl && redirectFromUrl.startsWith('/') && !redirectFromUrl.startsWith('/login')
+        ? redirectFromUrl
+        : (data.redirectPath || '/profile');
 
       console.log('[Login] Success - redirecting to:', {
         userId: data.user.id,
@@ -163,8 +212,8 @@ export default function LoginPage() {
         redirectPath,
       });
 
-      // Redirect to the first accessible route
-      router.push(redirectPath);
+      // Redirect to the target route (use replace to avoid back button issues)
+      router.replace(redirectPath);
     } catch (error) {
       console.error('Login error:', error);
       setApiError('An error occurred. Please try again.');
@@ -205,6 +254,17 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // Don't render login form if user is already authenticated (redirecting)
+  if (_hasHydrated && isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 sm:px-6 lg:px-8">
@@ -307,6 +367,20 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 

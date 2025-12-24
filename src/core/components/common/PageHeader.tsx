@@ -1,7 +1,4 @@
-interface PageHeaderProps {
-  title: string;
-  description?: string;
-}
+import type { PageHeaderProps } from '@/core/types/components/common';
 
 export function PageHeader({ title, description }: PageHeaderProps) {
   return (

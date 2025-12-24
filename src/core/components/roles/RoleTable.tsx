@@ -14,16 +14,7 @@ import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
 import { Edit, Trash2, Search, ShieldPlus } from 'lucide-react';
 import type { Role } from '@/core/lib/db/baseSchema';
-
-interface RoleTableProps {
-  roles: Array<Role & { userCount?: number }>;
-  isLoading?: boolean;
-  onEdit?: (role: Role) => void;
-  onDelete?: (role: Role) => void;
-  onCreate?: () => void;
-  onSearch?: (search: string) => void;
-  onStatusFilter?: (status: string) => void;
-}
+import type { RoleTableProps } from '@/core/types/components/roles';
 
 export function RoleTable({
   roles,

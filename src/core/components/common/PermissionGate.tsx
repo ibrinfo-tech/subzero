@@ -2,13 +2,7 @@
 
 import { ReactNode } from 'react';
 import { usePermissions } from '@/core/hooks/usePermissions';
-
-interface PermissionGateProps {
-  children: ReactNode;
-  permission: string | string[];
-  fallback?: ReactNode;
-  requireAll?: boolean; // If true, requires all permissions; if false, requires any
-}
+import type { PermissionGateProps } from '@/core/types/components/common';
 
 /**
  * Component that conditionally renders children based on user permissions
