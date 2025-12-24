@@ -20,8 +20,8 @@ export const routePermissions: RoutePermissionConfig[] = [
   // Dashboard
   { route: '/dashboard', permission: 'dashboard:read', exact: false },
   
-  // Profile
-  { route: '/profile', permission: 'profile:read', exact: false },
+  // Profile - No permission required, accessible to all authenticated users
+  // Removed from routePermissions so it's only protected by authentication
   
   // User Management
   { route: '/users', permission: 'users:read', exact: false },

@@ -6,6 +6,7 @@ import { usePermissions } from '@/core/hooks/usePermissions';
 import { useAuthStore } from '@/core/store/authStore';
 import { PageHeader } from './PageHeader';
 import { LoadingSpinner } from './LoadingSpinner';
+import { LogOut } from 'lucide-react';
 
 interface ProtectedPageProps {
   children: ReactNode;
@@ -31,7 +32,7 @@ export function ProtectedPage({
   showLoader = true,
 }: ProtectedPageProps) {
   const router = useRouter();
-  const { isAuthenticated, _hasHydrated } = useAuthStore();
+  const { isAuthenticated, _hasHydrated, logout, permissions, permissionsLoaded } = useAuthStore();
   const { hasPermission, hasAnyPermission, hasAllPermissions, loading } = usePermissions();
 
   // Redirect to login if not authenticated (use useEffect to avoid render-time navigation)
@@ -67,6 +68,12 @@ export function ProtectedPage({
     return null;
   }
 
+  // Handle empty permission array - allow access for all authenticated users
+  // This is useful for pages like profile that should be accessible to everyone
+  if (Array.isArray(permission) && permission.length === 0) {
+    return <>{children}</>;
+  }
+
   // Check permissions
   let hasAccess = false;
   if (Array.isArray(permission)) {
@@ -76,6 +83,27 @@ export function ProtectedPage({
   } else {
     hasAccess = hasPermission(permission);
   }
+
+  // Check if user has no permissions at all
+  const hasNoPermissions = permissionsLoaded && permissions.length === 0;
+
+  // Handle logout function
+  const handleLogout = async () => {
+    // Clear local state immediately
+    logout();
+    
+    // Redirect immediately for better UX
+    router.push('/login');
+    
+    // Clear cookies via API call in the background (don't wait for it)
+    fetch('/api/auth/logout', { 
+      method: 'POST',
+      credentials: 'include',
+    }).catch((error) => {
+      // Silently fail - user is already logged out locally
+      console.error('Logout API error (non-critical):', error);
+    });
+  };
 
   // Show access denied if no permission
   if (!hasAccess) {
@@ -99,16 +127,28 @@ export function ProtectedPage({
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
-            <p className="text-gray-500 mb-4">
-              You do not have permission to access this page.
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Access Denied</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              {hasNoPermissions 
+                ? "You don't have any permissions assigned. Please contact your administrator."
+                : "You do not have permission to access this page."}
             </p>
-            <button
-              onClick={() => router.push(fallbackPath)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-            >
-              Go to Dashboard
-            </button>
+            {hasNoPermissions ? (
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push(fallbackPath)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                Go to Dashboard
+              </button>
+            )}
           </div>
         </div>
       </div>

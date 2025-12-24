@@ -116,12 +116,14 @@ export default function ProfilePage() {
     members: 4500
   };
 
+  // Profile page is accessible to all authenticated users (no permission check required)
+  // This allows users without any permissions to still view and manage their own profile
   return (
     <ProtectedPage
-      permission="profile:read"
+      permission={[]}
       title="Profile"
       description="Manage your profile settings"
-      fallbackPath="/dashboard"
+      fallbackPath="/profile"
       showLoader={false}
     >
       {isLoading ? (
