@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/core/components/ui/input';
 import { Select } from '@/core/components/ui/select';
 import { Button } from '@/core/components/ui/button';
-import { User as UserIcon, Mail, Lock, Shield, Activity } from 'lucide-react';
+import { User as UserIcon, Mail, Lock, Shield, Activity, Building2 } from 'lucide-react';
 import {
   createUserSchema,
   updateUserSchema,
@@ -13,6 +13,7 @@ import {
 } from '@/core/lib/validations/users';
 import type { User } from '@/core/lib/db/baseSchema';
 import type { UserFormProps } from '@/core/types/components/users';
+import { useAuthStore } from '@/core/store/authStore';
 
 export function UserForm({
   initialData,
@@ -22,15 +23,26 @@ export function UserForm({
   isLoading,
   currentUserId,
 }: UserFormProps) {
+  const { token, permissions } = useAuthStore();
   const [formData, setFormData] = useState<CreateUserInput | UpdateUserInput>({
     email: initialData?.email || '',
     fullName: initialData?.fullName || '',
     // Prefer roleId from initialData when editing so the role dropdown is pre-filled
     roleId: (initialData as any)?.roleId ?? undefined,
     status: (initialData?.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
+    tenantId: (initialData as any)?.tenantId ?? undefined,
     ...(initialData ? {} : { password: '' }),
   });
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [tenants, setTenants] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [isLoadingTenants, setIsLoadingTenants] = useState(false);
+  
+  // Check if user is super admin
+  const isSuperAdmin = permissions?.includes('admin:*') || false;
+  
+  // Get selected role code
+  const selectedRole = roles.find(r => r.id === formData.roleId);
+  const isTenantAdminRole = selectedRole?.code === 'TENANT_ADMIN';
 
   useEffect(() => {
     if (initialData) {
@@ -40,9 +52,32 @@ export function UserForm({
         // Preserve roleId from the loaded user (UsersPage injects it from API response)
         roleId: (initialData as any)?.roleId ?? undefined,
         status: (initialData.status as 'active' | 'inactive' | 'suspended' | 'pending') || 'active',
+        tenantId: (initialData as any)?.tenantId ?? undefined,
       });
     }
   }, [initialData]);
+
+  // Fetch tenants when super admin selects Tenant Admin role
+  useEffect(() => {
+    if (isSuperAdmin && isTenantAdminRole && !initialData && token) {
+      setIsLoadingTenants(true);
+      fetch('/api/tenants', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setTenants(data.data);
+          }
+        })
+        .catch(err => {
+          console.error('Failed to fetch tenants:', err);
+        })
+        .finally(() => setIsLoadingTenants(false));
+    }
+  }, [isSuperAdmin, isTenantAdminRole, initialData, token]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -50,7 +85,22 @@ export function UserForm({
     const { name, value } = e.target;
     // Convert empty string to undefined for optional fields like roleId
     const processedValue = value === '' ? undefined : value;
-    setFormData((prev) => ({ ...prev, [name]: processedValue }));
+    
+    // If role is changing, check if we need to clear tenantId
+    if (name === 'roleId') {
+      const newRole = roles.find(r => r.id === processedValue);
+      const newIsTenantAdmin = newRole?.code === 'TENANT_ADMIN';
+      
+      setFormData((prev) => ({
+        ...prev,
+        [name]: processedValue,
+        // Clear tenantId if switching away from Tenant Admin role
+        tenantId: newIsTenantAdmin ? ('tenantId' in prev ? prev.tenantId : undefined) : undefined,
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: processedValue }));
+    }
+    
     // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
@@ -69,6 +119,12 @@ export function UserForm({
         }
       });
       setErrors(newErrors);
+      return false;
+    }
+
+    // Additional validation: Tenant Admin must have a tenant selected
+    if (!initialData && isTenantAdminRole && !formData.tenantId) {
+      setErrors((prev) => ({ ...prev, tenantId: 'Tenant is required for Tenant Admin role' }));
       return false;
     }
 
@@ -221,6 +277,37 @@ export function UserForm({
             ]}
           />
         </div>
+
+        {/* Tenant Selection - Only show for Super Admin creating Tenant Admin */}
+        {isSuperAdmin && isTenantAdminRole && !initialData && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 pb-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Building2 className="h-4 w-4 text-primary" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Tenant Assignment</h3>
+            </div>
+            <Select
+              id="tenantId"
+              name="tenantId"
+              label="Select Tenant"
+              value={formData.tenantId || ''}
+              onChange={handleChange}
+              error={errors.tenantId}
+              disabled={isLoadingTenants}
+              options={[
+                { value: '', label: isLoadingTenants ? 'Loading tenants...' : 'Select a tenant' },
+                ...tenants.map((tenant) => ({
+                  value: tenant.id,
+                  label: `${tenant.name} (${tenant.slug})`,
+                })),
+              ]}
+            />
+            {errors.tenantId && (
+              <p className="text-sm text-destructive">{errors.tenantId}</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Action Buttons */}

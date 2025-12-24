@@ -128,6 +128,18 @@ export async function POST(request: NextRequest) {
     console.log('[User Create] Request data:', { email: data.email, roleId: data.roleId, tenantId: data.tenantId });
     console.log('[User Create] Creator tenant:', userTenantId);
     
+    // Validate Tenant Admin role requires tenantId
+    if (data.roleId) {
+      const { getRoleById } = await import('@/core/lib/roles');
+      const role = await getRoleById(data.roleId);
+      if (role && role.code === 'TENANT_ADMIN' && !data.tenantId) {
+        return NextResponse.json(
+          { error: 'Tenant is required when creating a Tenant Admin user' },
+          { status: 400 }
+        );
+      }
+    }
+    
     // Tenant isolation: if user is not super admin, force their tenant
     let targetTenantId = data.tenantId;
     if (userTenantId !== null) {

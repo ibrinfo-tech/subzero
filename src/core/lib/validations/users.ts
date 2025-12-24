@@ -50,6 +50,7 @@ export const updateUserSchema = z.object({
     (val) => (val === '' ? undefined : val),
     z.string().uuid('Invalid role ID').optional()
   ),
+  tenantId: z.string().uuid('Invalid tenant ID').optional(),
 });
 
 /**
