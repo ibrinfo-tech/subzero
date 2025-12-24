@@ -8,6 +8,10 @@ import { eq } from 'drizzle-orm';
 /**
  * POST /api/auth/change-password
  * Change user password
+ * 
+ * IMPORTANT: This endpoint is accessible to ALL authenticated users regardless of permissions.
+ * Users should always be able to change their own password.
+ * Only requires authentication (verifyAuth), no permission check needed.
  */
 export async function POST(request: NextRequest) {
   try {

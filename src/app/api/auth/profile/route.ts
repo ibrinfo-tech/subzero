@@ -97,6 +97,10 @@ export async function GET(request: NextRequest) {
 /**
  * PATCH /api/auth/profile
  * Update current user's own profile (safe fields only)
+ * 
+ * IMPORTANT: This endpoint is accessible to ALL authenticated users regardless of permissions.
+ * Users should always be able to update their own profile information.
+ * Only requires authentication (verifyAuth), no permission check needed.
  */
 export async function PATCH(request: NextRequest) {
   try {
