@@ -30,6 +30,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
   const [moduleNavItems, setModuleNavItems] = useState<NavItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const { isAuthenticated, _hasHydrated, token } = useAuthStore();
 
   // Helper to check if user has permission (supports wildcards)
@@ -174,6 +175,29 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
           permissions = permData.permissions || [];
         }
         setUserPermissions(permissions);
+        
+        // Check if user is super admin by checking their roles
+        // Super admin typically has admin:* permission or we can check roles
+        const isSuperAdminUser = permissions.includes('admin:*') || 
+          permissions.some(p => p.includes('SUPER_ADMIN'));
+        
+        // Also check by fetching user profile to get roles
+        try {
+          const profileRes = await fetch('/api/auth/profile', {
+            headers,
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            const hasSuperAdminRole = profileData.data?.roles?.some((r: any) => r.code === 'SUPER_ADMIN');
+            setIsSuperAdmin(hasSuperAdminRole || isSuperAdminUser);
+          } else {
+            setIsSuperAdmin(isSuperAdminUser);
+          }
+        } catch {
+          setIsSuperAdmin(isSuperAdminUser);
+        }
 
         if (navData.success && navData.navigation) {
           const items: NavItem[] = navData.navigation.map((nav: ModuleNavigation) => ({
@@ -219,6 +243,12 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       label: 'Settings',
       href: '/settings/general',
       icon: <LucideIcons.Settings className="w-5 h-5" />,
+    }] : []),
+    // Add Tenant Management for Super Admin only
+    ...(isSuperAdmin ? [{
+      label: 'Tenant Management',
+      href: '/tenants',
+      icon: <LucideIcons.Building2 className="w-5 h-5" />,
     }] : []),
   ];
 
