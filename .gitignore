@@ -50,23 +50,5 @@ next-env.d.ts
 .env.production.local
 .env.test.local
 
-.cursor
-.cursorrules
-.cursorignore
-.cursorignorerules
-.cursorignorerules
-
-.cursor/rules/project-framework-rule.mdc
-.cursor/rules/project-framework-rule.mdc.md
-.cursor/rules/project-framework-rule.mdc.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md.md.md.md.md
-.cursor/rules/project-framework-rule.mdc.md.md.md.md.md.md.md.md.md.md
-
 .kiro/
 .kiro
