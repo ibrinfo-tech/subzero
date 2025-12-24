@@ -64,6 +64,8 @@ export function getAuthConfig(): AuthConfig {
 /**
  * Check if registration is enabled
  * Edge Runtime compatible - can be used in middleware
+ * This is a synchronous check that uses config/environment variables only
+ * For database-backed checks, use isRegistrationEnabledAsync() in API routes
  */
 export function isRegistrationEnabled(): boolean {
   // Check environment variable first (for runtime overrides)
@@ -74,6 +76,22 @@ export function isRegistrationEnabled(): boolean {
 
   const config = getAuthConfig();
   return config.registration.enabled && config.registration.allowPublicRegistration;
+}
+
+/**
+ * Check if registration is enabled (async version that checks database)
+ * Use this in API routes and server components (Node.js runtime only)
+ * Falls back to sync version if database check fails
+ */
+export async function isRegistrationEnabledAsync(): Promise<boolean> {
+  try {
+    const { isRegistrationEnabledFromDB } = await import('@/core/lib/services/systemSettingsService');
+    return await isRegistrationEnabledFromDB();
+  } catch (error) {
+    console.error('[Auth Config] Error checking registration from DB, falling back to config:', error);
+    // Fall back to sync version
+    return isRegistrationEnabled();
+  }
 }
 
 /**

@@ -203,6 +203,36 @@ Rules:
 - Never create duplicate module rows
 - Wire module seed into global seed flow
 
+### Module Seed Integration (REQUIRED)
+
+When creating a new module with a seed file (`seeds/seed.ts`), you MUST ensure `scripts/seed.ts` calls module seeds. If not already present, add this code after core seeding (modules, permissions, roles, users) and before the final summary:
+
+```typescript
+// ============================================================================
+// 7. MODULE SEEDS (Run each module's seed file)
+// ============================================================================
+console.log('🌱 Running module seeds...');
+const { loadAllModuleSeeds } = await import('../src/core/lib/seedLoader');
+const moduleSeeds = await loadAllModuleSeeds();
+
+if (moduleSeeds.length > 0) {
+  for (const { moduleId, seed } of moduleSeeds) {
+    console.log(`   Running seed for module: ${moduleId}...`);
+    try {
+      await seed(db);
+      console.log(`   ✅ Module ${moduleId} seeded successfully`);
+    } catch (error) {
+      console.error(`   ❌ Failed to seed module ${moduleId}:`, error);
+    }
+  }
+  console.log('');
+} else {
+  console.log('ℹ️  No module seeds found\n');
+}
+```
+
+**Note**: This code auto-discovers all module seeds. Once added, it will automatically run seeds for all modules (existing and new) without requiring updates for each new module.
+
 ---
 
 ## 14. REFERENCE MODULES

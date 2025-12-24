@@ -189,3 +189,58 @@ export async function getEffectiveSmtpSettings(
   return merged;
 }
 
+// ============================================================================
+// REGISTRATION SETTINGS
+// ============================================================================
+
+const REGISTRATION_CATEGORY = 'registration';
+
+export interface StoredRegistrationSettings {
+  enabled?: boolean;
+}
+
+export async function getStoredRegistrationSettings(): Promise<StoredRegistrationSettings> {
+  const settings = await getSystemSettingsByCategory(REGISTRATION_CATEGORY);
+
+  const map = settings.reduce<Record<string, string>>((acc, setting) => {
+    acc[setting.settingKey] = setting.settingValue;
+    return acc;
+  }, {});
+
+  const enabled = map['registration.enabled'];
+
+  return {
+    enabled: enabled === undefined ? undefined : enabled === 'true',
+  };
+}
+
+export async function saveRegistrationSettings(input: { enabled: boolean }): Promise<void> {
+  await upsertSystemSettings(REGISTRATION_CATEGORY, [
+    {
+      key: 'registration.enabled',
+      value: String(input.enabled),
+      dataType: 'boolean',
+      description: 'Enable or disable user registration/signup',
+      autoload: true,
+    },
+  ]);
+}
+
+export async function isRegistrationEnabledFromDB(): Promise<boolean> {
+  try {
+    const settings = await getStoredRegistrationSettings();
+    // If setting exists in DB, use it; otherwise fall back to config default
+    if (settings.enabled !== undefined) {
+      return settings.enabled;
+    }
+    // Fall back to config default if not set in DB
+    const { isRegistrationEnabled } = await import('@/core/config/authConfig');
+    return isRegistrationEnabled();
+  } catch (error) {
+    console.error('[Registration Settings] Error checking registration status:', error);
+    // Fall back to config default on error
+    const { isRegistrationEnabled } = await import('@/core/config/authConfig');
+    return isRegistrationEnabled();
+  }
+}
+

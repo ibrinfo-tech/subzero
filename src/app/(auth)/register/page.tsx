@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Input } from '@/core/components/ui/input';
 import { Button } from '@/core/components/ui/button';
 import { useAuthStore } from '@/core/store/authStore';
 import { registerSchema, type RegisterInput } from '@/core/lib/validations/auth';
+import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -21,6 +22,31 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof RegisterInput, string>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [isCheckingRegistration, setIsCheckingRegistration] = useState(true);
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  // Check if registration is enabled on mount
+  useEffect(() => {
+    async function checkRegistrationEnabled() {
+      try {
+        const response = await fetch('/api/auth/config');
+        if (response.ok) {
+          const data = await response.json();
+          setRegistrationEnabled(data.registration?.enabled ?? false);
+        } else {
+          // If API fails, assume disabled for security
+          setRegistrationEnabled(false);
+        }
+      } catch (error) {
+        console.error('Error checking registration status:', error);
+        setRegistrationEnabled(false);
+      } finally {
+        setIsCheckingRegistration(false);
+      }
+    }
+
+    checkRegistrationEnabled();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -93,6 +119,38 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while checking registration status
+  if (isCheckingRegistration) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // If registration is disabled, show error message
+  if (!registrationEnabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-6 sm:space-y-8">
+          <div>
+            <h2 className="mt-4 sm:mt-6 text-center text-2xl sm:text-3xl font-extrabold text-foreground">
+              Registration Disabled
+            </h2>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              New user registration is currently disabled. Please contact an administrator to create an account.
+            </p>
+            <div className="mt-6 text-center">
+              <Link href="/login" className="font-medium text-primary hover:text-primary/90">
+                Back to Sign In
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-8 sm:py-12 px-4 sm:px-6 lg:px-8">

@@ -74,13 +74,16 @@ function LoginForm() {
     fetch('/api/auth/config')
       .then((res) => res.json())
       .then((data) => {
+        // Check database-backed registration enabled status
         if (data.registration?.enabled && data.registration?.showOnLoginPage && data.ui?.showRegisterLink) {
           setShowRegisterLink(true);
+        } else {
+          setShowRegisterLink(false);
         }
       })
       .catch(() => {
-        // Default to showing register link if config fetch fails
-        setShowRegisterLink(true);
+        // Default to hiding register link if config fetch fails (security: fail closed)
+        setShowRegisterLink(false);
       });
   }, []);
 
