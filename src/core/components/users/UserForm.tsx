@@ -12,15 +12,7 @@ import {
   type UpdateUserInput,
 } from '@/core/lib/validations/users';
 import type { User } from '@/core/lib/db/baseSchema';
-
-interface UserFormProps {
-  initialData?: User;
-  roles?: Array<{ id: string; name: string; code: string }>;
-  onSubmit: (data: CreateUserInput | UpdateUserInput) => Promise<void>;
-  onCancel?: () => void;
-  isLoading?: boolean;
-  currentUserId?: string; // Current logged-in user ID to prevent self-role changes
-}
+import type { UserFormProps } from '@/core/types/components/users';
 
 export function UserForm({
   initialData,

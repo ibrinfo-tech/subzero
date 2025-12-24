@@ -5,10 +5,7 @@ import { useAuthStore } from '@/core/store/authStore';
 import { ThemeToggle } from '@/core/components/common/ThemeToggle';
 import { Menu, Bell, UserCircle, LogOut } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
-
-interface TopbarProps {
-  onMenuClick?: () => void;
-}
+import type { TopbarProps } from '@/core/types/components/layout';
 
 export function Topbar({ onMenuClick }: TopbarProps) {
   const router = useRouter();

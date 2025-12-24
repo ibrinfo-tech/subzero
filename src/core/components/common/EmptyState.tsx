@@ -1,15 +1,7 @@
 // EmptyState component
 
 import { Button } from '@/core/components/ui/button';
-
-interface EmptyStateProps {
-  title: string;
-  description: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-}
+import type { EmptyStateProps } from '@/core/types/components/common';
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (

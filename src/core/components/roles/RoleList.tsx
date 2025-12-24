@@ -8,13 +8,7 @@ import { EmptyState } from '@/core/components/common/EmptyState';
 import { ConfirmDialog } from '@/core/components/common/ConfirmDialog';
 import type { Role } from '@/core/lib/db/baseSchema';
 import { toast } from 'sonner';
-
-interface RoleListProps {
-  onCreateClick?: () => void;
-  onEditClick?: (role: Role) => void;
-  refreshTrigger?: number; // When this changes, refetch roles
-  onConfigurePermissions?: (role: Role, moduleCode?: string) => void;
-}
+import type { RoleListProps } from '@/core/types/components/roles';
 
 export function RoleList({ onCreateClick, onEditClick, refreshTrigger, onConfigurePermissions }: RoleListProps) {
   const { token } = useAuthStore();

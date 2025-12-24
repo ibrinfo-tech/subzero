@@ -1,11 +1,9 @@
 'use client';
 
-type TabType = 'overview' | 'security';
-
-interface ProfileTabsProps {
-  activeTab: TabType;
-  onTabChange: (tab: TabType) => void;
-}
+import type {
+  TabType,
+  ProfileTabsProps,
+} from '@/core/types/components/profile';
 
 export function ProfileTabs({ activeTab, onTabChange }: ProfileTabsProps) {
   const tabs: TabType[] = ['overview', 'security'];

@@ -11,20 +11,12 @@ import {
   DialogTitle 
 } from '@/core/components/ui/dialog';
 import { Button } from '@/core/components/ui/button';
+import type {
+  ConfirmDialogVariant,
+  ConfirmDialogProps,
+} from '@/core/types/components/common';
 
-export type ConfirmDialogVariant = 'danger' | 'warning' | 'info';
-
-interface ConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
-  title: string;
-  description: string;
-  confirmText?: string;
-  cancelText?: string;
-  variant?: ConfirmDialogVariant;
-  isLoading?: boolean;
-}
+export type { ConfirmDialogVariant };
 
 const variantConfig = {
   danger: {

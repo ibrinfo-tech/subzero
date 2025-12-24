@@ -13,21 +13,10 @@ import {
   type UpdateRoleInput,
 } from '@/core/lib/validations/roles';
 import type { Role } from '@/core/lib/db/baseSchema';
-
-interface RoleFormProps {
-  initialData?: Role;
-  onSubmit: (data: CreateRoleInput | UpdateRoleInput) => Promise<void>;
-  onCancel?: () => void;
-  isLoading?: boolean;
-}
-
-type RoleFormState = {
-  name: string;
-  code: string;
-  description: string;
-  priority: number;
-  status: 'active' | 'inactive';
-};
+import type {
+  RoleFormProps,
+  RoleFormState,
+} from '@/core/types/components/roles';
 
 export function RoleForm({
   initialData,

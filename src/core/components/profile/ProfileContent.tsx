@@ -1,33 +1,12 @@
 'use client';
 
 import { Calendar, Package, Download } from 'lucide-react';
-
-interface Activity {
-  title: string;
-  badge?: string;
-  date: string;
-  description: string;
-  hasDownload?: boolean;
-}
-
-interface Transaction {
-  product: string;
-  status: 'paid' | 'pending' | 'failed';
-  date: string;
-  amount: string;
-}
-
-interface Connection {
-  name: string;
-  email: string;
-  color: string;
-}
-
-interface ProfileContentProps {
-  activities: Activity[];
-  transactions: Transaction[];
-  connections: Connection[];
-}
+import type {
+  Activity,
+  Transaction,
+  Connection,
+  ProfileContentProps,
+} from '@/core/types/components/profile';
 
 export function ProfileContent({ activities, transactions, connections }: ProfileContentProps) {
   const getInitials = (name: string) => {

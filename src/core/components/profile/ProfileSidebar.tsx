@@ -1,19 +1,7 @@
 'use client';
 
 import { Mail, Phone, MapPin, Globe, Link as LinkIcon } from 'lucide-react';
-
-interface ProfileSidebarProps {
-  profile: {
-    fullName: string | null;
-    email: string;
-    roles?: Array<{ name: string }>;
-  };
-  stats: {
-    posts: number;
-    projects: number;
-    members: number;
-  };
-}
+import type { ProfileSidebarProps } from '@/core/types/components/profile';
 
 export function ProfileSidebar({ profile, stats }: ProfileSidebarProps) {
   const getInitials = (name: string) => {

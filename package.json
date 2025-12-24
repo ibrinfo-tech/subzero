@@ -12,7 +12,8 @@
     "db:migrate": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:schema": "tsx scripts/get-schema.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "sync:modules": "tsx scripts/sync-modules.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",

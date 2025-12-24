@@ -7,32 +7,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/c
 import { ArrowLeft, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { toast } from 'sonner';
-
-interface Permission {
-  id: string;
-  code: string;
-  name: string;
-  action: string;
-  resource: string | null;
-  isDangerous: boolean;
-  requiresMfa: boolean;
-  description: string | null;
-  granted: boolean;
-}
-
-interface ModulePermissions {
-  moduleId: string;
-  moduleName: string;
-  moduleCode: string;
-  icon: string | null;
-  permissions: Permission[];
-}
-
-interface PermissionAssignmentProps {
-  roleId: string;
-  roleName: string;
-  onBack: () => void;
-}
+import type {
+  Permission,
+  RoleModulePermissions,
+  PermissionAssignmentProps,
+} from '@/core/types/components/roles';
 
 export function PermissionAssignment({
   roleId,
@@ -42,7 +21,7 @@ export function PermissionAssignment({
   const { token } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [modulePermissions, setModulePermissions] = useState<ModulePermissions[]>([]);
+  const [modulePermissions, setModulePermissions] = useState<RoleModulePermissions[]>([]);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
 
@@ -70,7 +49,7 @@ export function PermissionAssignment({
 
       // Set initially granted permissions
       const granted = new Set<string>();
-      data.modulePermissions?.forEach((module: ModulePermissions) => {
+      data.modulePermissions?.forEach((module: RoleModulePermissions) => {
         module.permissions.forEach((perm: Permission) => {
           if (perm.granted) {
             granted.add(perm.id);
@@ -81,7 +60,7 @@ export function PermissionAssignment({
 
       // Expand modules that have granted permissions
       const expanded = new Set<string>();
-      data.modulePermissions?.forEach((module: ModulePermissions) => {
+      data.modulePermissions?.forEach((module: RoleModulePermissions) => {
         if (module.permissions.some((p: Permission) => p.granted)) {
           expanded.add(module.moduleId);
         }

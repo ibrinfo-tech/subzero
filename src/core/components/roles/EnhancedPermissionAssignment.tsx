@@ -8,76 +8,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/core/components/ui/c
 import { ArrowLeft, Save, ChevronDown, ChevronUp } from 'lucide-react';
 import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { toast } from 'sonner';
-
-interface Permission {
-  id: string;
-  code: string;
-  name: string;
-  action: string;
-  resource: string | null;
-  isDangerous: boolean;
-  requiresMfa: boolean;
-  description: string | null;
-  granted: boolean;
-}
-
-interface ModulePermissions {
-  moduleId: string;
-  moduleName: string;
-  moduleCode: string;
-  icon: string | null;
-  hasAccess?: boolean;
-  dataAccess?: 'none' | 'own' | 'team' | 'all';
-  permissions: Permission[];
-  fields?: ModuleField[];
-}
-
-interface ModuleField {
-  fieldId: string;
-  fieldName: string;
-  fieldCode: string;
-  fieldLabel: string;
-  isVisible?: boolean;
-  isEditable?: boolean;
-}
-
-interface FieldPermission {
-  fieldId: string;
-  fieldName: string;
-  visible: boolean;
-  editable: boolean;
-}
-
-interface SettingsSubmenuConfig {
-  enabled: boolean;
-  read: boolean;
-  update: boolean;
-}
-
-interface ModuleConfig {
-  moduleId: string ;
-  enabled: boolean;
-  dataAccess: 'none' | 'own' | 'team' | 'all';
-  permissions: {
-    view: boolean;
-    create: boolean;
-    update: boolean;
-    delete: boolean;
-    import?: boolean;
-    export?: boolean;
-    manage_labels?: boolean;
-    duplicate?: boolean;
-    manage: boolean;
-  };
-  fieldPermissions: Record<string, FieldPermission>;
-  settingsSubmenus?: Record<string, SettingsSubmenuConfig>;
-}
-
-interface EnhancedPermissionAssignmentProps {
-  roleId: string;
-  roleName: string;
-  onBack: () => void;
-}
+import type {
+  Permission,
+  RoleModulePermissions,
+  ModuleField,
+  FieldPermission,
+  SettingsSubmenuConfig,
+  RoleModuleConfig,
+  EnhancedPermissionAssignmentProps,
+} from '@/core/types/components/roles';
 
 export function EnhancedPermissionAssignment({
   roleId,
@@ -89,7 +28,7 @@ export function EnhancedPermissionAssignment({
   const { token } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [modulePermissions, setModulePermissions] = useState<ModulePermissions[]>([]);
+  const [modulePermissions, setModulePermissions] = useState<RoleModulePermissions[]>([]);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     modulePermissions: true,
     settingsSubmenus: true,
@@ -97,7 +36,7 @@ export function EnhancedPermissionAssignment({
     fieldPermission: true,
   });
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
-  const [moduleConfigs, setModuleConfigs] = useState<Record<string, ModuleConfig>>({});
+  const [moduleConfigs, setModuleConfigs] = useState<Record<string, RoleModuleConfig>>({});
   const hasUnsavedChangesRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
 
@@ -169,7 +108,7 @@ export function EnhancedPermissionAssignment({
         return parts[parts.length - 1] || '';
       };
 
-      const normalizedModules: ModulePermissions[] = (data.modulePermissions || [])
+      const normalizedModules: RoleModulePermissions[] = (data.modulePermissions || [])
         // Filter out profile module - it should be viewable and updatable by every user for their own profile
         .filter((module: any) => normalizeCode(module.moduleCode || module.module_code).toLowerCase() !== 'profile')
         .map((module: any) => {
@@ -183,7 +122,7 @@ export function EnhancedPermissionAssignment({
             moduleCode,
             icon: module.icon ?? null,
             hasAccess: Boolean(module.hasAccess ?? module.has_access),
-            dataAccess: (module.dataAccess ?? module.data_access ?? 'none') as ModuleConfig['dataAccess'],
+            dataAccess: (module.dataAccess ?? module.data_access ?? 'none') as RoleModuleConfig['dataAccess'],
             permissions: (module.permissions || []).map((perm: any) => {
               const code = normalizeCode(perm.permissionCode || perm.code).toLowerCase();
               return {
@@ -214,8 +153,8 @@ export function EnhancedPermissionAssignment({
       // Initialize module configs - only on initial load or if no unsaved changes exist
       // This prevents overwriting user's unsaved changes
       if (!initialLoadDoneRef.current || !hasUnsavedChangesRef.current) {
-        const configs: Record<string, ModuleConfig> = {};
-        normalizedModules.forEach((module: ModulePermissions) => {
+        const configs: Record<string, RoleModuleConfig> = {};
+        normalizedModules.forEach((module: RoleModulePermissions) => {
           const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
           const grantedPerms = module.permissions.filter(p => p.granted);
           const isSettings = normalizeCode(module.moduleCode).toLowerCase() === 'settings';
@@ -232,7 +171,7 @@ export function EnhancedPermissionAssignment({
             };
           });
           
-          const config: ModuleConfig = {
+          const config: RoleModuleConfig = {
             moduleId: module.moduleId,
             enabled,
             dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
@@ -318,7 +257,7 @@ export function EnhancedPermissionAssignment({
         // If there are unsaved changes, only initialize configs for new modules that don't exist yet
         setModuleConfigs(prev => {
           const updated = { ...prev };
-          normalizedModules.forEach((module: ModulePermissions) => {
+          normalizedModules.forEach((module: RoleModulePermissions) => {
             // Only initialize if this module config doesn't exist yet
             if (!updated[module.moduleId]) {
               const normalizeCode = (code?: string) => (typeof code === 'string' ? code : '');
@@ -337,7 +276,7 @@ export function EnhancedPermissionAssignment({
                 };
               });
               
-              const config: ModuleConfig = {
+              const config: RoleModuleConfig = {
                 moduleId: module.moduleId,
                 enabled,
                 dataAccess: module.dataAccess || (enabled ? 'team' : 'none'),
@@ -441,7 +380,7 @@ export function EnhancedPermissionAssignment({
     }));
   };
 
-  const updateModuleConfig = (moduleId: string, updates: Partial<ModuleConfig>) => {
+  const updateModuleConfig = (moduleId: string, updates: Partial<RoleModuleConfig>) => {
     hasUnsavedChangesRef.current = true;
     setModuleConfigs(prev => {
       const existingConfig = prev[moduleId];
@@ -459,7 +398,7 @@ export function EnhancedPermissionAssignment({
             editable: false,
           };
         });
-        const baseConfig: ModuleConfig = {
+        const baseConfig: RoleModuleConfig = {
           moduleId: moduleId,
           enabled: false,
           dataAccess: 'none',
@@ -511,7 +450,7 @@ export function EnhancedPermissionAssignment({
     updateModuleConfig(moduleId, { enabled: !config?.enabled });
   };
 
-  const togglePermission = (moduleId: string, permissionKey: keyof ModuleConfig['permissions']) => {
+  const togglePermission = (moduleId: string, permissionKey: keyof RoleModuleConfig['permissions']) => {
     const config = moduleConfigs[moduleId];
     if (!config) return;
 
@@ -523,7 +462,7 @@ export function EnhancedPermissionAssignment({
     });
   };
 
-  const setDataAccess = (moduleId: string, access: ModuleConfig['dataAccess']) => {
+  const setDataAccess = (moduleId: string, access: RoleModuleConfig['dataAccess']) => {
     updateModuleConfig(moduleId, { dataAccess: access });
   };
 
@@ -717,7 +656,7 @@ export function EnhancedPermissionAssignment({
         }).filter(Boolean) as Array<{
         moduleId: string;
         hasAccess: boolean;
-        dataAccess: ModuleConfig['dataAccess'];
+        dataAccess: RoleModuleConfig['dataAccess'];
         permissions: Array<{ permissionId: string; granted: boolean }>;
         fields: Array<{ fieldId: string; isVisible: boolean; isEditable: boolean }>;
       }>;

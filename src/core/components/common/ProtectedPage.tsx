@@ -7,16 +7,7 @@ import { useAuthStore } from '@/core/store/authStore';
 import { PageHeader } from './PageHeader';
 import { LoadingSpinner } from './LoadingSpinner';
 import { LogOut } from 'lucide-react';
-
-interface ProtectedPageProps {
-  children: ReactNode;
-  permission: string | string[];
-  requireAll?: boolean;
-  title?: string;
-  description?: string;
-  fallbackPath?: string;
-  showLoader?: boolean;
-}
+import type { ProtectedPageProps } from '@/core/types/components/common';
 
 /**
  * Component that protects entire pages based on permissions

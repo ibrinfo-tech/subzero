@@ -8,13 +8,7 @@ import { EmptyState } from '@/core/components/common/EmptyState';
 import { ConfirmDialog } from '@/core/components/common/ConfirmDialog';
 import type { User } from '@/core/lib/db/baseSchema';
 import { toast } from 'sonner';
-
-interface UserListProps {
-  onCreateClick?: () => void;
-  onEditClick?: (user: User) => void;
-  onDeleteClick?: (user: User) => void;
-  refreshTrigger?: number; // When this changes, refetch users
-}
+import type { UserListProps } from '@/core/types/components/users';
 
 export function UserList({ onCreateClick, onEditClick, onDeleteClick, refreshTrigger }: UserListProps) {
   const { token, user: currentUser } = useAuthStore();
