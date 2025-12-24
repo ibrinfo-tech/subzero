@@ -35,18 +35,24 @@ export async function getFirstAccessibleRoute(userId: string): Promise<string | 
     // Get user permissions
     const userPermissions = await getUserPermissions(userId, tenantId || undefined);
 
+    // If user has no permissions at all, return profile (always accessible to authenticated users)
+    if (userPermissions.length === 0) {
+      return '/profile';
+    }
+
     // Define route priority order (most important first)
+    // Note: Profile is always accessible to authenticated users (no permission check)
     const routePriority = [
-      { moduleCode: 'dashboard', path: '/dashboard', permission: 'dashboard:read' },
-      { moduleCode: 'profile', path: '/profile', permission: 'profile:read' },
-      { moduleCode: 'users', path: '/users', permission: 'users:read' },
-      { moduleCode: 'roles', path: '/roles', permission: 'roles:read' },
-      { moduleCode: 'settings', path: '/settings/general', permission: 'settings:read' },
+      { moduleCode: 'dashboard', path: '/dashboard', permission: 'dashboard:read', requiresPermission: true },
+      { moduleCode: 'users', path: '/users', permission: 'users:read', requiresPermission: true },
+      { moduleCode: 'roles', path: '/roles', permission: 'roles:read', requiresPermission: true },
+      { moduleCode: 'settings', path: '/settings/general', permission: 'settings:read', requiresPermission: true },
     ];
 
     // Check each route in priority order
     for (const route of routePriority) {
       const hasPermission = 
+        !route.requiresPermission || // Profile doesn't require permission
         userPermissions.includes(route.permission) ||
         userPermissions.includes(`${route.moduleCode}:*`) ||
         userPermissions.includes('admin:*');
@@ -102,8 +108,8 @@ export async function getFirstAccessibleRoute(userId: string): Promise<string | 
     }
 
     // If no accessible route found, return profile as fallback (users should always have access to their profile)
-    // If they don't have profile access either, return null
-    return null;
+    // Profile is accessible to all authenticated users regardless of permissions
+    return '/profile';
   } catch (error) {
     console.error('[getFirstAccessibleRoute] Error:', error);
     return null;

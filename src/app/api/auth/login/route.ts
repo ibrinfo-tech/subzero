@@ -103,22 +103,22 @@ export async function POST(request: NextRequest) {
       USE_NON_EXPIRING_TOKENS
     );
     
-    console.log('[Login] Tokens generated:', {
-      userId: user.id,
-      email: user.email,
-      nonExpiring: USE_NON_EXPIRING_TOKENS,
-      accessExpiresAt,
-      refreshExpiresAt,
-    });
+    // console.log('[Login] Tokens generated:', {
+    //   userId: user.id,
+    //   email: user.email,
+    //   nonExpiring: USE_NON_EXPIRING_TOKENS,
+    //   accessExpiresAt,
+    //   refreshExpiresAt,
+    // });
     
     // Get the first accessible route for the user
     const redirectPath = await getFirstAccessibleRoute(user.id);
     const defaultRedirect = redirectPath || '/dashboard'; // Fallback to dashboard if no accessible route
     
-    console.log('[Login] User accessible route:', {
-      userId: user.id,
-      redirectPath: defaultRedirect,
-    });
+    // console.log('[Login] User accessible route:', {
+    //   userId: user.id,
+    //   redirectPath: defaultRedirect,
+    // });
     
     // Create response with user data (without password) and tokens
     const response = NextResponse.json(
@@ -155,12 +155,12 @@ export async function POST(request: NextRequest) {
       || request.nextUrl.protocol === 'https:'
       || process.env.NODE_ENV === 'development';
     
-    console.log('[Login] Cookie Configuration:', {
-      isSecureConnection,
-      xForwardedProto: request.headers.get('x-forwarded-proto'),
-      protocol: request.nextUrl.protocol,
-      nodeEnv: process.env.NODE_ENV,
-    });
+    // console.log('[Login] Cookie Configuration:', {
+    //   isSecureConnection,
+    //   xForwardedProto: request.headers.get('x-forwarded-proto'),
+    //   protocol: request.nextUrl.protocol,
+    //   nodeEnv: process.env.NODE_ENV,
+    // });
     
     response.cookies.set('access-token', accessToken, {
       httpOnly: true,
