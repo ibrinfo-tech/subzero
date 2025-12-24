@@ -13,7 +13,7 @@ const MODULES_DIR = join(process.cwd(), 'src', 'modules');
  * Get handler function from module
  */
 async function getHandler(moduleId: string, handlerName: string, method: string) {
-  // Support nested handler paths like "tasks/create"
+  // Support nested handler paths like "entity/create"
   const handlerSegments = handlerName.split('/').filter(Boolean);
   const handlerPath = join(
     MODULES_DIR,

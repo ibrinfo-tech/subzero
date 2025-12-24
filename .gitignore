@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+db/DATABASE_SCHEMA.sql
 
 # next.js
 /.next/
