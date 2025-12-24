@@ -386,6 +386,31 @@ export const systemSettings = pgTable('system_settings', {
   categorySubcategoryIdx: index('idx_system_settings_category_subcategory').on(table.category, table.subcategory),
 }));
 
+// In-app notifications table - generic notification system for all modules
+export const notifications = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message').notNull(),
+  type: varchar('type', { length: 50 }).default('info').notNull(), // info, success, warning, error
+  category: varchar('category', { length: 100 }), // Module-specific category (e.g., 'task_assigned', 'project_updated')
+  actionUrl: text('action_url'), // Link to related resource (e.g., '/tasks/123')
+  actionLabel: varchar('action_label', { length: 100 }), // "View Task", "Go to Project"
+  resourceType: varchar('resource_type', { length: 50 }), // 'task', 'project', 'note', etc.
+  resourceId: uuid('resource_id'), // ID of related resource
+  priority: varchar('priority', { length: 20 }).default('normal'), // low, normal, high, urgent
+  metadata: jsonb('metadata').default({}), // Additional context data
+  isRead: boolean('is_read').default(false).notNull(),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userUnreadIdx: index('idx_notifications_user_unread').on(table.userId, table.isRead, table.createdAt),
+  tenantIdx: index('idx_notifications_tenant').on(table.tenantId),
+  resourceIdx: index('idx_notifications_resource').on(table.resourceType, table.resourceId),
+}));
+
 // ============================================================================
 // RELATIONS
 // ============================================================================
@@ -403,6 +428,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   userRoles: many(userRoles),
   resourcePermissions: many(resourcePermissions),
   sessions: many(sessions),
+  notifications: many(notifications),
 }));
 
 export const modulesRelations = relations(modules, ({ many }) => ({
@@ -492,6 +518,7 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   userRoles: many(userRoles),
   resourcePermissions: many(resourcePermissions),
   sessions: many(sessions),
+  notifications: many(notifications),
 }));
 
 export const tenantUsersRelations = relations(tenantUsers, ({ one }) => ({
@@ -506,6 +533,17 @@ export const tenantUsersRelations = relations(tenantUsers, ({ one }) => ({
   role: one(roles, {
     fields: [tenantUsers.roleId],
     references: [roles.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [notifications.tenantId],
+    references: [tenants.id],
+  }),
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
   }),
 }));
 
@@ -551,3 +589,5 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

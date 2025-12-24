@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/core/store/authStore';
 import { ThemeToggle } from '@/core/components/common/ThemeToggle';
-import { Menu, Bell, UserCircle, LogOut } from 'lucide-react';
+import { NotificationPanel } from '@/core/components/common/NotificationPanel';
+import { Menu, UserCircle, LogOut } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { TopbarProps } from '@/core/types/components/layout';
 
@@ -146,12 +147,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <ThemeToggle />
           
           {/* Notifications */}
-          <button
-            className="p-2 rounded-lg hover:bg-muted transition-colors relative border border-border/60 bg-background/80"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5 text-muted-foreground" />
-          </button>
+          <NotificationPanel />
 
           {/* User Profile Dropdown */}
           <div className="relative" ref={dropdownRef}>

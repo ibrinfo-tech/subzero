@@ -1,7 +1,6 @@
 Create a NEW dynamic module called "<MODULE_NAME>" for this subzero_2.0 RAD framework.
 
 Follow ALL rules (structure, UX, seeding, permissions) from:
-- .cursor/rules/cursor.md
 - .cursor/rules/cursor.rules.md
 - .cursor/templates/custom-fields-module-template.md
 - .cursor/templates/static-module-template.md
@@ -18,6 +17,7 @@ Module brief (fill these before running):
 - Labels needed? (yes/no)
 - Import/export? (yes/no)
 - Duplicate action? (yes/no)
+- Notifications needed? (yes/no) - If yes, specify when to send notifications (e.g., "on assignment", "on status change", "on creation")
 - Special filters / extra actions / behaviors: <...>
 
 Hard requirements:
@@ -28,6 +28,7 @@ Hard requirements:
 - Enforce RBAC end-to-end: module access, data permissions (CRUD, extras), field permissions (visibility/editability). Check permissions in UI and API.
 - If custom_field = true: add customFields JSONB column, hook using useCustomFieldsStore, dynamic rendering, search only text-like types, cache invalidation.
 - If labels needed: use core module_labels, module-specific hook/dialog, permission-gated manage_labels action.
+- If notifications needed: import `createNotification` from `@/core/lib/services/notificationService` and send notifications at specified events. Use appropriate category (e.g., `<module>_assigned`, `<module>_updated`), include actionUrl pointing to the resource, and provide meaningful title/message. See `src/core/lib/services/README_NOTIFICATIONS.md` for examples.
 - Implement CRUD API handlers with Zod validation, tenancy checks, soft deletes, consistent JSON responses.
 - Implement routes/index.tsx with list/table, filters, debounced search, pagination, dialogs for create/edit, delete confirmation, toasts for feedback; hide/disable actions based on permissions.
 - Implement services with server-side filters/search; include custom field search when applicable; include label handling if enabled.
