@@ -1,22 +1,26 @@
 import { NextResponse } from 'next/server';
-import { getAuthConfig } from '@/core/config/authConfig';
+import { getAuthConfig, isRegistrationEnabledAsync } from '@/core/config/authConfig';
 
 /**
  * GET /api/auth/config
  * Returns auth configuration for client-side use
+ * Checks database for registration enabled status
  */
 export async function GET() {
   try {
     const config = getAuthConfig();
     
+    // Check database for registration enabled status
+    const registrationEnabled = await isRegistrationEnabledAsync();
+    
     // Only return UI-relevant config (hide sensitive settings)
     return NextResponse.json({
       registration: {
-        enabled: config.registration.enabled,
+        enabled: registrationEnabled,
         showOnLoginPage: config.registration.showOnLoginPage,
       },
       ui: {
-        showRegisterLink: config.ui.showRegisterLink,
+        showRegisterLink: config.ui.showRegisterLink && registrationEnabled,
         showForgotPasswordLink: config.ui.showForgotPasswordLink,
       },
     });

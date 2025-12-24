@@ -4,7 +4,7 @@ import { users, authProviders, tenants } from '@/core/lib/db/baseSchema';
 import { registerSchema } from '@/core/lib/validations/auth';
 import { hashPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
-import { isRegistrationEnabled } from '@/core/config/authConfig';
+import { isRegistrationEnabledAsync } from '@/core/config/authConfig';
 import { getDefaultUserRole } from '@/core/lib/roles';
 import { sendEmailVerificationEmail } from '@/core/lib/email';
 import { generateEmailVerificationToken } from '@/core/lib/verificationToken';
@@ -15,8 +15,9 @@ import { eq } from 'drizzle-orm';
  * Registration endpoint with email, password, and name
  */
 export async function POST(request: NextRequest) {
-  // Check if registration is enabled
-  if (!isRegistrationEnabled()) {
+  // Check if registration is enabled (checks database setting)
+  const registrationEnabled = await isRegistrationEnabledAsync();
+  if (!registrationEnabled) {
     return NextResponse.json(
       { error: 'Registration is currently disabled' },
       { status: 403 }
