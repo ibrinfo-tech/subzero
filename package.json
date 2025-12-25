@@ -12,14 +12,16 @@
     "db:migrate": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:schema": "tsx scripts/get-schema.ts",
-    "seed": "tsx scripts/seed.ts",
-    "sync:modules": "tsx scripts/sync-modules.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "sync:modules": "tsx scripts/sync-modules.ts",
+    "event:worker": "tsx scripts/start-event-worker.ts"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.8",
     "@types/nodemailer": "^7.0.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.36.4",
     "jsonwebtoken": "^9.0.2",
@@ -28,6 +30,7 @@
     "next-themes": "^0.4.6",
     "nextjs-toploader": "^3.9.17",
     "nodemailer": "^7.0.11",
+    "pg-boss": "^10.2.0",
     "postgres": "^3.4.5",
     "react": "19.2.0",
     "react-dom": "19.2.0",

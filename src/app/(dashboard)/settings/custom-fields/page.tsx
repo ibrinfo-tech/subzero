@@ -61,6 +61,7 @@ const FIELD_TYPES: Array<{ value: CustomFieldType; label: string }> = [
   { value: 'textarea', label: 'Textarea' },
   { value: 'boolean', label: 'Boolean' },
   { value: 'url', label: 'URL' },
+  { value: 'reference', label: 'Reference' },
 ];
 
 export default function CustomFieldsSettingsPage() {
@@ -83,7 +84,14 @@ export default function CustomFieldsSettingsPage() {
     isRequired: false,
     showInTable: false,
     options: '', // For select fields, comma-separated
+    referenceModule: '', // For reference fields
+    referenceColumn: '', // For reference fields
+    referenceLabel: '', // For reference fields
   });
+
+  const [referenceColumns, setReferenceColumns] = useState<Array<{ name: string; type: string; isUnique: boolean }>>([]);
+  const [referenceLabelColumns, setReferenceLabelColumns] = useState<Array<{ name: string; type: string }>>([]);
+  const [loadingColumns, setLoadingColumns] = useState(false);
 
   const loadModules = async () => {
     setLoading(true);
@@ -175,8 +183,50 @@ export default function CustomFieldsSettingsPage() {
       isRequired: false,
       showInTable: false,
       options: '',
+      referenceModule: '',
+      referenceColumn: '',
+      referenceLabel: '',
     });
     setEditingField(null);
+    setReferenceColumns([]);
+    setReferenceLabelColumns([]);
+  };
+
+  const loadReferenceColumns = async (moduleCode: string) => {
+    if (!accessToken || !moduleCode) {
+      setReferenceColumns([]);
+      setReferenceLabelColumns([]);
+      return;
+    }
+
+    setLoadingColumns(true);
+    try {
+      const res = await fetch(`/api/settings/custom-fields/columns?moduleCode=${encodeURIComponent(moduleCode)}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to load columns');
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        const columns = data.data || [];
+        // Unique columns for reference column (must be unique)
+        setReferenceColumns(columns.filter((col: any) => col.isUnique));
+        // All columns for reference label
+        setReferenceLabelColumns(columns);
+      }
+    } catch (error) {
+      console.error('Load columns error:', error);
+      toast.error('Failed to load module columns');
+      setReferenceColumns([]);
+      setReferenceLabelColumns([]);
+    } finally {
+      setLoadingColumns(false);
+    }
   };
 
   const openCreate = () => {
@@ -195,8 +245,16 @@ export default function CustomFieldsSettingsPage() {
       isRequired: field.metadata?.isRequired || false,
       showInTable: field.metadata?.showInTable || false,
       options: field.metadata?.options?.join(', ') || '',
+      referenceModule: field.metadata?.referenceModule || '',
+      referenceColumn: field.metadata?.referenceColumn || '',
+      referenceLabel: field.metadata?.referenceLabel || '',
     });
     setDialogOpen(true);
+    
+    // Load columns if it's a reference field
+    if (field.fieldType === 'reference' && field.metadata?.referenceModule) {
+      loadReferenceColumns(field.metadata.referenceModule);
+    }
   };
 
   const handleDelete = async (fieldId: string) => {
@@ -265,6 +323,17 @@ export default function CustomFieldsSettingsPage() {
       // Add options for select fields
       if (form.fieldType === 'select' && form.options) {
         metadata.options = form.options.split(',').map(o => o.trim()).filter(Boolean);
+      }
+
+      // Add reference configuration for reference fields
+      if (form.fieldType === 'reference') {
+        if (!form.referenceModule || !form.referenceColumn || !form.referenceLabel) {
+          toast.error('Please fill in all reference field configuration');
+          return;
+        }
+        metadata.referenceModule = form.referenceModule;
+        metadata.referenceColumn = form.referenceColumn;
+        metadata.referenceLabel = form.referenceLabel;
       }
 
       const payload: any = {
@@ -505,7 +574,22 @@ export default function CustomFieldsSettingsPage() {
               <Select
                 label="Type"
                 value={form.fieldType}
-                onChange={(e) => setForm({ ...form, fieldType: e.target.value as CustomFieldType })}
+                onChange={(e) => {
+                  const newType = e.target.value as CustomFieldType;
+                  setForm({ 
+                    ...form, 
+                    fieldType: newType,
+                    // Reset reference fields if changing away from reference
+                    ...(newType !== 'reference' ? { referenceModule: '', referenceColumn: '', referenceLabel: '' } : {})
+                  });
+                  // Load columns if switching to reference type
+                  if (newType === 'reference' && form.referenceModule) {
+                    loadReferenceColumns(form.referenceModule);
+                  } else if (newType !== 'reference') {
+                    setReferenceColumns([]);
+                    setReferenceLabelColumns([]);
+                  }
+                }}
                 options={FIELD_TYPES.map(t => ({ value: t.value, label: t.label }))}
               />
             </div>
@@ -519,6 +603,78 @@ export default function CustomFieldsSettingsPage() {
                   onChange={(e) => setForm({ ...form, options: e.target.value })}
                 />
               </div>
+            )}
+
+            {form.fieldType === 'reference' && (
+              <>
+                <div>
+                  <Select
+                    label="Reference Module"
+                    value={form.referenceModule}
+                    onChange={(e) => {
+                      const moduleCode = e.target.value;
+                      setForm({ 
+                        ...form, 
+                        referenceModule: moduleCode,
+                        referenceColumn: '',
+                        referenceLabel: ''
+                      });
+                      if (moduleCode) {
+                        loadReferenceColumns(moduleCode);
+                      } else {
+                        setReferenceColumns([]);
+                        setReferenceLabelColumns([]);
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'Select a module' },
+                      ...modules.map(m => ({ value: m.code, label: m.name })),
+                    ]}
+                  />
+                </div>
+
+                {form.referenceModule && (
+                  <>
+                    <div>
+                      <Select
+                        label="Reference Column (Must be Unique)"
+                        value={form.referenceColumn}
+                        onChange={(e) => setForm({ ...form, referenceColumn: e.target.value })}
+                        disabled={loadingColumns}
+                        options={[
+                          { value: '', label: loadingColumns ? 'Loading...' : 'Select a unique column' },
+                          ...referenceColumns.map(col => ({ 
+                            value: col.name, 
+                            label: `${col.name} (${col.type})` 
+                          })),
+                        ]}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This column must be unique (primary key or unique constraint)
+                      </p>
+                    </div>
+
+                    <div>
+                      <Select
+                        label="Reference Label Column"
+                        value={form.referenceLabel}
+                        onChange={(e) => setForm({ ...form, referenceLabel: e.target.value })}
+                        disabled={loadingColumns}
+                        options={[
+                          { value: '', label: loadingColumns ? 'Loading...' : 'Select a label column' },
+                          ...referenceLabelColumns.map(col => ({ 
+                            value: col.name, 
+                            label: `${col.name} (${col.type})` 
+                          })),
+                        ]}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This column will be displayed as the label in the dropdown
+                      </p>
+                    </div>
+                  </>
+                )}
+              </>
             )}
 
             <div className="space-y-3">

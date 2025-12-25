@@ -23,9 +23,9 @@ A modular, highly customizable framework for rapid MVP development built with Ne
 
 ```
 src/
-├── app/                    # Next.js App Router
+├── app/                   # Next.js App Router
 │   ├── (auth)/            # Authentication routes
-│   ├── (dashboard)/        # Protected dashboard routes
+│   ├── (dashboard)/       # Protected dashboard routes
 │   └── api/               # API routes
 ├── core/                  # Core system
 │   ├── components/        # Shared components
