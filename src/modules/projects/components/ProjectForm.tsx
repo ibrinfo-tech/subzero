@@ -5,43 +5,48 @@ import { Input } from '@/core/components/ui/input';
 import { Label } from '@/core/components/ui/label';
 import { Textarea } from '@/core/components/ui/textarea';
 import { Select } from '@/core/components/ui/select';
+import { Checkbox } from '@/core/components/ui/checkbox';
 import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
-import { useTaskCustomFields } from '../hooks/useTaskCustomFields';
-import { TASK_STATUSES, TASK_PRIORITIES } from '../utils/constants';
-import type { CreateTaskInput } from '../types';
+import { useProjectCustomFields } from '../hooks/useProjectCustomFields';
+import { useProjectLabels } from '../hooks/useProjectLabels';
+import { PROJECT_STATUSES, PROJECT_PRIORITIES } from '../utils/constants';
+import type { CreateProjectInput } from '../types';
 import { useAuthStore } from '@/core/store/authStore';
 
-interface TaskFormProps {
-  form: CreateTaskInput;
-  onChange: (form: CreateTaskInput) => void;
+interface ProjectFormProps {
+  form: CreateProjectInput;
+  onChange: (form: CreateProjectInput) => void;
 }
 
 const STANDARD_FIELD_CONFIG = [
-  { code: 'title', label: 'Title', type: 'text' as const, required: true },
+  { code: 'name', label: 'Name', type: 'text' as const, required: true },
   { code: 'description', label: 'Description', type: 'textarea' as const },
   { code: 'status', label: 'Status', type: 'select' as const },
   { code: 'priority', label: 'Priority', type: 'select' as const },
-  { code: 'due_date', label: 'Due Date', type: 'date' as const },
-  { code: 'assigned_to', label: 'Assigned To', type: 'uuid' as const },
-  { code: 'project_id', label: 'Project', type: 'uuid' as const },
+  { code: 'start_date', label: 'Start Date', type: 'date' as const },
+  { code: 'end_date', label: 'End Date', type: 'date' as const },
+  { code: 'owner_id', label: 'Owner', type: 'uuid' as const },
+  { code: 'team_member_ids', label: 'Team Members', type: 'json' as const },
+  { code: 'progress', label: 'Progress', type: 'number' as const },
 ] as const;
 
-export function TaskForm({ form, onChange }: TaskFormProps) {
+export function ProjectForm({ form, onChange }: ProjectFormProps) {
   const { isFieldVisible, isFieldEditable, loading: loadingPerms } =
-    useFieldPermissions('tasks');
-  const { customFields, loading: loadingCustomFields } = useTaskCustomFields();
+    useFieldPermissions('projects');
+  const { customFields, loading: loadingCustomFields } = useProjectCustomFields();
+  const { labels, loading: loadingLabels, enabled: labelsEnabled } = useProjectLabels();
   const { token } = useAuthStore();
-  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
-  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [users, setUsers] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Fetch projects for project selection
+  // Fetch users for owner and team member selection
   useEffect(() => {
     if (!token) return;
 
-    const fetchProjects = async () => {
-      setLoadingProjects(true);
+    const fetchUsers = async () => {
+      setLoadingUsers(true);
       try {
-        const res = await fetch('/api/projects', {
+        const res = await fetch('/api/users', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -50,22 +55,22 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
-            setProjects(data.data || []);
+            setUsers(data.data || []);
           }
         }
       } catch (error) {
-        console.error('Failed to fetch projects:', error);
+        console.error('Failed to fetch users:', error);
       } finally {
-        setLoadingProjects(false);
+        setLoadingUsers(false);
       }
     };
 
-    fetchProjects();
+    fetchUsers();
   }, [token]);
 
-  const updateField = <K extends keyof CreateTaskInput>(
+  const updateField = <K extends keyof CreateProjectInput>(
     key: K,
-    value: CreateTaskInput[K]
+    value: CreateProjectInput[K]
   ) => {
     onChange({ ...form, [key]: value });
   };
@@ -78,6 +83,22 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
         [fieldCode]: value,
       },
     });
+  };
+
+  const toggleTeamMember = (userId: string) => {
+    const currentTeam = form.teamMemberIds || [];
+    const newTeam = currentTeam.includes(userId)
+      ? currentTeam.filter((id) => id !== userId)
+      : [...currentTeam, userId];
+    updateField('teamMemberIds', newTeam);
+  };
+
+  const toggleLabel = (labelId: string) => {
+    const currentLabels = form.labelIds || [];
+    const newLabels = currentLabels.includes(labelId)
+      ? currentLabels.filter((id) => id !== labelId)
+      : [...currentLabels, labelId];
+    updateField('labelIds', newLabels);
   };
 
   if (loadingPerms) {
@@ -96,11 +117,11 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
   }
 
   const visibleStandardFields = STANDARD_FIELD_CONFIG.filter((field: typeof STANDARD_FIELD_CONFIG[number]) =>
-    isFieldVisible('tasks', field.code)
+    isFieldVisible('projects', field.code)
   );
 
   const visibleCustomFields = customFields.filter((field: { code: string }) =>
-    isFieldVisible('tasks', field.code)
+    isFieldVisible('projects', field.code)
   );
 
   if (!visibleStandardFields.length && !visibleCustomFields.length && !loadingCustomFields) {
@@ -116,9 +137,9 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
       {visibleStandardFields.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {visibleStandardFields.map((field) => {
-            const editable = isFieldEditable('tasks', field.code);
+            const editable = isFieldEditable('projects', field.code);
 
-            if (field.code === 'title') {
+            if (field.code === 'name') {
               return (
                 <div key={field.code} className="md:col-span-2">
                   <Label>
@@ -129,8 +150,8 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                     )}
                   </Label>
                   <Input
-                    value={form.title || ''}
-                    onChange={(e) => updateField('title', e.target.value)}
+                    value={form.name || ''}
+                    onChange={(e) => updateField('name', e.target.value)}
                     disabled={!editable}
                     required={field.required}
                   />
@@ -167,9 +188,9 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                     )}
                   </Label>
                   <Select
-                    value={form.status || 'todo'}
+                    value={form.status || 'planned'}
                     onChange={(e) => updateField('status', e.target.value as any)}
-                    options={TASK_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                    options={PROJECT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
                     disabled={!editable}
                     className="w-full"
                   />
@@ -189,7 +210,7 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                   <Select
                     value={form.priority || 'normal'}
                     onChange={(e) => updateField('priority', e.target.value as any)}
-                    options={TASK_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
+                    options={PROJECT_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
                     disabled={!editable}
                     className="w-full"
                   />
@@ -197,7 +218,7 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
               );
             }
 
-            if (field.code === 'due_date') {
+            if (field.code === 'start_date') {
               return (
                 <div key={field.code}>
                   <Label>
@@ -208,15 +229,34 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                   </Label>
                   <Input
                     type="date"
-                    value={form.dueDate || ''}
-                    onChange={(e) => updateField('dueDate', e.target.value || undefined)}
+                    value={form.startDate || ''}
+                    onChange={(e) => updateField('startDate', e.target.value || null)}
                     disabled={!editable}
                   />
                 </div>
               );
             }
 
-            if (field.code === 'project_id') {
+            if (field.code === 'end_date') {
+              return (
+                <div key={field.code}>
+                  <Label>
+                    {field.label}
+                    {!editable && (
+                      <span className="text-xs text-muted-foreground ml-2">(Read-only)</span>
+                    )}
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.endDate || ''}
+                    onChange={(e) => updateField('endDate', e.target.value || null)}
+                    disabled={!editable}
+                  />
+                </div>
+              );
+            }
+
+            if (field.code === 'owner_id') {
               return (
                 <div key={field.code}>
                   <Label>
@@ -226,15 +266,82 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                     )}
                   </Label>
                   <Select
-                    value={form.projectId || ''}
-                    onChange={(e) => updateField('projectId', e.target.value || null)}
-                    disabled={!editable || loadingProjects}
+                    value={form.ownerId || ''}
+                    onChange={(e) => updateField('ownerId', e.target.value || null)}
+                    disabled={!editable || loadingUsers}
                     options={[
-                      { value: '', label: 'Select project...' },
-                      ...projects.map((p) => ({ value: p.id, label: p.name })),
+                      { value: '', label: 'Select owner...' },
+                      ...users.map((u) => ({ value: u.id, label: `${u.fullName} (${u.email})` })),
                     ]}
                     className="w-full"
                   />
+                </div>
+              );
+            }
+
+            if (field.code === 'team_member_ids') {
+              return (
+                <div key={field.code} className="md:col-span-2">
+                  <Label>
+                    {field.label}
+                    {!editable && (
+                      <span className="text-xs text-muted-foreground ml-2">(Read-only)</span>
+                    )}
+                  </Label>
+                  <div className="border rounded-lg p-3 max-h-48 overflow-y-auto">
+                    {loadingUsers ? (
+                      <div className="text-sm text-muted-foreground">Loading users...</div>
+                    ) : users.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No users available</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {users.map((user) => {
+                          const isSelected = form.teamMemberIds?.includes(user.id) || false;
+                          return (
+                            <div key={user.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleTeamMember(user.id)}
+                                disabled={!editable}
+                              />
+                              <label className="text-sm cursor-pointer flex-1">
+                                {user.fullName} ({user.email})
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            if (field.code === 'progress') {
+              return (
+                <div key={field.code} className="md:col-span-2">
+                  <Label>
+                    {field.label}
+                    {!editable && (
+                      <span className="text-xs text-muted-foreground ml-2">(Read-only)</span>
+                    )}
+                  </Label>
+                  <div className="space-y-2">
+                    <Input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={form.progress ?? 0}
+                      onChange={(e) => updateField('progress', parseInt(e.target.value, 10))}
+                      disabled={!editable}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>0%</span>
+                      <span className="font-medium">{form.progress ?? 0}%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
                 </div>
               );
             }
@@ -244,6 +351,42 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
         </div>
       )}
 
+      {/* Labels Section */}
+      {labelsEnabled && (
+        <div className="border-t pt-4 mt-4">
+          <h3 className="text-sm font-medium text-foreground mb-4">Labels</h3>
+          {loadingLabels ? (
+            <div className="text-sm text-muted-foreground">Loading labels...</div>
+          ) : labels.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No labels available</div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {labels.map((label) => {
+                const isSelected = form.labelIds?.includes(label.id) || false;
+                return (
+                  <div
+                    key={label.id}
+                    className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                    onClick={() => toggleLabel(label.id)}
+                  >
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: label.color }}
+                    />
+                    {label.name}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Custom Fields Section */}
       {(visibleCustomFields.length > 0 || loadingCustomFields) && (
         <div className="border-t pt-4 mt-4">
           <h3 className="text-sm font-medium text-foreground mb-4">Custom Fields</h3>
@@ -261,7 +404,7 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
               {visibleCustomFields.map((field: { id: string; code: string; label: string; fieldType: string; metadata?: { isRequired?: boolean }; description?: string }) => {
                 const value = form.customFields?.[field.code] ?? '';
                 const isRequired = field.metadata?.isRequired ?? false;
-                const editable = isFieldEditable('tasks', field.code);
+                const editable = isFieldEditable('projects', field.code);
 
                 return (
                   <div key={field.id}>

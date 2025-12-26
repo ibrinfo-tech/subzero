@@ -2,25 +2,12 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
-import { updateTask } from '../../services/taskService';
-import { z } from 'zod';
-
-const updateTaskSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().optional(),
-  status: z.enum(['todo', 'in_progress', 'blocked', 'completed']).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  dueDate: z.string().optional().nullable(),
-  assignedTo: z.string().uuid().optional().nullable(),
-  projectId: z.string().uuid().optional().nullable(),
-  relatedEntityType: z.string().optional().nullable(),
-  relatedEntityId: z.string().uuid().optional().nullable(),
-  customFields: z.record(z.any()).optional(),
-});
+import { updateProject } from '../../services/projectService';
+import { updateProjectSchema } from '../../schemas/projectValidation';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authMiddleware = requireAuth();
@@ -35,14 +22,14 @@ export async function PATCH(
 
     // tenantId can be null in single-tenant mode - that's OK
 
-    const taskId = params.id;
+    const { id: projectId } = await params;
 
-    if (!taskId) {
-      return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
+    if (!projectId) {
+      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
     const body = await request.json();
-    const validation = updateTaskSchema.safeParse(body);
+    const validation = updateProjectSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -51,20 +38,20 @@ export async function PATCH(
       );
     }
 
-    const record = await updateTask({
-      id: taskId,
+    const record = await updateProject({
+      id: projectId,
       tenantId,
       userId,
       data: validation.data,
     });
 
     if (!record) {
-      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true, data: record }, { status: 200 });
   } catch (error) {
-    console.error('Task update error:', error);
+    console.error('Project update error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

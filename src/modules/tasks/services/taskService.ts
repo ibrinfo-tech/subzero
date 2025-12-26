@@ -18,7 +18,7 @@ export async function listTasks(
   userId: string,
   filters: TaskListFilters = {}
 ): Promise<TaskRecord[]> {
-  const { search, status, priority, assignedTo, dueDate, overdue } = filters;
+  const { search, status, priority, assignedTo, projectId, dueDate, overdue } = filters;
 
   const conditions: any[] = [];
 
@@ -62,6 +62,11 @@ export async function listTasks(
     }
   }
 
+  // Project filter
+  if (projectId && projectId !== 'all') {
+    conditions.push(eq(tasks.projectId, projectId));
+  }
+
   // Due date filter
   if (dueDate) {
     conditions.push(eq(tasks.dueDate, dueDate));
@@ -96,6 +101,7 @@ export async function listTasks(
     priority: task.priority as any,
     dueDate: task.dueDate,
     assignedTo: task.assignedTo,
+    projectId: task.projectId,
     createdBy: task.createdBy,
     relatedEntityType: task.relatedEntityType,
     relatedEntityId: task.relatedEntityId,
@@ -134,6 +140,7 @@ export async function getTaskById(
     priority: result.priority as any,
     dueDate: result.dueDate,
     assignedTo: result.assignedTo,
+    projectId: result.projectId,
     createdBy: result.createdBy,
     relatedEntityType: result.relatedEntityType,
     relatedEntityId: result.relatedEntityId,
@@ -158,6 +165,7 @@ export async function createTask(params: {
     priority: data.priority || 'normal',
     dueDate: data.dueDate || null,
     assignedTo: data.assignedTo || null,
+    projectId: data.projectId || null,
     createdBy: userId,
     relatedEntityType: data.relatedEntityType || null,
     relatedEntityId: data.relatedEntityId || null,
@@ -215,6 +223,7 @@ export async function createTask(params: {
     priority: task.priority as any,
     dueDate: task.dueDate,
     assignedTo: task.assignedTo,
+    projectId: task.projectId,
     createdBy: task.createdBy,
     relatedEntityType: task.relatedEntityType,
     relatedEntityId: task.relatedEntityId,
@@ -247,6 +256,7 @@ export async function updateTask(params: {
   if (data.priority !== undefined) updateData.priority = data.priority;
   if (data.dueDate !== undefined) updateData.dueDate = data.dueDate;
   if (data.assignedTo !== undefined) updateData.assignedTo = data.assignedTo;
+  if (data.projectId !== undefined) updateData.projectId = data.projectId;
   if (data.relatedEntityType !== undefined) updateData.relatedEntityType = data.relatedEntityType;
   if (data.relatedEntityId !== undefined) updateData.relatedEntityId = data.relatedEntityId;
   if (data.customFields !== undefined) updateData.customFields = data.customFields;
@@ -419,6 +429,7 @@ export async function updateTask(params: {
     priority: updated.priority as any,
     dueDate: updated.dueDate,
     assignedTo: updated.assignedTo,
+    projectId: updated.projectId,
     createdBy: updated.createdBy,
     relatedEntityType: updated.relatedEntityType,
     relatedEntityId: updated.relatedEntityId,

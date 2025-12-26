@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import { useTaskCustomFields } from '../hooks/useTaskCustomFields';
 import type { TaskRecord } from '../types';
 import { TASK_STATUSES, TASK_PRIORITIES } from '../utils/constants';
+import { useAuthStore } from '@/core/store/authStore';
 
 interface TaskTableProps {
   records: TaskRecord[];
@@ -68,6 +70,38 @@ export function TaskTable({
 }: TaskTableProps) {
   const { isFieldVisible, loading: loadingPerms } = useFieldPermissions('tasks');
   const { customFields } = useTaskCustomFields();
+  const { token } = useAuthStore();
+  const [projects, setProjects] = useState<Map<string, { name: string }>>(new Map());
+
+  // Fetch projects for display
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch('/api/projects', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            const projectMap = new Map();
+            (data.data || []).forEach((project: { id: string; name: string }) => {
+              projectMap.set(project.id, { name: project.name });
+            });
+            setProjects(projectMap);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      }
+    };
+
+    fetchProjects();
+  }, [token]);
 
   if (loading || loadingPerms) {
     return (
@@ -90,6 +124,7 @@ export function TaskTable({
   const showPriority = isFieldVisible('tasks', 'priority');
   const showDueDate = isFieldVisible('tasks', 'due_date');
   const showAssignedTo = isFieldVisible('tasks', 'assigned_to');
+  const showProject = isFieldVisible('tasks', 'project_id');
 
   return (
     <div className="border rounded-lg overflow-hidden bg-card">
@@ -101,6 +136,7 @@ export function TaskTable({
             {showPriority && <TableHead>Priority</TableHead>}
             {showDueDate && <TableHead>Due Date</TableHead>}
             {showAssignedTo && <TableHead>Assigned To</TableHead>}
+            {showProject && <TableHead>Project</TableHead>}
             {visibleCustomFields.map((field) => (
               <TableHead key={field.id}>{field.label}</TableHead>
             ))}
@@ -156,6 +192,15 @@ export function TaskTable({
                       <span className="text-sm">{record.assignedTo}</span>
                     ) : (
                       <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </TableCell>
+                )}
+                {showProject && (
+                  <TableCell>
+                    {record.projectId ? (
+                      <span className="text-sm">{projects.get(record.projectId)?.name || record.projectId}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
                 )}

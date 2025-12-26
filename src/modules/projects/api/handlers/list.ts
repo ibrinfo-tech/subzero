@@ -2,7 +2,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
-import { listTasks } from '../../services/taskService';
+import { listProjects } from '../../services/projectService';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,26 +22,28 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || undefined;
     const status = searchParams.get('status') || undefined;
     const priority = searchParams.get('priority') || undefined;
-    const assignedTo = searchParams.get('assignedTo') || undefined;
-    const projectId = searchParams.get('projectId') || undefined;
-    const dueDate = searchParams.get('dueDate') || undefined;
-    const overdue = searchParams.get('overdue') === 'true';
+    const ownerId = searchParams.get('ownerId') || undefined;
+    const myProjects = searchParams.get('myProjects') === 'true';
+    const archived = searchParams.get('archived') === 'true' ? true : searchParams.get('archived') === 'false' ? false : undefined;
+    const startDate = searchParams.get('startDate') || undefined;
+    const endDate = searchParams.get('endDate') || undefined;
 
     const filters = {
       search,
       status: status as any,
       priority: priority as any,
-      assignedTo: assignedTo as any,
-      projectId: projectId as any,
-      dueDate,
-      overdue,
+      ownerId: ownerId as any,
+      myProjects,
+      archived,
+      startDate,
+      endDate,
     };
 
-    const records = await listTasks(tenantId, userId, filters);
+    const records = await listProjects(tenantId, userId, filters);
 
     return NextResponse.json({ success: true, data: records }, { status: 200 });
   } catch (error) {
-    console.error('Task list error:', error);
+    console.error('Project list error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { pgTable, uuid, varchar, text, timestamp, date, jsonb, index } from 'drizzle-orm/pg-core';
 import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
+import { projects } from '@/modules/projects/schemas/projectSchema';
 
 const tasksTable = pgTable(
   'tasks',
@@ -14,6 +15,7 @@ const tasksTable = pgTable(
     priority: varchar('priority', { length: 50 }).notNull().default('normal'),
     dueDate: date('due_date'),
     assignedTo: uuid('assigned_to'),
+    projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
     createdBy: uuid('created_by').notNull(),
     relatedEntityType: varchar('related_entity_type', { length: 100 }),
     relatedEntityId: uuid('related_entity_id'),
@@ -25,6 +27,7 @@ const tasksTable = pgTable(
   (table) => ({
     tenantIdx: index('idx_tasks_tenant').on(table.tenantId),
     assignedToIdx: index('idx_tasks_assigned_to').on(table.assignedTo),
+    projectIdx: index('idx_tasks_project').on(table.projectId),
     createdByIdx: index('idx_tasks_created_by').on(table.createdBy),
     statusIdx: index('idx_tasks_status').on(table.status),
     priorityIdx: index('idx_tasks_priority').on(table.priority),
