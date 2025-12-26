@@ -19,6 +19,7 @@ export async function listTasks(
   filters: TaskListFilters = {}
 ): Promise<TaskRecord[]> {
   const { search, status, priority, assignedTo, dueDate, overdue } = filters;
+  console.log("status",status)
 
   const conditions: any[] = [];
 

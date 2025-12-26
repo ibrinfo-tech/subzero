@@ -17,6 +17,9 @@
     "event:worker": "tsx scripts/start-event-worker.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@radix-ui/react-label": "^2.1.8",
     "@types/nodemailer": "^7.0.4",
     "class-variance-authority": "^0.7.1",
