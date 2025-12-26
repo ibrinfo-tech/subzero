@@ -1,0 +1,52 @@
+{
+  "id": "tasks",
+  "name": "Tasks",
+  "version": "1.0.0",
+  "description": "Manage tasks with assignment, status, priority, due dates, and ownership across the system",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/tasks",
+      "component": "index",
+      "title": "Tasks",
+      "requiresAuth": true
+    }
+  ],
+  "api": {
+    "basePath": "/api/tasks",
+    "endpoints": [
+      { "method": "GET", "path": "", "handler": "list", "requiresAuth": true },
+      { "method": "POST", "path": "", "handler": "create", "requiresAuth": true },
+      { "method": "GET", "path": "/:id", "handler": "getById", "requiresAuth": true },
+      { "method": "PATCH", "path": "/:id", "handler": "update", "requiresAuth": true },
+      { "method": "DELETE", "path": "/:id", "handler": "delete", "requiresAuth": true },
+      { "method": "POST", "path": "/:id/duplicate", "handler": "duplicate", "requiresAuth": true },
+      { "method": "POST", "path": "/export", "handler": "export", "requiresAuth": true },
+      { "method": "POST", "path": "/import", "handler": "import", "requiresAuth": true }
+    ]
+  },
+  "permissions": {
+    "create": "tasks:create",
+    "read": "tasks:read",
+    "update": "tasks:update",
+    "delete": "tasks:delete",
+    "assign": "tasks:assign",
+    "complete": "tasks:complete",
+    "export": "tasks:export",
+    "import": "tasks:import",
+    "duplicate": "tasks:duplicate",
+    "manage_labels": "tasks:manage_labels",
+    "manage": "tasks:*"
+  },
+  "navigation": {
+    "icon": "CheckSquare",
+    "label": "Tasks",
+    "order": 10
+  },
+  "fields": {
+    "enabled": true,
+    "configPath": "./config/fields.config.ts"
+  },
+  "custom_field": true
+}
+

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { db } from '@/core/lib/db';
-import { moduleLabels, modules } from '@/core/lib/db/baseSchema';
+import { moduleLabels, modules, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { eq, and } from 'drizzle-orm';
 
@@ -12,6 +12,14 @@ const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
  * Returns labels for the given module id, scoped to the authenticated user's tenant
  */
 export async function GET(request: NextRequest) {
+  // Check if multi-tenancy is enabled (module labels require multi-tenancy)
+  if (!MULTI_TENANT_ENABLED || !moduleLabels) {
+    return NextResponse.json(
+      { error: 'Module labels are only available in multi-tenant mode' },
+      { status: 404 }
+    );
+  }
+
   const auth = requireAuth();
   const authResult = await auth(request);
   if (authResult instanceof NextResponse) {
@@ -57,6 +65,14 @@ export async function GET(request: NextRequest) {
  * Body: { moduleId, name, color?, sortOrder? }
  */
 export async function POST(request: NextRequest) {
+  // Check if multi-tenancy is enabled (module labels require multi-tenancy)
+  if (!MULTI_TENANT_ENABLED || !moduleLabels) {
+    return NextResponse.json(
+      { error: 'Module labels are only available in multi-tenant mode' },
+      { status: 404 }
+    );
+  }
+
   const auth = requireAuth();
   const authResult = await auth(request);
   if (authResult instanceof NextResponse) {
@@ -106,6 +122,14 @@ export async function POST(request: NextRequest) {
  * Body: { id, name?, color?, sortOrder?, isActive? }
  */
 export async function PATCH(request: NextRequest) {
+  // Check if multi-tenancy is enabled (module labels require multi-tenancy)
+  if (!MULTI_TENANT_ENABLED || !moduleLabels) {
+    return NextResponse.json(
+      { error: 'Module labels are only available in multi-tenant mode' },
+      { status: 404 }
+    );
+  }
+
   const auth = requireAuth();
   const authResult = await auth(request);
   if (authResult instanceof NextResponse) {
@@ -155,6 +179,14 @@ export async function PATCH(request: NextRequest) {
  * Body: { id }
  */
 export async function DELETE(request: NextRequest) {
+  // Check if multi-tenancy is enabled (module labels require multi-tenancy)
+  if (!MULTI_TENANT_ENABLED || !moduleLabels) {
+    return NextResponse.json(
+      { error: 'Module labels are only available in multi-tenant mode' },
+      { status: 404 }
+    );
+  }
+
   const auth = requireAuth();
   const authResult = await auth(request);
   if (authResult instanceof NextResponse) {

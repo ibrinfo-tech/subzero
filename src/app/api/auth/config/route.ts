@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthConfig, isRegistrationEnabledAsync } from '@/core/config/authConfig';
+import { MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 
 /**
  * GET /api/auth/config
@@ -22,6 +23,9 @@ export async function GET() {
       ui: {
         showRegisterLink: config.ui.showRegisterLink && registrationEnabled,
         showForgotPasswordLink: config.ui.showForgotPasswordLink,
+      },
+      multiTenant: {
+        enabled: MULTI_TENANT_ENABLED,
       },
     });
   } catch (error) {

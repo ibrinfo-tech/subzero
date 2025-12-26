@@ -140,51 +140,6 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Tenant isolation: if user is not super admin, force their tenant
-    let targetTenantId = data.tenantId;
-    if (userTenantId !== null) {
-      // Non-super-admin can only create users in their own tenant
-      if (data.tenantId && data.tenantId !== userTenantId) {
-        return NextResponse.json(
-          { error: 'Forbidden - You can only create users in your own tenant' },
-          { status: 403 }
-        );
-      }
-      targetTenantId = userTenantId;
-    }
-    
-    // If no tenant specified and Super Admin is creating, use default tenant
-    if (!targetTenantId) {
-      console.log('[User Create] No tenant specified, looking for default tenant');
-      const { tenants } = await import('@/core/lib/db/baseSchema');
-      const defaultTenant = await db
-        .select()
-        .from(tenants)
-        .where(eq(tenants.slug, 'default'))
-        .limit(1);
-      
-      if (defaultTenant.length > 0) {
-        targetTenantId = defaultTenant[0].id;
-        console.log('[User Create] Using default tenant:', targetTenantId);
-      } else {
-        // Create default tenant if it doesn't exist
-        console.log('[User Create] Creating default tenant');
-        const newTenant = await db
-          .insert(tenants)
-          .values({
-            name: 'Default Organization',
-            slug: 'default',
-            status: 'active',
-            plan: 'free',
-            maxUsers: 1000,
-            metadata: {},
-          })
-          .returning();
-        targetTenantId = newTenant[0].id;
-        console.log('[User Create] Created default tenant:', targetTenantId);
-      }
-    }
-    
     // Check if user already exists
     const existingUser = await db
       .select()
@@ -199,24 +154,76 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Ensure we have a tenant (required for role assignment)
-    if (!targetTenantId) {
-      return NextResponse.json(
-        { error: 'Tenant ID is required for user creation' },
-        { status: 400 }
-      );
+    // Handle tenant logic (only in multi-tenant mode)
+    const { MULTI_TENANT_ENABLED, tenants } = await import('@/core/lib/db/baseSchema');
+    let targetTenantId: string | undefined;
+    
+    if (MULTI_TENANT_ENABLED && tenants) {
+      // Tenant isolation: if user is not super admin, force their tenant
+      targetTenantId = data.tenantId;
+      if (userTenantId !== null) {
+        // Non-super-admin can only create users in their own tenant
+        if (data.tenantId && data.tenantId !== userTenantId) {
+          return NextResponse.json(
+            { error: 'Forbidden - You can only create users in your own tenant' },
+            { status: 403 }
+          );
+        }
+        targetTenantId = userTenantId;
+      }
+      
+      // If no tenant specified and Super Admin is creating, use default tenant
+      if (!targetTenantId) {
+        console.log('[User Create] No tenant specified, looking for default tenant');
+        const defaultTenant = await db
+          .select()
+          .from(tenants)
+          .where(eq(tenants.slug, 'default'))
+          .limit(1);
+        
+        if (defaultTenant.length > 0) {
+          targetTenantId = defaultTenant[0].id;
+          console.log('[User Create] Using default tenant:', targetTenantId);
+        } else {
+          // Create default tenant if it doesn't exist
+          console.log('[User Create] Creating default tenant');
+          const newTenant = await db
+            .insert(tenants)
+            .values({
+              name: 'Default Organization',
+              slug: 'default',
+              status: 'active',
+              plan: 'free',
+              maxUsers: 1000,
+              metadata: {},
+            })
+            .returning();
+          targetTenantId = newTenant[0].id;
+          console.log('[User Create] Created default tenant:', targetTenantId);
+        }
+      }
+      
+      // Ensure we have a tenant (required for role assignment in multi-tenant mode)
+      if (!targetTenantId) {
+        return NextResponse.json(
+          { error: 'Tenant ID is required for user creation' },
+          { status: 400 }
+        );
+      }
     }
     
     // Create user (this will auto-assign default role if tenantId is present)
-    const user = await createUser(
-      {
-        ...data,
-        tenantId: targetTenantId,
-      },
-      userId
-    );
+    const createUserData: any = { ...data };
+    if (MULTI_TENANT_ENABLED && targetTenantId) {
+      createUserData.tenantId = targetTenantId;
+    }
     
-    console.log('[User Create] User created:', user.id, 'with tenant:', user.tenantId);
+    const user = await createUser(createUserData, userId);
+    
+    console.log('[User Create] User created:', user.id);
+    if (MULTI_TENANT_ENABLED && 'tenantId' in user) {
+      console.log('[User Create] User tenant:', user.tenantId);
+    }
     
     // Create auth provider entry for password authentication
     await db.insert(authProviders).values({
@@ -227,7 +234,7 @@ export async function POST(request: NextRequest) {
     // If a specific role was requested (and different from default), update it
     if (data.roleId) {
       console.log('[User Create] Specific role requested:', data.roleId);
-      const { userRoles } = await import('@/core/lib/db/baseSchema');
+      const { userRoles, MULTI_TENANT_ENABLED: mtEnabled } = await import('@/core/lib/db/baseSchema');
       
       // Remove the default role that was auto-assigned
       await db
@@ -237,14 +244,20 @@ export async function POST(request: NextRequest) {
       console.log('[User Create] Assigning requested role');
       
       // Assign the requested role
-      await db.insert(userRoles).values({
+      const roleData: any = {
         userId: user.id,
         roleId: data.roleId,
-        tenantId: targetTenantId,
         grantedBy: userId,
         isActive: true,
         metadata: {},
-      });
+      };
+
+      // Only include tenantId if multi-tenancy is enabled and column exists
+      if (mtEnabled && 'tenantId' in userRoles && targetTenantId) {
+        roleData.tenantId = targetTenantId;
+      }
+
+      await db.insert(userRoles).values(roleData);
       
       console.log('[User Create] Role assigned successfully');
     } else {

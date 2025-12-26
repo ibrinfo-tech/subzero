@@ -7,6 +7,7 @@ import {
   userRoles,
   resourcePermissions,
   modules,
+  MULTI_TENANT_ENABLED,
 } from './db/baseSchema';
 import { roleModuleAccess, roleModulePermissions } from './db/permissionSchema';
 import { eq, and, isNull, or, lte, gte, sql, inArray } from 'drizzle-orm';
@@ -23,6 +24,27 @@ export async function getUserPermissions(userId: string, tenantId?: string): Pro
   const now = new Date();
   
   // Get user's active roles with hierarchy (up to 5 levels deep)
+  const whereConditions = [
+    eq(userRoles.userId, userId),
+    eq(userRoles.isActive, true),
+    or(
+      isNull(userRoles.validFrom),
+      lte(userRoles.validFrom, now)
+    ),
+    or(
+      isNull(userRoles.validUntil),
+      gte(userRoles.validUntil, now)
+    ),
+    eq(roles.status, 'active')
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and tenantId column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+    if (tenantId) {
+      whereConditions.push(eq(userRoles.tenantId, tenantId));
+    }
+  }
+
   const userRolesQuery = db
     .select({
       roleId: roles.id,
@@ -31,22 +53,7 @@ export async function getUserPermissions(userId: string, tenantId?: string): Pro
     })
     .from(userRoles)
     .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(
-      and(
-        eq(userRoles.userId, userId),
-        tenantId ? eq(userRoles.tenantId, tenantId) : sql`true`,
-        eq(userRoles.isActive, true),
-        or(
-          isNull(userRoles.validFrom),
-          lte(userRoles.validFrom, now)
-        ),
-        or(
-          isNull(userRoles.validUntil),
-          gte(userRoles.validUntil, now)
-        ),
-        eq(roles.status, 'active')
-      )
-    );
+    .where(and(...whereConditions));
 
   const directRoles = await userRolesQuery;
   
@@ -195,16 +202,11 @@ export async function userHasPermission(
   // Check resource-level permission first (highest priority)
   if (resourceType && resourceId) {
     const now = new Date();
-    const resourcePerm = await db
-      .select()
-      .from(resourcePermissions)
-      .where(
-        and(
+    const whereConditions = [
           eq(resourcePermissions.userId, userId),
           eq(resourcePermissions.resourceType, resourceType),
           eq(resourcePermissions.resourceId, resourceId),
           eq(resourcePermissions.permissionCode, permissionCode),
-          tenantId ? eq(resourcePermissions.tenantId, tenantId) : sql`true`,
           or(
             isNull(resourcePermissions.validFrom),
             lte(resourcePermissions.validFrom, now)
@@ -213,8 +215,17 @@ export async function userHasPermission(
             isNull(resourcePermissions.validUntil),
             gte(resourcePermissions.validUntil, now)
           )
-        )
-      )
+    ];
+
+    // Only check tenantId if multi-tenancy is enabled and tenantId column exists
+    if (MULTI_TENANT_ENABLED && 'tenantId' in resourcePermissions && tenantId) {
+      whereConditions.push(eq(resourcePermissions.tenantId, tenantId));
+    }
+
+    const resourcePerm = await db
+      .select()
+      .from(resourcePermissions)
+      .where(and(...whereConditions))
       .limit(1);
     
     if (resourcePerm.length > 0) {
@@ -318,6 +329,27 @@ export async function userHasAllPermissions(
 export async function getUserRoles(userId: string, tenantId?: string): Promise<Array<{ id: string; name: string; code: string; priority: number }>> {
   const now = new Date();
   
+  const whereConditions = [
+    eq(userRoles.userId, userId),
+    eq(userRoles.isActive, true),
+    or(
+      isNull(userRoles.validFrom),
+      lte(userRoles.validFrom, now)
+    ),
+    or(
+      isNull(userRoles.validUntil),
+      gte(userRoles.validUntil, now)
+    ),
+    eq(roles.status, 'active')
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and tenantId column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+    if (tenantId) {
+      whereConditions.push(eq(userRoles.tenantId, tenantId));
+    }
+  }
+  
   const result = await db
     .select({
       id: roles.id,
@@ -327,22 +359,7 @@ export async function getUserRoles(userId: string, tenantId?: string): Promise<A
     })
     .from(userRoles)
     .innerJoin(roles, eq(userRoles.roleId, roles.id))
-    .where(
-      and(
-        eq(userRoles.userId, userId),
-        tenantId ? eq(userRoles.tenantId, tenantId) : sql`true`,
-        eq(userRoles.isActive, true),
-        or(
-          isNull(userRoles.validFrom),
-          lte(userRoles.validFrom, now)
-        ),
-        or(
-          isNull(userRoles.validUntil),
-          gte(userRoles.validUntil, now)
-        ),
-        eq(roles.status, 'active')
-      )
-    )
+    .where(and(...whereConditions))
     .orderBy(sql`${roles.priority} DESC`);
 
   return result;
@@ -411,8 +428,18 @@ export async function getUserPermissionsWithModules(userId: string, tenantId?: s
  * Check if user belongs to a specific tenant
  */
 export async function userBelongsToTenant(userId: string, tenantId: string): Promise<boolean> {
+  // In single-tenant mode, all users belong to the same "tenant" (conceptually)
+  if (!MULTI_TENANT_ENABLED || !('tenantId' in users)) {
+    return true;
+  }
+
+  const selectFields: any = {};
+  if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+    selectFields.tenantId = users.tenantId;
+  }
+
   const user = await db
-    .select({ tenantId: users.tenantId })
+    .select(selectFields)
     .from(users)
     .where(
       and(
@@ -426,20 +453,32 @@ export async function userBelongsToTenant(userId: string, tenantId: string): Pro
     return false;
   }
   
+  const userTenantId = (user[0] as any).tenantId;
+  
   // Super admin (no tenant) can access all tenants
-  if (user[0].tenantId === null) {
+  if (userTenantId === null) {
     return true;
   }
   
-  return user[0].tenantId === tenantId;
+  return userTenantId === tenantId;
 }
 
 /**
  * Get user's tenant ID
  */
 export async function getUserTenantId(userId: string): Promise<string | null> {
+  const selectFields: any = {};
+  
+  // Only select tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+    selectFields.tenantId = users.tenantId;
+  } else {
+    // In single-tenant mode, return null
+    return null;
+  }
+
   const user = await db
-    .select({ tenantId: users.tenantId })
+    .select(selectFields)
     .from(users)
     .where(
       and(
@@ -449,5 +488,5 @@ export async function getUserTenantId(userId: string): Promise<string | null> {
     )
     .limit(1);
   
-  return user.length > 0 ? user[0].tenantId : null;
+  return user.length > 0 ? (user[0] as any).tenantId || null : null;
 }

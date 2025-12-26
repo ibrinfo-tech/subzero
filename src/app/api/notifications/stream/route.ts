@@ -18,22 +18,41 @@ const activeConnections = new Map<
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication (EventSource uses cookies, so this should work)
+    // Verify authentication
+    // EventSource doesn't support custom headers, so verifyAuth will check:
+    // 1. Query parameter (token passed from client)
+    // 2. Cookies (set during login)
     const userId = await verifyAuth(request);
     if (!userId) {
-      return new Response('Unauthorized', { status: 401 });
+      // Send error via SSE format before closing
+      const errorMessage = JSON.stringify({ type: 'error', message: 'Unauthorized' });
+      return new Response(`data: ${errorMessage}\n\n`, {
+        status: 401,
+        headers: {
+          'Content-Type': 'text/event-stream',
+        },
+      });
     }
 
     const tenantId = await getUserTenantId(userId);
-    if (!tenantId) {
-      return new Response('Tenant not found', { status: 400 });
+    
+    // tenantId is optional - only required in multi-tenant mode
+    const { MULTI_TENANT_ENABLED } = await import('@/core/lib/db/baseSchema');
+    if (MULTI_TENANT_ENABLED && !tenantId) {
+      const errorMessage = JSON.stringify({ type: 'error', message: 'Tenant not found' });
+      return new Response(`data: ${errorMessage}\n\n`, {
+        status: 400,
+        headers: {
+          'Content-Type': 'text/event-stream',
+        },
+      });
     }
 
     // Create a readable stream for SSE
     const stream = new ReadableStream({
       start(controller) {
         // Send initial unread count
-        sendInitialData(controller, userId, tenantId).catch((error) => {
+        sendInitialData(controller, userId, tenantId || undefined).catch((error) => {
           console.error('Error sending initial data:', error);
         });
 
@@ -41,14 +60,22 @@ export async function GET(request: NextRequest) {
         // In production, you could use database triggers or a message queue for instant updates
         const pollInterval = setInterval(async () => {
           try {
-            const count = await getUnreadCount(userId, tenantId);
+            const count = await getUnreadCount(userId, tenantId || undefined);
             const message = JSON.stringify({ type: 'unread_count', count });
             controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
           } catch (error) {
             console.error('Error polling notifications:', error);
-            // Send error to client
-            const errorMessage = JSON.stringify({ type: 'error', message: 'Failed to fetch count' });
-            controller.enqueue(new TextEncoder().encode(`data: ${errorMessage}\n\n`));
+            // Only send error if controller is still active
+            try {
+              const errorMessage = JSON.stringify({ 
+                type: 'error', 
+                message: error instanceof Error ? error.message : 'Failed to fetch count' 
+              });
+              controller.enqueue(new TextEncoder().encode(`data: ${errorMessage}\n\n`));
+            } catch (enqueueError) {
+              // Controller might be closed, stop polling
+              clearInterval(pollInterval);
+            }
           }
         }, 2000);
 
@@ -58,7 +85,7 @@ export async function GET(request: NextRequest) {
         }
         activeConnections.get(userId)!.push({
           controller,
-          tenantId,
+          tenantId: tenantId || '', // Store empty string in single-tenant mode
           pollInterval,
         });
 
@@ -96,14 +123,25 @@ export async function GET(request: NextRequest) {
 async function sendInitialData(
   controller: ReadableStreamDefaultController,
   userId: string,
-  tenantId: string
+  tenantId?: string | null
 ) {
   try {
-    const count = await getUnreadCount(userId, tenantId);
+    const count = await getUnreadCount(userId, tenantId || undefined);
     const message = JSON.stringify({ type: 'unread_count', count });
     controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
   } catch (error) {
     console.error('Error sending initial data:', error);
+    // Send error message to client
+    try {
+      const errorMessage = JSON.stringify({ 
+        type: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to fetch initial count' 
+      });
+      controller.enqueue(new TextEncoder().encode(`data: ${errorMessage}\n\n`));
+    } catch (enqueueError) {
+      // Controller might be closed
+      console.error('Error sending error message:', enqueueError);
+    }
   }
 }
 
@@ -111,19 +149,21 @@ async function sendInitialData(
  * Broadcast notification update to all active connections for a user
  * This is called when a new notification is created
  */
-export async function broadcastNotificationUpdate(userId: string, tenantId: string) {
+export async function broadcastNotificationUpdate(userId: string, tenantId?: string | null) {
   const connections = activeConnections.get(userId);
   if (!connections || connections.length === 0) return;
 
   try {
-    const count = await getUnreadCount(userId, tenantId);
+    const count = await getUnreadCount(userId, tenantId || undefined);
     const message = JSON.stringify({ type: 'unread_count', count });
     const data = new TextEncoder().encode(`data: ${message}\n\n`);
 
     // Send to all active connections for this user
     connections.forEach((conn) => {
-      // Only send if tenant matches (security)
-      if (conn.tenantId === tenantId) {
+      // Only send if tenant matches (security) - in single-tenant mode, both will be empty string/null
+      const connTenantId = conn.tenantId || null;
+      const updateTenantId = tenantId || null;
+      if (connTenantId === updateTenantId) {
         try {
           conn.controller.enqueue(data);
         } catch (error) {

@@ -1,11 +1,11 @@
 // Generic notification service - can be used by any module
 
 import { db } from '@/core/lib/db';
-import { notifications } from '@/core/lib/db/baseSchema';
+import { notifications, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 
 export interface CreateNotificationInput {
-  tenantId: string;
+  tenantId?: string; // Optional - only required in multi-tenant mode
   userId: string;
   title: string;
   message: string;
@@ -24,23 +24,29 @@ export interface CreateNotificationInput {
  * This is a generic function that any module can use to create notifications
  */
 export async function createNotification(input: CreateNotificationInput) {
+  const notificationData: any = {
+    userId: input.userId,
+    title: input.title,
+    message: input.message,
+    type: input.type || 'info',
+    category: input.category,
+    actionUrl: input.actionUrl,
+    actionLabel: input.actionLabel,
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    priority: input.priority || 'normal',
+    metadata: input.metadata || {},
+    isRead: false,
+  };
+
+  // Only include tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && input.tenantId) {
+    notificationData.tenantId = input.tenantId;
+  }
+
   const [notification] = await db
     .insert(notifications)
-    .values({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      title: input.title,
-      message: input.message,
-      type: input.type || 'info',
-      category: input.category,
-      actionUrl: input.actionUrl,
-      actionLabel: input.actionLabel,
-      resourceType: input.resourceType,
-      resourceId: input.resourceId,
-      priority: input.priority || 'normal',
-      metadata: input.metadata || {},
-      isRead: false,
-    })
+    .values(notificationData)
     .returning();
 
   // Broadcast real-time update to connected clients via SSE
@@ -71,21 +77,29 @@ export async function createBulkNotifications(
   if (inputs.length === 0) return;
 
   await db.insert(notifications).values(
-    inputs.map((input) => ({
-      tenantId: input.tenantId,
-      userId: input.userId,
-      title: input.title,
-      message: input.message,
-      type: input.type || 'info',
-      category: input.category,
-      actionUrl: input.actionUrl,
-      actionLabel: input.actionLabel,
-      resourceType: input.resourceType,
-      resourceId: input.resourceId,
-      priority: input.priority || 'normal',
-      metadata: input.metadata || {},
-      isRead: false,
-    }))
+    inputs.map((input) => {
+      const notificationData: any = {
+        userId: input.userId,
+        title: input.title,
+        message: input.message,
+        type: input.type || 'info',
+        category: input.category,
+        actionUrl: input.actionUrl,
+        actionLabel: input.actionLabel,
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        priority: input.priority || 'normal',
+        metadata: input.metadata || {},
+        isRead: false,
+      };
+
+      // Only include tenantId if multi-tenancy is enabled and column exists
+      if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && input.tenantId) {
+        notificationData.tenantId = input.tenantId;
+      }
+
+      return notificationData;
+    })
   );
 }
 
@@ -94,7 +108,7 @@ export async function createBulkNotifications(
  */
 export async function getUserNotifications(
   userId: string,
-  tenantId: string,
+  tenantId?: string | null,
   options: {
     limit?: number;
     offset?: number;
@@ -104,17 +118,27 @@ export async function getUserNotifications(
 ) {
   const { limit = 20, offset = 0, unreadOnly = false, category } = options;
 
+  const whereConditions = [
+    eq(notifications.userId, userId),
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && tenantId) {
+    whereConditions.push(eq(notifications.tenantId, tenantId));
+  }
+
+  if (unreadOnly) {
+    whereConditions.push(eq(notifications.isRead, false));
+  }
+
+  if (category) {
+    whereConditions.push(eq(notifications.category, category));
+  }
+
   const userNotifications = await db
     .select()
     .from(notifications)
-    .where(
-      and(
-        eq(notifications.tenantId, tenantId),
-        eq(notifications.userId, userId),
-        unreadOnly ? eq(notifications.isRead, false) : undefined,
-        category ? eq(notifications.category, category) : undefined
-      )
-    )
+    .where(and(...whereConditions))
     .orderBy(desc(notifications.createdAt))
     .limit(limit)
     .offset(offset);
@@ -127,18 +151,22 @@ export async function getUserNotifications(
  */
 export async function getUnreadCount(
   userId: string,
-  tenantId: string
+  tenantId?: string | null
 ): Promise<number> {
+  const whereConditions = [
+    eq(notifications.userId, userId),
+    eq(notifications.isRead, false),
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && tenantId) {
+    whereConditions.push(eq(notifications.tenantId, tenantId));
+  }
+
   const [result] = await db
     .select({ count: sql<number>`count(*)` })
     .from(notifications)
-    .where(
-      and(
-        eq(notifications.tenantId, tenantId),
-        eq(notifications.userId, userId),
-        eq(notifications.isRead, false)
-      )
-    );
+    .where(and(...whereConditions));
 
   return result.count;
 }
@@ -149,8 +177,18 @@ export async function getUnreadCount(
 export async function markAsRead(
   notificationId: string,
   userId: string,
-  tenantId: string
+  tenantId?: string | null
 ): Promise<void> {
+  const whereConditions = [
+    eq(notifications.id, notificationId),
+    eq(notifications.userId, userId), // Security: user can only mark their own notifications
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && tenantId) {
+    whereConditions.push(eq(notifications.tenantId, tenantId));
+  }
+
   await db
     .update(notifications)
     .set({
@@ -158,13 +196,7 @@ export async function markAsRead(
       readAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(notifications.id, notificationId),
-        eq(notifications.tenantId, tenantId),
-        eq(notifications.userId, userId) // Security: user can only mark their own notifications
-      )
-    );
+    .where(and(...whereConditions));
 }
 
 /**
@@ -172,8 +204,18 @@ export async function markAsRead(
  */
 export async function markAllAsRead(
   userId: string,
-  tenantId: string
+  tenantId?: string | null
 ): Promise<void> {
+  const whereConditions = [
+    eq(notifications.userId, userId),
+    eq(notifications.isRead, false),
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && tenantId) {
+    whereConditions.push(eq(notifications.tenantId, tenantId));
+  }
+
   await db
     .update(notifications)
     .set({
@@ -181,13 +223,7 @@ export async function markAllAsRead(
       readAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(
-      and(
-        eq(notifications.tenantId, tenantId),
-        eq(notifications.userId, userId),
-        eq(notifications.isRead, false)
-      )
-    );
+    .where(and(...whereConditions));
 }
 
 /**
@@ -196,16 +232,20 @@ export async function markAllAsRead(
 export async function deleteNotification(
   notificationId: string,
   userId: string,
-  tenantId: string
+  tenantId?: string | null
 ): Promise<void> {
+  const whereConditions = [
+    eq(notifications.id, notificationId),
+    eq(notifications.userId, userId), // Security: user can only delete their own notifications
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in notifications && tenantId) {
+    whereConditions.push(eq(notifications.tenantId, tenantId));
+  }
+
   await db
     .delete(notifications)
-    .where(
-      and(
-        eq(notifications.id, notificationId),
-        eq(notifications.tenantId, tenantId),
-        eq(notifications.userId, userId) // Security: user can only delete their own notifications
-      )
-    );
+    .where(and(...whereConditions));
 }
 

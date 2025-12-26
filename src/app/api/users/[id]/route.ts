@@ -4,7 +4,7 @@ import { getUserWithRoles, updateUser, deleteUser } from '@/core/lib/services/us
 import { getUserTenantId, userHasPermission, userBelongsToTenant, getUserRoles } from '@/core/lib/permissions';
 import { getRoleById } from '@/core/lib/roles';
 import { db } from '@/core/lib/db';
-import { users } from '@/core/lib/db/baseSchema';
+import { users, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
 
 /**
@@ -50,13 +50,16 @@ export async function GET(
       );
     }
     
-    // Tenant isolation check
-    const userTenantId = await getUserTenantId(userId);
-    if (userTenantId !== null && result.user.tenantId !== userTenantId) {
-      return NextResponse.json(
-        { error: 'Forbidden - You can only view users in your tenant' },
-        { status: 403 }
-      );
+    // Tenant isolation check (only if multi-tenancy is enabled)
+    if (MULTI_TENANT_ENABLED && 'tenantId' in result.user) {
+      const userTenantId = await getUserTenantId(userId);
+      const targetUserTenantId = (result.user as any).tenantId;
+      if (userTenantId !== null && targetUserTenantId !== userTenantId) {
+        return NextResponse.json(
+          { error: 'Forbidden - You can only view users in your tenant' },
+          { status: 403 }
+        );
+      }
     }
     
     // Remove password hash and sensitive data from response
@@ -129,13 +132,16 @@ export async function PATCH(
       );
     }
     
-    // Tenant isolation check
-    const userTenantId = await getUserTenantId(userId);
-    if (userTenantId !== null && targetUser[0].tenantId !== userTenantId) {
-      return NextResponse.json(
-        { error: 'Forbidden - You can only update users in your tenant' },
-        { status: 403 }
-      );
+    // Tenant isolation check (only if multi-tenancy is enabled)
+    if (MULTI_TENANT_ENABLED && 'tenantId' in targetUser[0]) {
+      const userTenantId = await getUserTenantId(userId);
+      const targetUserTenantId = (targetUser[0] as any).tenantId;
+      if (userTenantId !== null && targetUserTenantId !== userTenantId) {
+        return NextResponse.json(
+          { error: 'Forbidden - You can only update users in your tenant' },
+          { status: 403 }
+        );
+      }
     }
     
     // Parse and validate request body
@@ -334,15 +340,18 @@ export async function DELETE(
       );
     }
     
-    // Tenant isolation check
-    const userTenantId = await getUserTenantId(userId);
-    console.log('[User Delete] Tenant check:', { userTenantId, targetTenantId: targetUser[0].tenantId });
-    
-    if (userTenantId !== null && targetUser[0].tenantId !== userTenantId) {
-      return NextResponse.json(
-        { error: 'Forbidden - You can only delete users in your tenant' },
-        { status: 403 }
-      );
+    // Tenant isolation check (only if multi-tenancy is enabled)
+    if (MULTI_TENANT_ENABLED && 'tenantId' in targetUser[0]) {
+      const userTenantId = await getUserTenantId(userId);
+      const targetTenantId = (targetUser[0] as any).tenantId;
+      console.log('[User Delete] Tenant check:', { userTenantId, targetTenantId });
+      
+      if (userTenantId !== null && targetTenantId !== userTenantId) {
+        return NextResponse.json(
+          { error: 'Forbidden - You can only delete users in your tenant' },
+          { status: 403 }
+        );
+      }
     }
     
     // Delete user

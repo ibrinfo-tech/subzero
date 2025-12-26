@@ -13,23 +13,76 @@ import {
   char,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
+import { MULTI_TENANT_ENABLED } from '@/core/config/tenantConfig';
+export { MULTI_TENANT_ENABLED };
 
 // ============================================================================
-// 1. AUTHENTICATION CORE TABLES
+// CONDITIONAL MULTI-TENANCY SCHEMA
+// ============================================================================
+// When MULTI_TENANT_ENABLED=true:
+//   - tenants table is created
+//   - tenantId columns are added to relevant tables
+//   - tenant-related indexes and constraints are created
+// When MULTI_TENANT_ENABLED=false:
+//   - NO tenants table
+//   - NO tenantId columns
+//   - NO tenant-related logic
 // ============================================================================
 
-// Note: tenants and roles are referenced before definition, but PostgreSQL allows this
-// We'll define them in the correct order
+// ============================================================================
+// 1. MULTI-TENANT SUPPORT (CONDITIONAL)
+// ============================================================================
 
-// Core identity table - aligned with core.sql
+// Tenants table - ONLY created when multi-tenancy is enabled
+const tenantsTable = pgTable('tenants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 255 }).notNull(),
+  slug: varchar('slug', { length: 100 }).notNull().unique(),
+  settings: jsonb('settings').default({}),
+  status: varchar('status', { length: 20 }).default('active').notNull(), // active, suspended, archived, trial
+  plan: varchar('plan', { length: 50 }).default('free').notNull(), // free, starter, pro, enterprise
+  maxUsers: integer('max_users').default(10),
+  trialEndsAt: timestamp('trial_ends_at'),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
+}, (table) => ({
+  slugIdx: index('idx_tenants_slug').on(table.slug),
+  statusIdx: index('idx_tenants_status').on(table.status),
+  planIdx: index('idx_tenants_plan').on(table.plan),
+}));
+
+export const tenants = (MULTI_TENANT_ENABLED ? tenantsTable : null) as any;
+
+// Track which user belongs to which tenant - ONLY when multi-tenancy is enabled
+const tenantUsersTable = pgTable('tenant_users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleId: uuid('role_id').references(() => roles.id, { onDelete: 'set null' }),
+  isPrimary: boolean('is_primary').default(false).notNull(),
+  joinedAt: timestamp('joined_at').defaultNow().notNull(),
+}, (table) => ({
+  tenantIdx: index('idx_tenant_users_tenant').on(table.tenantId),
+  userIdx: index('idx_tenant_users_user').on(table.userId),
+  tenantUserUnique: unique('tenant_users_tenant_user_unique').on(table.tenantId, table.userId),
+}));
+
+export const tenantUsers = (MULTI_TENANT_ENABLED && MULTI_TENANT_ENABLED ? tenantUsersTable : null) as any;
+
+// ============================================================================
+// 2. AUTHENTICATION CORE TABLES
+// ============================================================================
+
+// Core identity table - with conditional tenantId
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
   email: varchar('email', { length: 255 }).notNull(),
   passwordHash: varchar('password_hash', { length: 255 }),
   fullName: varchar('full_name', { length: 255 }),
   avatarUrl: text('avatar_url'),
-  // Extended profile details (aligned with core.sql)
+  // Extended profile details
   phoneNumber: varchar('phone_number', { length: 30 }),
   jobTitle: varchar('job_title', { length: 100 }),
   department: varchar('department', { length: 100 }),
@@ -56,14 +109,30 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),
-}, (table) => ({
-  emailIdx: index('idx_users_email').on(table.email),
-  tenantIdx: index('idx_users_tenant').on(table.tenantId),
-  tenantEmailUnique: unique('users_tenant_email_unique').on(table.tenantId, table.email),
-  deletedIdx: index('idx_users_deleted').on(table.deletedAt),
-  statusIdx: index('idx_users_status').on(table.status),
-  lockedIdx: index('idx_users_locked').on(table.lockedUntil),
-}));
+  // Conditionally include tenantId column
+  ...(MULTI_TENANT_ENABLED
+    ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) }
+    : {}),
+} as any, (table: any) => {
+  // Build indexes conditionally
+  const indexes: Record<string, any> = {
+    emailIdx: index('idx_users_email').on(table.email),
+    deletedIdx: index('idx_users_deleted').on(table.deletedAt),
+    statusIdx: index('idx_users_status').on(table.status),
+    lockedIdx: index('idx_users_locked').on(table.lockedUntil),
+  };
+
+  // Conditionally add tenant-related indexes
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_users_tenant').on(table.tenantId);
+    indexes.tenantEmailUnique = unique('users_tenant_email_unique').on(
+      table.tenantId,
+      table.email
+    );
+  }
+
+  return indexes;
+});
 
 // Supports email/password AND external login (Google, GitHub, Azure AD, etc.)
 export const authProviders = pgTable('auth_providers', {
@@ -123,10 +192,8 @@ export const passwordResetTokens = pgTable('password_reset_tokens', {
   expiresIdx: index('idx_password_reset_tokens_expires').on(table.expiresAt),
 }));
 
-// Note: Email verification now uses JWT tokens (no database storage needed)
-
 // ============================================================================
-// 2. RBAC (Role-Based Access Control) - ENHANCED VERSION
+// 3. RBAC (Role-Based Access Control)
 // ============================================================================
 
 // High-level functional areas of your SaaS
@@ -146,9 +213,10 @@ export const modules = pgTable('modules', {
   codeIdx: index('idx_modules_code').on(table.code),
 }));
 
-export const moduleLabels = pgTable('module_labels', {
+// Module labels - CONDITIONAL (requires tenantId)
+const moduleLabelsTable = pgTable('module_labels', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
   moduleId: uuid('module_id').notNull().references(() => modules.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 100 }).notNull(),
   color: varchar('color', { length: 20 }).notNull().default('#3b82f6'),
@@ -162,18 +230,32 @@ export const moduleLabels = pgTable('module_labels', {
   tenantModuleNameUnique: unique('module_labels_tenant_module_name_unique').on(table.tenantId, table.moduleId, table.name),
 }));
 
-// Permission groups (reusable permission sets) - from core.sql
-export const permissionGroups = pgTable('permission_groups', {
+export const moduleLabels = (MULTI_TENANT_ENABLED && MULTI_TENANT_ENABLED ? moduleLabelsTable : null) as any;
+
+// Permission groups (reusable permission sets) - with conditional tenantId
+const permissionGroupsTable = pgTable('permission_groups', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
+  // Use a nullable tenantId column here, we'll handle the actual inclusion via MULTI_TENANT_ENABLED if needed
+  // but to keep types stable we can just include it in the base definition
+  ...(MULTI_TENANT_ENABLED ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) } : {}),
   name: varchar('name', { length: 100 }).notNull(),
   code: varchar('code', { length: 50 }).notNull(),
   description: text('description'),
   isSystem: boolean('is_system').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  tenantCodeUnique: unique('permission_groups_tenant_code_unique').on(table.tenantId, table.code),
-}));
+} as any, (table) => {
+  const indexes: Record<string, any> = {};
+
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantCodeUnique = unique('permission_groups_tenant_code_unique').on(table.tenantId, table.code);
+  } else {
+    indexes.codeUnique = unique('permission_groups_code_unique').on(table.code);
+  }
+
+  return indexes;
+});
+
+export const permissionGroups = permissionGroupsTable as any;
 
 // Permission group items (many-to-many between groups and permissions)
 export const permissionGroupItems = pgTable('permission_group_items', {
@@ -185,7 +267,7 @@ export const permissionGroupItems = pgTable('permission_group_items', {
   groupPermissionUnique: unique('permission_group_items_unique').on(table.groupId, table.permissionId),
 }));
 
-// Define atomic permissions - aligned with core.sql (module:action format)
+// Define atomic permissions
 export const permissions = pgTable('permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
   code: varchar('code', { length: 100 }).notNull().unique(), // Format: module:action (e.g., users:create)
@@ -205,10 +287,9 @@ export const permissions = pgTable('permissions', {
   dangerousIdx: index('idx_permissions_dangerous').on(table.isDangerous),
 }));
 
-// Roles can be global (system) or tenant-specific - aligned with core.sql
+// Roles - with conditional tenantId
 export const roles = pgTable('roles', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
   parentRoleId: uuid('parent_role_id'), // For hierarchical roles
   name: varchar('name', { length: 100 }).notNull(),
   code: varchar('code', { length: 50 }).notNull(),
@@ -222,21 +303,34 @@ export const roles = pgTable('roles', {
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-}, (table) => ({
-  tenantIdx: index('idx_roles_tenant').on(table.tenantId),
-  codeIdx: index('idx_roles_code').on(table.code),
-  statusIdx: index('idx_roles_status').on(table.status),
-  parentIdx: index('idx_roles_parent').on(table.parentRoleId),
-  priorityIdx: index('idx_roles_priority').on(table.priority),
-  tenantCodeUnique: unique('roles_tenant_code_unique').on(table.tenantId, table.code),
-}));
+  // Conditionally include tenantId column
+  ...(MULTI_TENANT_ENABLED
+    ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) }
+    : {}),
+} as any, (table: any) => {
+  const indexes: Record<string, any> = {
+    codeIdx: index('idx_roles_code').on(table.code),
+    statusIdx: index('idx_roles_status').on(table.status),
+    parentIdx: index('idx_roles_parent').on(table.parentRoleId),
+    priorityIdx: index('idx_roles_priority').on(table.priority),
+  };
 
-// User-Role assignments (many-to-many with temporal access) - from core.sql
-export const userRoles = pgTable('user_roles', {
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_roles_tenant').on(table.tenantId);
+    indexes.tenantCodeUnique = unique('roles_tenant_code_unique').on(table.tenantId, table.code);
+  } else {
+    indexes.codeUnique = unique('roles_code_unique').on(table.code);
+  }
+
+  return indexes;
+});
+
+// User-Role assignments - CONDITIONAL (requires tenantId when multi-tenant)
+const userRolesMultiTable = pgTable('user_roles', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
   grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
   validFrom: timestamp('valid_from').defaultNow(),
   validUntil: timestamp('valid_until'),
@@ -250,6 +344,25 @@ export const userRoles = pgTable('user_roles', {
   temporalIdx: index('idx_user_roles_temporal').on(table.validFrom, table.validUntil),
   userRoleTenantUnique: unique('user_roles_user_role_tenant_unique').on(table.userId, table.roleId, table.tenantId),
 }));
+
+const userRolesSingleTable = pgTable('user_roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  validFrom: timestamp('valid_from').defaultNow(),
+  validUntil: timestamp('valid_until'),
+  isActive: boolean('is_active').default(true).notNull(),
+  metadata: jsonb('metadata').default({}),
+  assignedAt: timestamp('assigned_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('idx_user_roles_user').on(table.userId),
+  roleIdx: index('idx_user_roles_role').on(table.roleId),
+  temporalIdx: index('idx_user_roles_temporal').on(table.validFrom, table.validUntil),
+  userRoleUnique: unique('user_roles_user_role_unique').on(table.userId, table.roleId),
+}));
+
+export const userRoles = (MULTI_TENANT_ENABLED ? userRolesMultiTable : userRolesSingleTable) as any;
 
 // Mapping between roles and permissions with conditions
 export const rolePermissions = pgTable('role_permissions', {
@@ -265,11 +378,11 @@ export const rolePermissions = pgTable('role_permissions', {
   rolePermissionUnique: unique('role_permissions_role_permission_unique').on(table.roleId, table.permissionId),
 }));
 
-// Resource-level permissions (object-level access control) - from core.sql
-export const resourcePermissions = pgTable('resource_permissions', {
+// Resource-level permissions - CONDITIONAL (requires tenantId)
+const resourcePermissionsMultiTable = pgTable('resource_permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
   resourceType: varchar('resource_type', { length: 50 }).notNull(),
   resourceId: uuid('resource_id').notNull(),
   permissionCode: varchar('permission_code', { length: 100 }).notNull(),
@@ -285,11 +398,31 @@ export const resourcePermissions = pgTable('resource_permissions', {
   userResourcePermUnique: unique('resource_permissions_unique').on(table.userId, table.resourceType, table.resourceId, table.permissionCode),
 }));
 
-// Sessions (track active user sessions) - from core.sql
-export const sessions = pgTable('sessions', {
+const resourcePermissionsSingleTable = pgTable('resource_permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  resourceType: varchar('resource_type', { length: 50 }).notNull(),
+  resourceId: uuid('resource_id').notNull(),
+  permissionCode: varchar('permission_code', { length: 100 }).notNull(),
+  grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  validFrom: timestamp('valid_from').defaultNow(),
+  validUntil: timestamp('valid_until'),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index('idx_resource_permissions_user').on(table.userId),
+  resourceIdx: index('idx_resource_permissions_resource').on(table.resourceType, table.resourceId),
+  temporalIdx: index('idx_resource_permissions_temporal').on(table.validFrom, table.validUntil),
+  userResourcePermUnique: unique('resource_permissions_unique').on(table.userId, table.resourceType, table.resourceId, table.permissionCode),
+}));
+
+export const resourcePermissions = (MULTI_TENANT_ENABLED ? resourcePermissionsMultiTable : resourcePermissionsSingleTable) as any;
+
+// Sessions - CONDITIONAL (requires tenantId)
+const sessionsMultiTable = pgTable('sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
   tokenHash: text('token_hash').notNull().unique(),
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
@@ -303,52 +436,33 @@ export const sessions = pgTable('sessions', {
   activityIdx: index('idx_sessions_activity').on(table.lastActivity),
 }));
 
-// ============================================================================
-// 3. MULTI-TENANT SUPPORT
-// ============================================================================
-
-// Tenants (organizations / companies) - aligned with core.sql
-export const tenants = pgTable('tenants', {
+const sessionsSingleTable = pgTable('sessions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 255 }).notNull(),
-  slug: varchar('slug', { length: 100 }).notNull().unique(),
-  settings: jsonb('settings').default({}),
-  status: varchar('status', { length: 20 }).default('active').notNull(), // active, suspended, archived, trial
-  plan: varchar('plan', { length: 50 }).default('free').notNull(), // free, starter, pro, enterprise
-  maxUsers: integer('max_users').default(10),
-  trialEndsAt: timestamp('trial_ends_at'),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tokenHash: text('token_hash').notNull().unique(),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  lastActivity: timestamp('last_activity').defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  deletedAt: timestamp('deleted_at'),
 }, (table) => ({
-  slugIdx: index('idx_tenants_slug').on(table.slug),
-  statusIdx: index('idx_tenants_status').on(table.status),
-  planIdx: index('idx_tenants_plan').on(table.plan),
+  userIdx: index('idx_sessions_user').on(table.userId),
+  expiresIdx: index('idx_sessions_expires').on(table.expiresAt),
+  activityIdx: index('idx_sessions_activity').on(table.lastActivity),
 }));
 
-// Track which user belongs to which tenant
-export const tenantUsers = pgTable('tenant_users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  roleId: uuid('role_id').references(() => roles.id, { onDelete: 'set null' }),
-  isPrimary: boolean('is_primary').default(false).notNull(),
-  joinedAt: timestamp('joined_at').defaultNow().notNull(),
-}, (table) => ({
-  tenantIdx: index('idx_tenant_users_tenant').on(table.tenantId),
-  userIdx: index('idx_tenant_users_user').on(table.userId),
-  tenantUserUnique: unique('tenant_users_tenant_user_unique').on(table.tenantId, table.userId),
-}));
+export const sessions = (MULTI_TENANT_ENABLED ? sessionsMultiTable : sessionsSingleTable) as any;
 
 // ============================================================================
 // 4. AUDIT LOG
 // ============================================================================
 
+// AUDIT LOG
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id'),
-  tenantId: uuid('tenant_id'),
+  ...(MULTI_TENANT_ENABLED ? { tenantId: uuid('tenant_id') } : {}),
   action: varchar('action', { length: 100 }).notNull(),
   resourceType: varchar('resource_type', { length: 100 }),
   resourceId: uuid('resource_id'),
@@ -356,12 +470,19 @@ export const auditLogs = pgTable('audit_logs', {
   ipAddress: varchar('ip_address', { length: 45 }),
   userAgent: text('user_agent'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  userIdx: index('idx_audit_logs_user').on(table.userId),
-  tenantIdx: index('idx_audit_logs_tenant').on(table.tenantId),
-  resourceIdx: index('idx_audit_logs_resource').on(table.resourceType, table.resourceId),
-  createdIdx: index('idx_audit_logs_created').on(table.createdAt),
-}));
+} as any, (table) => {
+  const indexes: Record<string, any> = {
+    userIdx: index('idx_audit_logs_user').on(table.userId),
+    resourceIdx: index('idx_audit_logs_resource').on(table.resourceType, table.resourceId),
+    createdIdx: index('idx_audit_logs_created').on(table.createdAt),
+  };
+
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_audit_logs_tenant').on(table.tenantId);
+  }
+
+  return indexes;
+});
 
 // ============================================================================
 // 5. SYSTEM SETTINGS
@@ -386,21 +507,21 @@ export const systemSettings = pgTable('system_settings', {
   categorySubcategoryIdx: index('idx_system_settings_category_subcategory').on(table.category, table.subcategory),
 }));
 
-// In-app notifications table - generic notification system for all modules
-export const notifications = pgTable('notifications', {
+// In-app notifications - CONDITIONAL (requires tenantId)
+const notificationsMultiTable = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenantsTable.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 255 }).notNull(),
   message: text('message').notNull(),
   type: varchar('type', { length: 50 }).default('info').notNull(), // info, success, warning, error
-  category: varchar('category', { length: 100 }), // Module-specific category (e.g., 'task_assigned', 'project_updated')
-  actionUrl: text('action_url'), // Link to related resource (e.g., '/tasks/123')
-  actionLabel: varchar('action_label', { length: 100 }), // "View Task", "Go to Project"
-  resourceType: varchar('resource_type', { length: 50 }), // 'task', 'project', 'note', etc.
-  resourceId: uuid('resource_id'), // ID of related resource
-  priority: varchar('priority', { length: 20 }).default('normal'), // low, normal, high, urgent
-  metadata: jsonb('metadata').default({}), // Additional context data
+  category: varchar('category', { length: 100 }), // Module-specific category
+  actionUrl: text('action_url'),
+  actionLabel: varchar('action_label', { length: 100 }),
+  resourceType: varchar('resource_type', { length: 50 }),
+  resourceId: uuid('resource_id'),
+  priority: varchar('priority', { length: 20 }).default('normal'),
+  metadata: jsonb('metadata').default({}),
   isRead: boolean('is_read').default(false).notNull(),
   readAt: timestamp('read_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -411,20 +532,49 @@ export const notifications = pgTable('notifications', {
   resourceIdx: index('idx_notifications_resource').on(table.resourceType, table.resourceId),
 }));
 
+const notificationsSingleTable = pgTable('notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar('title', { length: 255 }).notNull(),
+  message: text('message').notNull(),
+  type: varchar('type', { length: 50 }).default('info').notNull(),
+  category: varchar('category', { length: 100 }),
+  actionUrl: text('action_url'),
+  actionLabel: varchar('action_label', { length: 100 }),
+  resourceType: varchar('resource_type', { length: 50 }),
+  resourceId: uuid('resource_id'),
+  priority: varchar('priority', { length: 20 }).default('normal'),
+  metadata: jsonb('metadata').default({}),
+  isRead: boolean('is_read').default(false).notNull(),
+  readAt: timestamp('read_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  userUnreadIdx: index('idx_notifications_user_unread').on(table.userId, table.isRead, table.createdAt),
+  resourceIdx: index('idx_notifications_resource').on(table.resourceType, table.resourceId),
+}));
+
+export const notifications = (MULTI_TENANT_ENABLED ? notificationsMultiTable : notificationsSingleTable) as any;
+
 // ============================================================================
 // RELATIONS
 // ============================================================================
 
 export const usersRelations = relations(users, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [users.tenantId],
-    references: [tenants.id],
-  }),
+  // Conditionally include tenant relation
+  ...(MULTI_TENANT_ENABLED && tenants && 'tenantId' in users
+    ? {
+      tenant: one(tenants!, {
+        fields: [users.tenantId],
+        references: [tenants!.id],
+      }),
+    }
+    : {}),
   authProviders: many(authProviders),
   refreshTokens: many(refreshTokens),
   accessTokens: many(accessTokens),
   passwordResetTokens: many(passwordResetTokens),
-  tenantUsers: many(tenantUsers),
+  ...(MULTI_TENANT_ENABLED && tenantUsers ? { tenantUsers: many(tenantUsers) } : {}),
   userRoles: many(userRoles),
   resourcePermissions: many(resourcePermissions),
   sessions: many(sessions),
@@ -432,14 +582,18 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 }));
 
 export const modulesRelations = relations(modules, ({ many }) => ({
-  // Modules are now just organizational units, not directly linked to permissions
+  ...(MULTI_TENANT_ENABLED && moduleLabels ? { labels: many(moduleLabels) } : {}),
 }));
 
 export const permissionGroupsRelations = relations(permissionGroups, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [permissionGroups.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && tenants && 'tenantId' in permissionGroups
+    ? {
+      tenant: one(tenants!, {
+        fields: [permissionGroups.tenantId],
+        references: [tenants!.id],
+      }),
+    }
+    : {}),
   items: many(permissionGroupItems),
 }));
 
@@ -460,17 +614,21 @@ export const permissionsRelations = relations(permissions, ({ many }) => ({
 }));
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
-  tenant: one(tenants, {
-    fields: [roles.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && 'tenantId' in roles
+    ? {
+      tenant: one(tenantsTable, {
+        fields: [roles.tenantId],
+        references: [tenantsTable.id],
+      }),
+    }
+    : {}),
   parentRole: one(roles, {
     fields: [roles.parentRoleId],
     references: [roles.id],
   }),
   rolePermissions: many(rolePermissions),
   userRoles: many(userRoles),
-  tenantUsers: many(tenantUsers),
+  ...(MULTI_TENANT_ENABLED && tenantUsers ? { tenantUsers: many(tenantUsers) } : {}),
   childRoles: many(roles),
 }));
 
@@ -483,10 +641,14 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
     fields: [userRoles.roleId],
     references: [roles.id],
   }),
-  tenant: one(tenants, {
-    fields: [userRoles.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && 'tenantId' in userRoles
+    ? {
+      tenant: one(tenantsTable, {
+        fields: [userRoles.tenantId],
+        references: [tenantsTable.id],
+      }),
+    }
+    : {}),
 }));
 
 export const rolePermissionsRelations = relations(rolePermissions, ({ one }) => ({
@@ -505,42 +667,56 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     fields: [sessions.userId],
     references: [users.id],
   }),
-  tenant: one(tenants, {
-    fields: [sessions.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && 'tenantId' in sessions
+    ? {
+      tenant: one(tenantsTable, {
+        fields: [sessions.tenantId],
+        references: [tenantsTable.id],
+      }),
+    }
+    : {}),
 }));
 
-export const tenantsRelations = relations(tenants, ({ many }) => ({
-  users: many(users),
-  roles: many(roles),
-  tenantUsers: many(tenantUsers),
-  userRoles: many(userRoles),
-  resourcePermissions: many(resourcePermissions),
-  sessions: many(sessions),
-  notifications: many(notifications),
-}));
+// Conditionally export tenants relations
+export const tenantsRelations = MULTI_TENANT_ENABLED
+  ? relations(tenantsTable, ({ many }) => ({
+    users: many(users),
+    roles: many(roles),
+    tenantUsers: many(tenantUsersTable),
+    userRoles: many(userRoles),
+    resourcePermissions: many(resourcePermissions),
+    sessions: many(sessions),
+    notifications: many(notifications),
+    moduleLabels: many(moduleLabelsTable),
+  }))
+  : null as any;
 
-export const tenantUsersRelations = relations(tenantUsers, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [tenantUsers.tenantId],
-    references: [tenants.id],
-  }),
-  user: one(users, {
-    fields: [tenantUsers.userId],
-    references: [users.id],
-  }),
-  role: one(roles, {
-    fields: [tenantUsers.roleId],
-    references: [roles.id],
-  }),
-}));
+export const tenantUsersRelations = MULTI_TENANT_ENABLED
+  ? relations(tenantUsersTable, ({ one }) => ({
+    tenant: one(tenantsTable, {
+      fields: [tenantUsersTable.tenantId],
+      references: [tenantsTable.id],
+    }),
+    user: one(users, {
+      fields: [tenantUsersTable.userId],
+      references: [users.id],
+    }),
+    role: one(roles, {
+      fields: [tenantUsersTable.roleId],
+      references: [roles.id],
+    }),
+  }))
+  : null as any;
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [notifications.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && 'tenantId' in notifications
+    ? {
+      tenant: one(tenantsTable, {
+        fields: [notifications.tenantId],
+        references: [tenantsTable.id],
+      }),
+    }
+    : {}),
   user: one(users, {
     fields: [notifications.userId],
     references: [users.id],
@@ -563,12 +739,6 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type NewPasswordResetToken = typeof passwordResetTokens.$inferInsert;
 export type Module = typeof modules.$inferSelect;
 export type NewModule = typeof modules.$inferInsert;
-export type ModuleLabel = typeof moduleLabels.$inferSelect;
-export type NewModuleLabel = typeof moduleLabels.$inferInsert;
-export type PermissionGroup = typeof permissionGroups.$inferSelect;
-export type NewPermissionGroup = typeof permissionGroups.$inferInsert;
-export type PermissionGroupItem = typeof permissionGroupItems.$inferSelect;
-export type NewPermissionGroupItem = typeof permissionGroupItems.$inferInsert;
 export type Permission = typeof permissions.$inferSelect;
 export type NewPermission = typeof permissions.$inferInsert;
 export type Role = typeof roles.$inferSelect;
@@ -581,13 +751,41 @@ export type ResourcePermission = typeof resourcePermissions.$inferSelect;
 export type NewResourcePermission = typeof resourcePermissions.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
-export type Tenant = typeof tenants.$inferSelect;
-export type NewTenant = typeof tenants.$inferInsert;
-export type TenantUser = typeof tenantUsers.$inferSelect;
-export type NewTenantUser = typeof tenantUsers.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+// Conditional types for multi-tenant tables
+export type Tenant = typeof tenantsTable.$inferSelect;
+export type NewTenant = typeof tenantsTable.$inferInsert;
+export type TenantUser = typeof tenantUsersTable.$inferSelect;
+export type NewTenantUser = typeof tenantUsersTable.$inferInsert;
+export type ModuleLabel = typeof moduleLabelsTable.$inferSelect;
+export type NewModuleLabel = typeof moduleLabelsTable.$inferInsert;
+export type PermissionGroup = typeof permissionGroups.$inferSelect;
+export type NewPermissionGroup = typeof permissionGroups.$inferInsert;
+export type PermissionGroupItem = typeof permissionGroupItems.$inferSelect;
+export type NewPermissionGroupItem = typeof permissionGroupItems.$inferInsert;
+
+// ============================================================================
+// TYPE GUARDS & UTILITIES
+// ============================================================================
+
+/**
+ * Type guard to check if an object has a tenantId property
+ */
+export function hasTenantId<T extends Record<string, any>>(
+  obj: T
+): obj is T & { tenantId: string | null } {
+  return 'tenantId' in obj;
+}
+
+/**
+ * Type guard to check if multi-tenancy is enabled at runtime
+ */
+export function isMultiTenantMode(): boolean {
+  return MULTI_TENANT_ENABLED;
+}

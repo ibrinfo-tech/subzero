@@ -19,8 +19,8 @@ export function ReferenceFieldCell({ field, referenceId }: ReferenceFieldCellPro
 
   if (loading) {
     return (
-      <span className="text-muted-foreground text-sm">
-        <LoadingSpinner size="sm" className="inline mr-1" />
+      <span className="text-muted-foreground text-sm flex items-center gap-1">
+        <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
         Loading...
       </span>
     );

@@ -259,39 +259,46 @@ export async function createCustomField(
       throw new Error('Reference fields require referenceModule, referenceColumn, and referenceLabel in metadata');
     }
 
+    // At this point, we know metadata exists and has the required properties
+    const metadata = input.metadata as {
+      referenceModule: string;
+      referenceColumn: string;
+      referenceLabel: string;
+    };
+
     // Validate that the referenced module exists and supports custom fields
     const referencedModule = await db
       .select()
       .from(modules)
-      .where(eq(modules.code, input.metadata.referenceModule.toUpperCase()))
+      .where(eq(modules.code, metadata.referenceModule.toUpperCase()))
       .limit(1);
 
     if (referencedModule.length === 0) {
-      throw new Error(`Referenced module "${input.metadata.referenceModule}" not found`);
+      throw new Error(`Referenced module "${metadata.referenceModule}" not found`);
     }
 
-    const referencedModuleConfig = moduleRegistry.getModule(input.metadata.referenceModule.toLowerCase());
+    const referencedModuleConfig = moduleRegistry.getModule(metadata.referenceModule.toLowerCase());
     if (!referencedModuleConfig || (referencedModuleConfig.config as any).custom_field !== true) {
-      throw new Error(`Referenced module "${input.metadata.referenceModule}" does not support custom fields`);
+      throw new Error(`Referenced module "${metadata.referenceModule}" does not support custom fields`);
     }
 
     // Validate that the reference column exists and is unique
     try {
-      const columns = await getModuleTableColumns(input.metadata.referenceModule);
+      const columns = await getModuleTableColumns(metadata.referenceModule);
       
-      const referenceColumn = columns.find(col => col.name === input.metadata.referenceColumn);
+      const referenceColumn = columns.find((col: { name: string; isUnique: boolean }) => col.name === metadata.referenceColumn);
       if (!referenceColumn) {
-        throw new Error(`Column "${input.metadata.referenceColumn}" does not exist in module "${input.metadata.referenceModule}"`);
+        throw new Error(`Column "${metadata.referenceColumn}" does not exist in module "${metadata.referenceModule}"`);
       }
 
       if (!referenceColumn.isUnique) {
-        throw new Error(`Column "${input.metadata.referenceColumn}" must be a unique column (primary key or unique constraint) in module "${input.metadata.referenceModule}"`);
+        throw new Error(`Column "${metadata.referenceColumn}" must be a unique column (primary key or unique constraint) in module "${metadata.referenceModule}"`);
       }
 
       // Validate that the reference label column exists
-      const labelColumn = columns.find(col => col.name === input.metadata.referenceLabel);
+      const labelColumn = columns.find((col: { name: string }) => col.name === metadata.referenceLabel);
       if (!labelColumn) {
-        throw new Error(`Label column "${input.metadata.referenceLabel}" does not exist in module "${input.metadata.referenceModule}"`);
+        throw new Error(`Label column "${metadata.referenceLabel}" does not exist in module "${metadata.referenceModule}"`);
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes('not found')) {

@@ -1,5 +1,5 @@
 import { db } from '@/core/lib/db';
-import { roles, userRoles } from '@/core/lib/db/baseSchema';
+import { roles, userRoles, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, or, like, isNull, desc, count, lte, gte, sql, ne } from 'drizzle-orm';
 import type { Role, NewRole } from '@/core/lib/db/baseSchema';
 import type { CreateRoleInput, UpdateRoleInput } from '@/core/lib/validations/roles';
@@ -30,11 +30,14 @@ export async function getRoles(options?: {
     );
   }
   
-  if (tenantId !== undefined) {
-    if (tenantId === null) {
-      conditions.push(isNull(roles.tenantId));
-    } else {
-      conditions.push(eq(roles.tenantId, tenantId));
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in roles) {
+    if (tenantId !== undefined) {
+      if (tenantId === null) {
+        conditions.push(isNull(roles.tenantId));
+      } else {
+        conditions.push(eq(roles.tenantId, tenantId));
+      }
     }
   }
   
@@ -111,21 +114,27 @@ export async function getRoleWithUserCount(id: string) {
  * Create a new role
  */
 export async function createRole(data: CreateRoleInput, createdBy: string): Promise<Role> {
+  const roleData: any = {
+    name: data.name,
+    code: data.code.toUpperCase(),
+    description: data.description || null,
+    parentRoleId: data.parentRoleId || null,
+    isSystem: data.isSystem || false,
+    isDefault: data.isDefault || false,
+    priority: data.priority || 0,
+    color: data.color || null,
+    status: data.status || 'active',
+    metadata: {},
+  };
+
+  // Only include tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in roles) {
+    roleData.tenantId = data.tenantId || null;
+  }
+
   const result = await db
     .insert(roles)
-    .values({
-      name: data.name,
-      code: data.code.toUpperCase(),
-      description: data.description || null,
-      tenantId: data.tenantId || null,
-      parentRoleId: data.parentRoleId || null,
-      isSystem: data.isSystem || false,
-      isDefault: data.isDefault || false,
-      priority: data.priority || 0,
-      color: data.color || null,
-      status: data.status || 'active',
-      metadata: {},
-    })
+    .values(roleData)
     .returning();
   
   return result[0];
@@ -244,16 +253,20 @@ export async function getRoleUserCount(roleId: string): Promise<number> {
  * Get system roles (global roles)
  */
 export async function getSystemRoles(): Promise<Role[]> {
+  const whereConditions = [
+    eq(roles.isSystem, true),
+    eq(roles.status, 'active'),
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in roles) {
+    whereConditions.push(isNull(roles.tenantId));
+  }
+
   const result = await db
     .select()
     .from(roles)
-    .where(
-      and(
-        eq(roles.isSystem, true),
-        isNull(roles.tenantId),
-        eq(roles.status, 'active')
-      )
-    )
+    .where(and(...whereConditions))
     .orderBy(desc(roles.priority));
 
   return result;
@@ -263,6 +276,16 @@ export async function getSystemRoles(): Promise<Role[]> {
  * Get tenant-specific roles
  */
 export async function getTenantRoles(tenantId: string): Promise<Role[]> {
+  if (!MULTI_TENANT_ENABLED || !('tenantId' in roles)) {
+    // In single-tenant mode, return all active roles
+    const result = await db
+      .select()
+      .from(roles)
+      .where(eq(roles.status, 'active'))
+      .orderBy(desc(roles.priority));
+    return result;
+  }
+
   const result = await db
     .select()
     .from(roles)
