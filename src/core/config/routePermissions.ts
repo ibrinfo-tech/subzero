@@ -38,6 +38,7 @@ export const routePermissions: RoutePermissionConfig[] = [
   { route: '/settings/notification-methods', permission: 'settings:notification-methods:read', exact: true },
   { route: '/settings/smtp-settings', permission: 'settings:smtp-settings:read', exact: true },
   { route: '/settings/custom-fields', permission: 'settings:custom-fields:read', exact: true },
+  { route: '/settings/sidebar-settings', permission: 'settings:sidebar-settings:read', exact: true },
 ];
 
 /**

@@ -305,6 +305,20 @@ async function seed() {
       { code: 'settings:read', name: 'View Settings', module: 'settings', action: 'read', resource: 'settings', isDangerous: false, requiresMfa: false },
       { code: 'settings:update', name: 'Update Settings', module: 'settings', action: 'update', resource: 'settings', isDangerous: false, requiresMfa: false },
       { code: 'settings:*', name: 'All Settings Permissions', module: 'settings', action: 'manage', resource: 'settings', isDangerous: false, requiresMfa: false },
+      
+      // Settings Submenus
+      { code: 'settings:general:read', name: 'View General Settings', module: 'settings', action: 'read', resource: 'settings:general', isDangerous: false, requiresMfa: false },
+      { code: 'settings:general:update', name: 'Update General Settings', module: 'settings', action: 'update', resource: 'settings:general', isDangerous: false, requiresMfa: false },
+      { code: 'settings:registration:read', name: 'View Registration Settings', module: 'settings', action: 'read', resource: 'settings:registration', isDangerous: false, requiresMfa: false },
+      { code: 'settings:registration:update', name: 'Update Registration Settings', module: 'settings', action: 'update', resource: 'settings:registration', isDangerous: false, requiresMfa: false },
+      { code: 'settings:notification-methods:read', name: 'View Notification Methods', module: 'settings', action: 'read', resource: 'settings:notification-methods', isDangerous: false, requiresMfa: false },
+      { code: 'settings:notification-methods:update', name: 'Update Notification Methods', module: 'settings', action: 'update', resource: 'settings:notification-methods', isDangerous: false, requiresMfa: false },
+      { code: 'settings:smtp-settings:read', name: 'View SMTP Settings', module: 'settings', action: 'read', resource: 'settings:smtp-settings', isDangerous: false, requiresMfa: false },
+      { code: 'settings:smtp-settings:update', name: 'Update SMTP Settings', module: 'settings', action: 'update', resource: 'settings:smtp-settings', isDangerous: false, requiresMfa: false },
+      { code: 'settings:custom-fields:read', name: 'View Custom Fields', module: 'settings', action: 'read', resource: 'settings:custom-fields', isDangerous: false, requiresMfa: false },
+      { code: 'settings:custom-fields:update', name: 'Update Custom Fields', module: 'settings', action: 'update', resource: 'settings:custom-fields', isDangerous: false, requiresMfa: false },
+      { code: 'settings:sidebar-settings:read', name: 'View Sidebar Settings', module: 'settings', action: 'read', resource: 'settings:sidebar-settings', isDangerous: false, requiresMfa: false },
+      { code: 'settings:sidebar-settings:write', name: 'Update Sidebar Settings', module: 'settings', action: 'update', resource: 'settings:sidebar-settings', isDangerous: false, requiresMfa: false },
 
       // System
       { code: 'system:*', name: 'System Administrator', module: 'system', action: 'manage', resource: null, isDangerous: true, requiresMfa: true },

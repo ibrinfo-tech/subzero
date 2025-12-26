@@ -38,35 +38,86 @@ export async function GET(request: NextRequest) {
 
     // Get all active modules from database
     const { db } = await import('@/core/lib/db');
-    const { modules } = await import('@/core/lib/db/baseSchema');
+    const { modules, systemSettings } = await import('@/core/lib/db/baseSchema');
     const { eq } = await import('drizzle-orm');
 
-    const allModules = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.isActive, true))
-      .orderBy(modules.sortOrder);
+    // Check if custom sidebar menu order exists and get modules in parallel
+    // This reduces the number of sequential database queries
+    const [customOrder, allModules] = await Promise.all([
+      db
+        .select()
+        .from(systemSettings)
+        .where(eq(systemSettings.settingKey, 'sidebar_menu_order'))
+        .limit(1),
+      db
+        .select()
+        .from(modules)
+        .where(eq(modules.isActive, true))
+        .orderBy(modules.sortOrder),
+    ]);
 
-    // Build navigation from modules (exclude profile module - it should be accessible to all users for their own profile)
-    const navigationItems = allModules
-      .filter(module => module.code.toLowerCase() !== 'profile')
-      .map(module => {
-        const moduleCode = module.code.toLowerCase();
-        let path = `/${moduleCode}`;
-        
-        // Map core modules to their correct paths
-        if (moduleCode === 'dashboard') path = '/dashboard';
-        else if (moduleCode === 'users') path = '/users';
-        else if (moduleCode === 'roles') path = '/roles';
-        else if (moduleCode === 'settings') path = '/settings/general';
+    let navigationItems: Array<{ label: string; path: string; icon: string; order: number; moduleId?: string }> = [];
 
-        return {
-          label: module.name,
-          path,
-          icon: module.icon || 'Box',
-          order: module.sortOrder || 999,
-        };
-      });
+    if (customOrder.length > 0) {
+      try {
+        // Use custom order
+        const customMenuItems = JSON.parse(customOrder[0].settingValue) as Array<{
+          id: string;
+          label: string;
+          path: string;
+          icon?: string;
+          order: number;
+        }>;
+
+        // Create a map of module IDs to module data
+        const moduleMap = new Map(allModules.map(m => [m.id, m]));
+
+        // Build navigation from custom order, filtering out inactive modules
+        navigationItems = customMenuItems
+          .filter(item => {
+            const module = moduleMap.get(item.id);
+            return module && module.isActive;
+          })
+          .map(item => ({
+            label: item.label,
+            path: item.path,
+            icon: item.icon || 'Box',
+            order: item.order,
+            moduleId: item.id,
+          }));
+      } catch (error) {
+        console.error('Failed to parse custom menu order, using default:', error);
+        // Fall through to default order
+      }
+    }
+
+    // If no custom order or parsing failed, use default order from modules
+    if (navigationItems.length === 0) {
+      // Build navigation from modules (exclude profile module - it should be accessible to all users for their own profile)
+      navigationItems = allModules
+        .filter(module => module.code.toLowerCase() !== 'profile')
+        .map(module => {
+          const moduleCode = module.code.toLowerCase();
+          let path = `/${moduleCode}`;
+          
+          // Map core modules to their correct paths
+          if (moduleCode === 'dashboard') path = '/dashboard';
+          else if (moduleCode === 'users') path = '/users';
+          else if (moduleCode === 'roles') path = '/roles';
+          else if (moduleCode === 'settings') path = '/settings/general';
+
+          return {
+            label: module.name,
+            path,
+            icon: module.icon || 'Box',
+            order: module.sortOrder || 999,
+            moduleId: module.id,
+          };
+        });
+    }
+
+    // Sort by order
+    navigationItems.sort((a, b) => a.order - b.order);
 
     // If Super Admin, return all navigation
     if (isSuperAdmin) {

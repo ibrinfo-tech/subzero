@@ -246,6 +246,11 @@ export function EnhancedPermissionAssignment({
                 read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
                 update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
               },
+              'sidebar-settings': {
+                enabled: grantedPerms.some(p => p.code.includes('settings:sidebar-settings')),
+                read: grantedPerms.some(p => p.code === 'settings:sidebar-settings:read'),
+                update: grantedPerms.some(p => p.code === 'settings:sidebar-settings:write'),
+              },
             };
             config.settingsSubmenus = submenus;
           }
@@ -349,6 +354,11 @@ export function EnhancedPermissionAssignment({
                     enabled: grantedPerms.some(p => p.code.includes('settings:custom-fields')),
                     read: grantedPerms.some(p => p.code === 'settings:custom-fields:read'),
                     update: grantedPerms.some(p => p.code === 'settings:custom-fields:update'),
+                  },
+                  'sidebar-settings': {
+                    enabled: grantedPerms.some(p => p.code.includes('settings:sidebar-settings')),
+                    read: grantedPerms.some(p => p.code === 'settings:sidebar-settings:read'),
+                    update: grantedPerms.some(p => p.code === 'settings:sidebar-settings:write'),
                   },
                 };
                 config.settingsSubmenus = submenus;
