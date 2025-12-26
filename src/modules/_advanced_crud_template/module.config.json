@@ -1,0 +1,62 @@
+{
+  "id": "advanced_crud",
+  "name": "Advanced CRUD Module",
+  "version": "1.0.0",
+  "description": "Advanced CRUD module with multiple views (kanban, grid, table, card)",
+  "routes": [
+    {
+      "path": "/advanced_crud",
+      "component": "index",
+      "title": "Advanced CRUD",
+      "requiresAuth": true
+    }
+  ],
+  "api": {
+    "basePath": "/api/advanced_crud",
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "",
+        "handler": "list",
+        "requiresAuth": true
+      },
+      {
+        "method": "POST",
+        "path": "",
+        "handler": "create",
+        "requiresAuth": true
+      },
+      {
+        "method": "GET",
+        "path": "/:id",
+        "handler": "getById",
+        "requiresAuth": true
+      },
+      {
+        "method": "PATCH",
+        "path": "/:id",
+        "handler": "update",
+        "requiresAuth": true
+      },
+      {
+        "method": "DELETE",
+        "path": "/:id",
+        "handler": "delete",
+        "requiresAuth": true
+      }
+    ]
+  },
+  "navigation": {
+    "label": "Advanced CRUD",
+    "icon": "LayoutGrid",
+    "path": "/advanced_crud",
+    "order": 99
+  },
+  "permissions": {
+    "create": "advanced_crud:create",
+    "read": "advanced_crud:read",
+    "update": "advanced_crud:update",
+    "delete": "advanced_crud:delete"
+  }
+}
+

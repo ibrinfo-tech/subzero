@@ -1,0 +1,59 @@
+/**
+ * EXAMPLE: Custom Hook for Table View
+ * 
+ * This is an EXAMPLE file showing how to create a custom hook.
+ * Rename this file (remove .example) and implement your logic.
+ * 
+ * Usage in TableView.tsx:
+ * ```typescript
+ * import { useTableSort } from './hooks/useTableSort';
+ * 
+ * const { sortedRecords, sortConfig, handleSort } = useTableSort(records);
+ * ```
+ */
+
+import { useState, useMemo } from 'react';
+import type { AdvancedCrudRecord } from '../../types';
+import type { TableSortConfig } from '../types';
+
+export function useTableSort(records: AdvancedCrudRecord[]) {
+  const [sortConfig, setSortConfig] = useState<TableSortConfig | null>(null);
+
+  const sortedRecords = useMemo(() => {
+    if (!sortConfig) return records;
+
+    return [...records].sort((a, b) => {
+      const aValue = a[sortConfig.column as keyof AdvancedCrudRecord];
+      const bValue = b[sortConfig.column as keyof AdvancedCrudRecord];
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [records, sortConfig]);
+
+  const handleSort = (column: string) => {
+    setSortConfig((current) => {
+      if (current?.column === column) {
+        // Toggle direction if same column
+        return {
+          column,
+          direction: current.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+      // New column, default to ascending
+      return { column, direction: 'asc' };
+    });
+  };
+
+  return {
+    sortedRecords,
+    sortConfig,
+    handleSort,
+  };
+}
+

@@ -1,0 +1,6 @@
+# Custom Hooks for Card View
+
+Create your custom hooks here.
+
+Example: `useCardExpansion.ts`, `useCardGrouping.ts`, `useCardLayout.ts`
+

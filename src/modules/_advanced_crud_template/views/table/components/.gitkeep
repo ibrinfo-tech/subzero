@@ -1,0 +1,6 @@
+# Sub-Components for Table View
+
+Create your sub-components here.
+
+Example: `TableHeader.tsx`, `TableRow.tsx`, `TableFilters.tsx`, `TablePagination.tsx`
+

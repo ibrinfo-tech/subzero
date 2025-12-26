@@ -1,0 +1,6 @@
+# Custom Hooks for Kanban View
+
+Create your custom hooks here.
+
+Example: `useKanbanDragDrop.ts`, `useKanbanColumns.ts`, `useKanbanStats.ts`
+
