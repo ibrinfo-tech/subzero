@@ -536,7 +536,7 @@ export default function ProjectsPage() {
                   My Projects
                 </Button>
                 <Button
-                  variant={archived === false ? 'default' : archived === true ? 'secondary' : 'outline'}
+                  variant={archived === false ? 'default' : archived === true ? 'outline' : 'outline'}
                   size="sm"
                   onClick={() => {
                     if (archived === undefined) setArchived(false);

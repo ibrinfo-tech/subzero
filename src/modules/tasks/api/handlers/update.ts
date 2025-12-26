@@ -4,6 +4,7 @@ import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { updateTask } from '../../services/taskService';
 import { z } from 'zod';
+import { UpdateTaskInput } from '../../types';
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
@@ -55,7 +56,7 @@ export async function PATCH(
       id: taskId,
       tenantId,
       userId,
-      data: validation.data,
+      data: validation.data as UpdateTaskInput,
     });
 
     if (!record) {

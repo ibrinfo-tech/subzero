@@ -106,14 +106,14 @@ export function LogDetailDialog({ log, open, onOpenChange }: LogDetailDialogProp
               {log.message}
             </p>
           </div>
-          {log.context && Object.keys(log.context).length > 0 && (
+          {log.context && typeof log.context === 'object' && log.context !== null && Object.keys(log.context).length > 0 ? (
             <div>
               <label className="text-sm font-medium text-muted-foreground">Context</label>
               <pre className="text-xs mt-1 p-3 bg-muted rounded-md overflow-auto">
                 {JSON.stringify(log.context, null, 2)}
               </pre>
             </div>
-          )}
+          ) : null}
           {log.errorStack && (
             <div>
               <label className="text-sm font-medium text-muted-foreground">Error Stack</label>

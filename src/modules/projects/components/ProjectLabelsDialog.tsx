@@ -174,7 +174,7 @@ export function ProjectLabelsDialog({ open, onOpenChange }: ProjectLabelsDialogP
                         </Button>
                         <Button
                           size="sm"
-                          variant="destructive"
+                          variant="default"
                           onClick={() => handleDelete(label.id)}
                           disabled={loading}
                         >

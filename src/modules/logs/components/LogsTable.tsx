@@ -78,7 +78,7 @@ export function LogsTable({ logs, onLogClick }: LogsTableProps) {
             >
               <TableCell className="font-mono text-xs">
                 {log.createdAt
-                  ? formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })
+                  ? formatDistanceToNow(new Date(log.createdAt))
                   : 'N/A'}
               </TableCell>
               <TableCell>

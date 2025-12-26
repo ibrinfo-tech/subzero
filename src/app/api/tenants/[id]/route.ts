@@ -17,63 +17,63 @@ export async function GET(
 ) {
   return withCoreRouteLogging(request, async (req) => {
     const { id } = await params;
-  try {
-    // Check if multi-tenancy is enabled
-    if (!MULTI_TENANT_ENABLED || !tenants) {
-      return NextResponse.json(
-        { error: 'Multi-tenancy is not enabled' },
-        { status: 404 }
-      );
-    }
+    try {
+      // Check if multi-tenancy is enabled
+      if (!MULTI_TENANT_ENABLED || !tenants) {
+        return NextResponse.json(
+          { error: 'Multi-tenancy is not enabled' },
+          { status: 404 }
+        );
+      }
 
-    // Verify authentication
-    const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(req);
-    
-    if (authResult instanceof NextResponse) {
-      return authResult; // Unauthorized response
-    }
-    
-    const userId = authResult;
-    
-    // Check if user is Super Admin
-    const isSuperAdmin = await isUserSuperAdmin(userId);
-    
-    if (!isSuperAdmin) {
+      // Verify authentication
+      const authMiddleware = requireAuth();
+      const authResult = await authMiddleware(req);
+
+      if (authResult instanceof NextResponse) {
+        return authResult; // Unauthorized response
+      }
+
+      const userId = authResult;
+
+      // Check if user is Super Admin
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admin can access tenant management' },
+          { status: 403 }
+        );
+      }
+
+      // Get tenant
+      const tenant = await db
+        .select()
+        .from(tenants)
+        .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
+        .limit(1);
+
+      if (tenant.length === 0) {
+        return NextResponse.json(
+          { error: 'Tenant not found' },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
-        { error: 'Forbidden - Only Super Admin can access tenant management' },
-        { status: 403 }
+        {
+          success: true,
+          data: tenant[0],
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('Get tenant by ID error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
       );
     }
-    
-    // Get tenant
-    const tenant = await db
-      .select()
-      .from(tenants)
-      .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
-      .limit(1);
-    
-    if (tenant.length === 0) {
-      return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json(
-      {
-        success: true,
-        data: tenant[0],
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Get tenant by ID error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
   });
 }
 
@@ -86,115 +86,116 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Check if multi-tenancy is enabled
-    if (!MULTI_TENANT_ENABLED || !tenants) {
-      return NextResponse.json(
-        { error: 'Multi-tenancy is not enabled' },
-        { status: 404 }
-      );
-    }
-
-    // Verify authentication
-    const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(req);
-    
-    if (authResult instanceof NextResponse) {
-      return authResult; // Unauthorized response
-    }
-    
-    const userId = authResult;
-    
-    // Check if user is Super Admin
-    const isSuperAdmin = await isUserSuperAdmin(userId);
-    
-    if (!isSuperAdmin) {
-      return NextResponse.json(
-        { error: 'Forbidden - Only Super Admin can update tenants' },
-        { status: 403 }
-      );
-    }
-    
-    const { id } = await params;
-    
-    // Check if tenant exists
-    const existingTenant = await db
-      .select()
-      .from(tenants)
-      .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
-      .limit(1);
-    
-    if (existingTenant.length === 0) {
-      return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Parse request body
-    const body = await req.json();
-    const { name, slug, status, plan, maxUsers, trialEndsAt, settings, metadata } = body;
-    
-    // Build update object
-    const updateData: any = {
-      updatedAt: new Date(),
-    };
-    
-    if (name !== undefined) updateData.name = name;
-    if (slug !== undefined) {
-      // Validate slug format
-      const slugRegex = /^[a-z0-9-]+$/;
-      if (!slugRegex.test(slug)) {
+  return withCoreRouteLogging(request, async (req) => {
+    try {
+      // Check if multi-tenancy is enabled
+      if (!MULTI_TENANT_ENABLED || !tenants) {
         return NextResponse.json(
-          { error: 'Slug must contain only lowercase letters, numbers, and hyphens' },
-          { status: 400 }
+          { error: 'Multi-tenancy is not enabled' },
+          { status: 404 }
         );
       }
-      
-      // Check if slug already exists (excluding current tenant)
-      const slugExists = await db
+
+      // Verify authentication
+      const authMiddleware = requireAuth();
+      const authResult = await authMiddleware(req);
+
+      if (authResult instanceof NextResponse) {
+        return authResult; // Unauthorized response
+      }
+
+      const userId = authResult;
+
+      // Check if user is Super Admin
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admin can update tenants' },
+          { status: 403 }
+        );
+      }
+
+      const { id } = await params;
+
+      // Check if tenant exists
+      const existingTenant = await db
         .select()
         .from(tenants)
-        .where(and(eq(tenants.slug, slug), isNull(tenants.deletedAt)))
+        .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
         .limit(1);
-      
-      if (slugExists.length > 0 && slugExists[0].id !== id) {
+
+      if (existingTenant.length === 0) {
         return NextResponse.json(
-          { error: 'Tenant with this slug already exists' },
-          { status: 409 }
+          { error: 'Tenant not found' },
+          { status: 404 }
         );
       }
-      
-      updateData.slug = slug;
+
+      // Parse request body
+      const body = await req.json();
+      const { name, slug, status, plan, maxUsers, trialEndsAt, settings, metadata } = body;
+
+      // Build update object
+      const updateData: any = {
+        updatedAt: new Date(),
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (slug !== undefined) {
+        // Validate slug format
+        const slugRegex = /^[a-z0-9-]+$/;
+        if (!slugRegex.test(slug)) {
+          return NextResponse.json(
+            { error: 'Slug must contain only lowercase letters, numbers, and hyphens' },
+            { status: 400 }
+          );
+        }
+
+        // Check if slug already exists (excluding current tenant)
+        const slugExists = await db
+          .select()
+          .from(tenants)
+          .where(and(eq(tenants.slug, slug), isNull(tenants.deletedAt)))
+          .limit(1);
+
+        if (slugExists.length > 0 && slugExists[0].id !== id) {
+          return NextResponse.json(
+            { error: 'Tenant with this slug already exists' },
+            { status: 409 }
+          );
+        }
+
+        updateData.slug = slug;
+      }
+      if (status !== undefined) updateData.status = status;
+      if (plan !== undefined) updateData.plan = plan;
+      if (maxUsers !== undefined) updateData.maxUsers = maxUsers;
+      if (trialEndsAt !== undefined) updateData.trialEndsAt = trialEndsAt ? new Date(trialEndsAt) : null;
+      if (settings !== undefined) updateData.settings = settings;
+      if (metadata !== undefined) updateData.metadata = metadata;
+
+      // Update tenant
+      const updatedTenant = await db
+        .update(tenants)
+        .set(updateData)
+        .where(eq(tenants.id, id))
+        .returning();
+
+      return NextResponse.json(
+        {
+          success: true,
+          data: updatedTenant[0],
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('Update tenant error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
     }
-    if (status !== undefined) updateData.status = status;
-    if (plan !== undefined) updateData.plan = plan;
-    if (maxUsers !== undefined) updateData.maxUsers = maxUsers;
-    if (trialEndsAt !== undefined) updateData.trialEndsAt = trialEndsAt ? new Date(trialEndsAt) : null;
-    if (settings !== undefined) updateData.settings = settings;
-    if (metadata !== undefined) updateData.metadata = metadata;
-    
-    // Update tenant
-    const updatedTenant = await db
-      .update(tenants)
-      .set(updateData)
-      .where(eq(tenants.id, id))
-      .returning();
-    
-    return NextResponse.json(
-      {
-        success: true,
-        data: updatedTenant[0],
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Update tenant error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
   });
 }
 
@@ -207,71 +208,72 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Check if multi-tenancy is enabled
-    if (!MULTI_TENANT_ENABLED || !tenants) {
-      return NextResponse.json(
-        { error: 'Multi-tenancy is not enabled' },
-        { status: 404 }
-      );
-    }
+  return withCoreRouteLogging(request, async (req) => {
+    try {
+      // Check if multi-tenancy is enabled
+      if (!MULTI_TENANT_ENABLED || !tenants) {
+        return NextResponse.json(
+          { error: 'Multi-tenancy is not enabled' },
+          { status: 404 }
+        );
+      }
 
-    // Verify authentication
-    const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(req);
-    
-    if (authResult instanceof NextResponse) {
-      return authResult; // Unauthorized response
-    }
-    
-    const userId = authResult;
-    
-    // Check if user is Super Admin
-    const isSuperAdmin = await isUserSuperAdmin(userId);
-    
-    if (!isSuperAdmin) {
+      // Verify authentication
+      const authMiddleware = requireAuth();
+      const authResult = await authMiddleware(req);
+
+      if (authResult instanceof NextResponse) {
+        return authResult; // Unauthorized response
+      }
+
+      const userId = authResult;
+
+      // Check if user is Super Admin
+      const isSuperAdmin = await isUserSuperAdmin(userId);
+
+      if (!isSuperAdmin) {
+        return NextResponse.json(
+          { error: 'Forbidden - Only Super Admin can delete tenants' },
+          { status: 403 }
+        );
+      }
+
+      const { id } = await params;
+
+      // Check if tenant exists
+      const existingTenant = await db
+        .select()
+        .from(tenants)
+        .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
+        .limit(1);
+
+      if (existingTenant.length === 0) {
+        return NextResponse.json(
+          { error: 'Tenant not found' },
+          { status: 404 }
+        );
+      }
+
+      // Soft delete tenant
+      await db
+        .update(tenants)
+        .set({ deletedAt: new Date() })
+        .where(eq(tenants.id, id));
+
       return NextResponse.json(
-        { error: 'Forbidden - Only Super Admin can delete tenants' },
-        { status: 403 }
+        {
+          success: true,
+          message: 'Tenant deleted successfully',
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('Delete tenant error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
       );
     }
-    
-    const { id } = await params;
-    
-    // Check if tenant exists
-    const existingTenant = await db
-      .select()
-      .from(tenants)
-      .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
-      .limit(1);
-    
-    if (existingTenant.length === 0) {
-      return NextResponse.json(
-        { error: 'Tenant not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Soft delete tenant
-    await db
-      .update(tenants)
-      .set({ deletedAt: new Date() })
-      .where(eq(tenants.id, id));
-    
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'Tenant deleted successfully',
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Delete tenant error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
   });
 }
 

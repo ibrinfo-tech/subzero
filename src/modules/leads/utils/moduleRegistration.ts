@@ -1,5 +1,5 @@
 import { db } from '@/core/lib/db';
-import { modules, moduleFields, permissions } from '@/core/lib/db/baseSchema';
+import { modules, permissions } from '@/core/lib/db/baseSchema';
 import { moduleFields as moduleFieldsTable } from '@/core/lib/db/permissionSchema';
 import { eq } from 'drizzle-orm';
 import { LEAD_FIELDS } from '../config/fields.config';

@@ -709,16 +709,18 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     : {}),
 }));
 
-export const tenantsRelations = relations(tenants, ({ many }) => ({
-  users: many(users),
-  roles: many(roles),
-  tenantUsers: many(tenantUsers),
-  userRoles: many(userRoles),
-  resourcePermissions: many(resourcePermissions),
-  sessions: many(sessions),
-  notifications: many(notifications),
-  systemLogs: many(systemLogs),
-}));
+export const tenantsRelations = MULTI_TENANT_ENABLED && tenants
+  ? relations(tenants, ({ many }) => ({
+    users: many(users),
+    roles: many(roles),
+    tenantUsers: many(tenantUsers),
+    userRoles: many(userRoles),
+    resourcePermissions: many(resourcePermissions),
+    sessions: many(sessions),
+    notifications: many(notifications),
+    systemLogs: many(systemLogs),
+  }))
+  : null as any;
 
 export const tenantUsersRelations = MULTI_TENANT_ENABLED
   ? relations(tenantUsersTable, ({ one }) => ({
@@ -753,10 +755,14 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 }));
 
 export const systemLogsRelations = relations(systemLogs, ({ one }) => ({
-  tenant: one(tenants, {
-    fields: [systemLogs.tenantId],
-    references: [tenants.id],
-  }),
+  ...(MULTI_TENANT_ENABLED && tenants
+    ? {
+      tenant: one(tenants, {
+        fields: [systemLogs.tenantId],
+        references: [tenants.id],
+      }),
+    }
+    : {}),
   user: one(users, {
     fields: [systemLogs.userId],
     references: [users.id],
@@ -767,6 +773,8 @@ export const systemLogsRelations = relations(systemLogs, ({ one }) => ({
 // TYPE EXPORTS
 // ============================================================================
 
+export type Tenant = typeof tenantsTable.$inferSelect;
+export type NewTenant = typeof tenantsTable.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AuthProvider = typeof authProviders.$inferSelect;

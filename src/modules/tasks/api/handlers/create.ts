@@ -4,6 +4,7 @@ import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { createTask } from '../../services/taskService';
 import { z } from 'zod';
+import { CreateTaskInput } from '../../types';
 
 const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     const record = await createTask({
-      data: validation.data,
+      data: validation.data as CreateTaskInput,
       tenantId,
       userId,
     });

@@ -87,6 +87,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
@@ -201,6 +202,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Verify authentication
     const authMiddleware = requireAuth();

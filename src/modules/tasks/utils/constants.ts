@@ -1,3 +1,5 @@
+import type { TaskStatus, TaskPriority } from '../types';
+
 export const TASK_STATUSES: Array<{ value: TaskStatus; label: string }> = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
@@ -11,7 +13,4 @@ export const TASK_PRIORITIES: Array<{ value: TaskPriority; label: string }> = [
   { value: 'high', label: 'High' },
   { value: 'urgent', label: 'Urgent' },
 ];
-
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'completed';
-export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
