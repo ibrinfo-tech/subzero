@@ -8,15 +8,17 @@ import { generateAccessToken, generateRefreshToken } from '@/core/lib/tokens';
 import { USE_NON_EXPIRING_TOKENS } from '@/core/config/tokenConfig';
 import { getFirstAccessibleRoute } from '@/core/lib/utils/getAccessibleRoute';
 import { eq } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * POST /api/auth/login
  * Login endpoint with email and password
  */
 export async function POST(request: NextRequest) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Parse and validate request body
-    const body = await request.json();
+    const body = await req.json();
     const validation = validateRequest(loginSchema, body);
     
     if (!validation.success) {
@@ -163,8 +165,8 @@ export async function POST(request: NextRequest) {
     
     // Determine if connection is secure based on request protocol
     // In production/docker, check x-forwarded-proto header for proxy setups
-    const isSecureConnection = request.headers.get('x-forwarded-proto') === 'https' 
-      || request.nextUrl.protocol === 'https:'
+    const isSecureConnection = req.headers.get('x-forwarded-proto') === 'https' 
+      || req.nextUrl.protocol === 'https:'
       || process.env.NODE_ENV === 'development';
     
     // console.log('[Login] Cookie Configuration:', {
@@ -198,5 +200,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }
 

@@ -4,6 +4,7 @@ import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/tenants/:id
@@ -14,6 +15,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
+    const { id } = await params;
   try {
     // Check if multi-tenancy is enabled
     if (!MULTI_TENANT_ENABLED || !tenants) {
@@ -25,7 +28,7 @@ export async function GET(
 
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -42,8 +45,6 @@ export async function GET(
         { status: 403 }
       );
     }
-    
-    const { id } = await params;
     
     // Get tenant
     const tenant = await db
@@ -73,6 +74,7 @@ export async function GET(
       { status: 500 }
     );
   }
+  });
 }
 
 /**
@@ -95,7 +97,7 @@ export async function PATCH(
 
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -130,7 +132,7 @@ export async function PATCH(
     }
     
     // Parse request body
-    const body = await request.json();
+    const body = await req.json();
     const { name, slug, status, plan, maxUsers, trialEndsAt, settings, metadata } = body;
     
     // Build update object
@@ -193,6 +195,7 @@ export async function PATCH(
       { status: 500 }
     );
   }
+  });
 }
 
 /**
@@ -215,7 +218,7 @@ export async function DELETE(
 
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -269,5 +272,6 @@ export async function DELETE(
       { status: 500 }
     );
   }
+  });
 }
 
