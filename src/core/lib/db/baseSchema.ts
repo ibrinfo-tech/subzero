@@ -562,7 +562,7 @@ export const notifications = (MULTI_TENANT_ENABLED ? notificationsMultiTable : n
 
 export const systemLogs = pgTable('system_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   module: varchar('module', { length: 100 }).notNull(), // Module identifier (e.g., 'users', 'inventory_management')
   level: varchar('level', { length: 20 }).default('info').notNull(), // info, warning, error, debug, success
