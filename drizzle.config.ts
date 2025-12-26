@@ -7,6 +7,7 @@ export default {
   schema: [
     "./src/core/lib/db/baseSchema.ts",
     "./src/core/lib/db/permissionSchema.ts",
+    "./src/core/lib/db/eventSchema.ts",
     "./src/modules/**/schemas/*Schema.ts"
   ],
   out: "./drizzle/migrations",

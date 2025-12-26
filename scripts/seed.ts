@@ -633,6 +633,28 @@ async function seed() {
     console.log('');
 
     // ============================================================================
+    // 7. MODULE SEEDS (Run each module's seed file)
+    // ============================================================================
+    console.log('🌱 Running module seeds...');
+    const { loadAllModuleSeeds } = await import('../src/core/lib/seedLoader');
+    const moduleSeeds = await loadAllModuleSeeds();
+
+    if (moduleSeeds.length > 0) {
+      for (const { moduleId, seed } of moduleSeeds) {
+        console.log(`   Running seed for module: ${moduleId}...`);
+        try {
+          await seed(db);
+          console.log(`   ✅ Module ${moduleId} seeded successfully`);
+        } catch (error) {
+          console.error(`   ❌ Failed to seed module ${moduleId}:`, error);
+        }
+      }
+      console.log('');
+    } else {
+      console.log('ℹ️  No module seeds found\n');
+    }
+
+    // ============================================================================
     // SUMMARY
     // ============================================================================
     console.log('✨ Seed completed successfully!\n');

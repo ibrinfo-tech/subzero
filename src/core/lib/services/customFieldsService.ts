@@ -4,7 +4,7 @@ import { modules, roles } from '@/core/lib/db/baseSchema';
 import { eq, and, sql, ilike, or } from 'drizzle-orm';
 import { moduleRegistry } from '@/core/config/moduleRegistry';
 
-export type CustomFieldType = 'text' | 'number' | 'email' | 'date' | 'select' | 'textarea' | 'boolean' | 'url';
+export type CustomFieldType = 'text' | 'number' | 'email' | 'date' | 'select' | 'textarea' | 'boolean' | 'url' | 'reference';
 
 export interface CustomFieldMetadata {
   isRequired?: boolean;
@@ -12,6 +12,10 @@ export interface CustomFieldMetadata {
   showInTable?: boolean;
   isFilterable?: boolean;
   options?: string[]; // For select fields
+  // Reference field metadata
+  referenceModule?: string; // Module code to reference
+  referenceColumn?: string; // Column name in the referenced module's table (must be unique)
+  referenceLabel?: string; // Column name to display as label
   validation?: {
     min?: number;
     max?: number;
@@ -40,6 +44,75 @@ export interface UpdateCustomFieldInput {
   metadata?: CustomFieldMetadata;
   isActive?: boolean;
   sortOrder?: number;
+}
+
+/**
+ * Get table columns for a module
+ * Returns columns with their types and uniqueness information
+ */
+export async function getModuleTableColumns(moduleCode: string) {
+  // Get module from database
+  const module = await db
+    .select()
+    .from(modules)
+    .where(eq(modules.code, moduleCode.toUpperCase()))
+    .limit(1);
+
+  if (module.length === 0) {
+    throw new Error(`Module "${moduleCode}" not found`);
+  }
+
+  // Table name is typically the module code (lowercase)
+  // For modules like "customers", "leads", etc.
+  const tableName = moduleCode.toLowerCase();
+
+  // Get all columns with their types and uniqueness info
+  const columns = await db.execute(sql`
+    SELECT 
+      c.column_name,
+      c.data_type,
+      c.character_maximum_length,
+      c.is_nullable,
+      CASE 
+        WHEN pk.column_name IS NOT NULL THEN true
+        WHEN uq.column_name IS NOT NULL THEN true
+        ELSE false
+      END as is_unique
+    FROM information_schema.columns c
+    LEFT JOIN (
+      SELECT kcu.column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = ${tableName}
+        AND tc.constraint_type = 'PRIMARY KEY'
+    ) pk ON c.column_name = pk.column_name
+    LEFT JOIN (
+      SELECT kcu.column_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = ${tableName}
+        AND tc.constraint_type = 'UNIQUE'
+    ) uq ON c.column_name = uq.column_name
+    WHERE c.table_schema = 'public'
+      AND c.table_name = ${tableName}
+    ORDER BY c.ordinal_position
+  `);
+
+  // Drizzle execute returns an array-like result
+  const rows = Array.isArray(columns) ? columns : (columns as any).rows || [];
+  return rows.map((row: Record<string, unknown>) => ({
+    name: String(row.column_name || ''),
+    type: String(row.data_type || ''),
+    maxLength: row.character_maximum_length ? Number(row.character_maximum_length) : undefined,
+    nullable: row.is_nullable === 'YES',
+    isUnique: row.is_unique === true,
+  }));
 }
 
 /**
@@ -178,6 +251,61 @@ export async function createCustomField(
 
   if (existing.length > 0) {
     throw new Error(`Field with code "${input.code}" already exists for this module`);
+  }
+
+  // Validate reference field configuration if fieldType is 'reference'
+  if (input.fieldType === 'reference') {
+    if (!input.metadata?.referenceModule || !input.metadata?.referenceColumn || !input.metadata?.referenceLabel) {
+      throw new Error('Reference fields require referenceModule, referenceColumn, and referenceLabel in metadata');
+    }
+
+    // At this point, we know metadata exists and has the required properties
+    const metadata = input.metadata as {
+      referenceModule: string;
+      referenceColumn: string;
+      referenceLabel: string;
+    };
+
+    // Validate that the referenced module exists and supports custom fields
+    const referencedModule = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.code, metadata.referenceModule.toUpperCase()))
+      .limit(1);
+
+    if (referencedModule.length === 0) {
+      throw new Error(`Referenced module "${metadata.referenceModule}" not found`);
+    }
+
+    const referencedModuleConfig = moduleRegistry.getModule(metadata.referenceModule.toLowerCase());
+    if (!referencedModuleConfig || (referencedModuleConfig.config as any).custom_field !== true) {
+      throw new Error(`Referenced module "${metadata.referenceModule}" does not support custom fields`);
+    }
+
+    // Validate that the reference column exists and is unique
+    try {
+      const columns = await getModuleTableColumns(metadata.referenceModule);
+      
+      const referenceColumn = columns.find((col: { name: string; isUnique: boolean }) => col.name === metadata.referenceColumn);
+      if (!referenceColumn) {
+        throw new Error(`Column "${metadata.referenceColumn}" does not exist in module "${metadata.referenceModule}"`);
+      }
+
+      if (!referenceColumn.isUnique) {
+        throw new Error(`Column "${metadata.referenceColumn}" must be a unique column (primary key or unique constraint) in module "${metadata.referenceModule}"`);
+      }
+
+      // Validate that the reference label column exists
+      const labelColumn = columns.find((col: { name: string }) => col.name === metadata.referenceLabel);
+      if (!labelColumn) {
+        throw new Error(`Label column "${metadata.referenceLabel}" does not exist in module "${metadata.referenceModule}"`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        throw error;
+      }
+      throw new Error(`Failed to validate reference field: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   // Get max sort order for this module
