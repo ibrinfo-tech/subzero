@@ -6,7 +6,7 @@ export interface CustomFieldDefinition {
   name: string;
   code: string;
   label: string;
-  fieldType: 'text' | 'number' | 'email' | 'date' | 'select' | 'textarea' | 'boolean' | 'url';
+  fieldType: 'text' | 'number' | 'email' | 'date' | 'select' | 'textarea' | 'boolean' | 'url' | 'reference';
   description?: string;
   isActive: boolean;
   sortOrder: number;
@@ -16,6 +16,10 @@ export interface CustomFieldDefinition {
     showInTable?: boolean;
     isFilterable?: boolean;
     options?: string[]; // For select fields
+    // Reference field metadata
+    referenceModule?: string; // Module code to reference
+    referenceColumn?: string; // Column name in the referenced module's table (must be unique)
+    referenceLabel?: string; // Column name to display as label
     validation?: {
       min?: number;
       max?: number;
