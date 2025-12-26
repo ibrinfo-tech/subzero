@@ -220,9 +220,26 @@ export function useNotifications() {
             return newCount;
           });
         } else if (data.type === 'error') {
-          console.error('SSE error:', data.message);
+          // Only log as error if it's not a transient connection issue
+          const isTransientError = 
+            data.message?.includes('Retrying') ||
+            data.message?.includes('Connection issues') ||
+            data.message?.includes('Temporarily unable');
+          
+          if (isTransientError) {
+            // Log transient errors as warnings, not errors
+            console.warn('SSE connection issue:', data.message);
+          } else {
+            console.error('SSE error:', data.message);
+          }
+          
           // Close connection on auth errors to prevent infinite reconnection attempts
           if (data.message?.includes('Unauthorized') || data.message?.includes('Tenant not found')) {
+            eventSource.close();
+          }
+          
+          // Close connection if server indicates connection is lost
+          if (data.message?.includes('Connection lost')) {
             eventSource.close();
           }
         }

@@ -58,23 +58,71 @@ export async function GET(request: NextRequest) {
 
         // Set up polling to check for new notifications every 2 seconds
         // In production, you could use database triggers or a message queue for instant updates
+        let consecutiveErrors = 0;
         const pollInterval = setInterval(async () => {
           try {
             const count = await getUnreadCount(userId, tenantId || undefined);
             const message = JSON.stringify({ type: 'unread_count', count });
             controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
+            consecutiveErrors = 0; // Reset error counter on success
           } catch (error) {
-            console.error('Error polling notifications:', error);
-            // Only send error if controller is still active
-            try {
-              const errorMessage = JSON.stringify({ 
-                type: 'error', 
-                message: error instanceof Error ? error.message : 'Failed to fetch count' 
-              });
-              controller.enqueue(new TextEncoder().encode(`data: ${errorMessage}\n\n`));
-            } catch (enqueueError) {
-              // Controller might be closed, stop polling
+            consecutiveErrors++;
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            
+            // Check if it's a connection timeout or transient database error
+            const isTransientError = 
+              errorMessage.includes('CONNECT_TIMEOUT') ||
+              errorMessage.includes('timeout') ||
+              errorMessage.includes('ECONNREFUSED') ||
+              errorMessage.includes('ETIMEDOUT');
+            
+            if (isTransientError) {
+              // Log as warning, not error, and don't send to client unless it's persistent
+              console.warn(`[SSE] Transient database error (attempt ${consecutiveErrors}):`, errorMessage);
+              
+              // Only send error to client if we've had multiple consecutive failures
+              // This prevents spamming the client with transient connection issues
+              if (consecutiveErrors >= 3) {
+                try {
+                  const errorPayload = JSON.stringify({ 
+                    type: 'error', 
+                    message: 'Connection issues detected. Retrying...' 
+                  });
+                  controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+                } catch (enqueueError) {
+                  // Controller might be closed, stop polling
+                  clearInterval(pollInterval);
+                }
+              }
+            } else {
+              // For non-transient errors, log and send to client
+              console.error('Error polling notifications:', error);
+              try {
+                const errorPayload = JSON.stringify({ 
+                  type: 'error', 
+                  message: errorMessage 
+                });
+                controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+              } catch (enqueueError) {
+                // Controller might be closed, stop polling
+                clearInterval(pollInterval);
+              }
+            }
+            
+            // If we've had too many consecutive errors, stop polling to prevent resource exhaustion
+            if (consecutiveErrors >= 10) {
+              console.error('[SSE] Too many consecutive errors, stopping polling');
               clearInterval(pollInterval);
+              try {
+                const errorPayload = JSON.stringify({ 
+                  type: 'error', 
+                  message: 'Connection lost. Please refresh the page.' 
+                });
+                controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+                controller.close();
+              } catch {
+                // Controller already closed
+              }
             }
           }
         }, 2000);
@@ -130,17 +178,41 @@ async function sendInitialData(
     const message = JSON.stringify({ type: 'unread_count', count });
     controller.enqueue(new TextEncoder().encode(`data: ${message}\n\n`));
   } catch (error) {
-    console.error('Error sending initial data:', error);
-    // Send error message to client
-    try {
-      const errorMessage = JSON.stringify({ 
-        type: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to fetch initial count' 
-      });
-      controller.enqueue(new TextEncoder().encode(`data: ${errorMessage}\n\n`));
-    } catch (enqueueError) {
-      // Controller might be closed
-      console.error('Error sending error message:', enqueueError);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch initial count';
+    
+    // Check if it's a connection timeout or transient database error
+    const isTransientError = 
+      errorMessage.includes('CONNECT_TIMEOUT') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('ETIMEDOUT');
+    
+    if (isTransientError) {
+      // Log as warning and send a user-friendly message
+      console.warn('[SSE] Transient database error on initial connection:', errorMessage);
+      try {
+        const errorPayload = JSON.stringify({ 
+          type: 'error', 
+          message: 'Temporarily unable to connect. Retrying...' 
+        });
+        controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+      } catch (enqueueError) {
+        // Controller might be closed
+        console.error('Error sending error message:', enqueueError);
+      }
+    } else {
+      // For non-transient errors, log and send to client
+      console.error('Error sending initial data:', error);
+      try {
+        const errorPayload = JSON.stringify({ 
+          type: 'error', 
+          message: errorMessage 
+        });
+        controller.enqueue(new TextEncoder().encode(`data: ${errorPayload}\n\n`));
+      } catch (enqueueError) {
+        // Controller might be closed
+        console.error('Error sending error message:', enqueueError);
+      }
     }
   }
 }

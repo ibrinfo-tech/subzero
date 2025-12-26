@@ -97,6 +97,14 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       });
     }
 
+    if (hasPermission('settings:sidebar-settings:read')) {
+      items.push({
+        label: 'Sidebar Settings',
+        href: '/settings/sidebar-settings',
+        icon: <LucideIcons.LayoutList className="w-5 h-5" />,
+      });
+    }
+
     return items;
   };
 
@@ -147,13 +155,55 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       }, 50);
     }, 10000);
 
-    // Load navigation, permissions, and config in parallel
+    // Load navigation first and render immediately (progressive loading)
+    // This allows the sidebar to show items as soon as they're available
+    fetch('/api/modules/navigation', {
+      headers,
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then(async (navRes) => {
+        if (!navRes.ok) {
+          throw new Error(`HTTP error! status: ${navRes.status}`);
+        }
+        const navData = await navRes.json();
+        
+        if (navData.success && navData.navigation) {
+          const items: NavItem[] = navData.navigation.map((nav: ModuleNavigation) => ({
+            label: nav.label,
+            href: nav.path,
+            icon: getIconComponent(nav.icon),
+          }));
+          setModuleNavItems(items);
+          // Hide loading as soon as navigation is ready
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          setTimeout(() => {
+            onNavigationLoaded?.();
+          }, 50);
+        } else {
+          console.warn('[Sidebar] Navigation API returned no navigation items:', navData);
+          setModuleNavItems([]);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          setTimeout(() => {
+            onNavigationLoaded?.();
+          }, 50);
+        }
+      })
+      .catch((err) => {
+        console.error('[Sidebar] Failed to load navigation:', err);
+        setModuleNavItems([]);
+        setIsLoading(false);
+        clearTimeout(timeoutId);
+        setTimeout(() => {
+          onNavigationLoaded?.();
+        }, 50);
+      });
+
+    // Load permissions and config in parallel (non-blocking)
+    // These are used for filtering settings submenus and showing tenant management
     Promise.all([
-      fetch('/api/modules/navigation', {
-        headers,
-        credentials: 'include',
-        cache: 'no-store',
-      }),
       fetch('/api/auth/permissions', {
         headers,
         credentials: 'include',
@@ -165,15 +215,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         cache: 'no-store',
       }),
     ])
-      .then(async ([navRes, permRes, configRes]) => {
-        clearTimeout(timeoutId);
-        
-        // Handle navigation
-        if (!navRes.ok) {
-          throw new Error(`HTTP error! status: ${navRes.status}`);
-        }
-        const navData = await navRes.json();
-        
+      .then(async ([permRes, configRes]) => {
         // Handle permissions
         let permissions: string[] = [];
         if (permRes.ok) {
@@ -193,49 +235,35 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         const isSuperAdminUser = permissions.includes('admin:*') || 
           permissions.some(p => p.includes('SUPER_ADMIN'));
         
-        // Also check by fetching user profile to get roles
-        try {
-          const profileRes = await fetch('/api/auth/profile', {
-            headers,
-            credentials: 'include',
-            cache: 'no-store',
-          });
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            const hasSuperAdminRole = profileData.data?.roles?.some((r: any) => r.code === 'SUPER_ADMIN');
-            setIsSuperAdmin(hasSuperAdminRole || isSuperAdminUser);
-          } else {
+        // Check by fetching user profile to get roles (non-blocking, fire and forget)
+        // This is optional and won't delay sidebar rendering
+        fetch('/api/auth/profile', {
+          headers,
+          credentials: 'include',
+          cache: 'no-store',
+        })
+          .then((profileRes) => {
+            if (profileRes.ok) {
+              return profileRes.json();
+            }
+            return null;
+          })
+          .then((profileData) => {
+            if (profileData?.data?.roles) {
+              const hasSuperAdminRole = profileData.data.roles.some((r: any) => r.code === 'SUPER_ADMIN');
+              setIsSuperAdmin(hasSuperAdminRole || isSuperAdminUser);
+            } else {
+              setIsSuperAdmin(isSuperAdminUser);
+            }
+          })
+          .catch(() => {
             setIsSuperAdmin(isSuperAdminUser);
-          }
-        } catch {
-          setIsSuperAdmin(isSuperAdminUser);
-        }
-
-        if (navData.success && navData.navigation) {
-          const items: NavItem[] = navData.navigation.map((nav: ModuleNavigation) => ({
-            label: nav.label,
-            href: nav.path,
-            icon: getIconComponent(nav.icon),
-          }));
-          setModuleNavItems(items);
-        } else {
-          console.warn('[Sidebar] Navigation API returned no navigation items:', navData);
-          setModuleNavItems([]);
-        }
-        setIsLoading(false);
-        setTimeout(() => {
-          onNavigationLoaded?.();
-        }, 50);
+          });
       })
       .catch((err) => {
-        clearTimeout(timeoutId);
-        console.error('[Sidebar] Failed to load navigation or permissions:', err);
-        setModuleNavItems([]);
+        console.error('[Sidebar] Failed to load permissions or config:', err);
+        // Don't block sidebar rendering if permissions/config fail
         setUserPermissions([]);
-        setIsLoading(false);
-        setTimeout(() => {
-          onNavigationLoaded?.();
-        }, 50);
       });
   }, [isAuthenticated, _hasHydrated, token, onNavigationLoaded]);
 
