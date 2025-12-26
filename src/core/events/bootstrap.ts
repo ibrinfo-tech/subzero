@@ -49,45 +49,54 @@ export function registerAllEventHandlers(handlers: EventHandlerEntry[]): void {
 export async function bootstrapEventHandlers(): Promise<void> {
   const allHandlers: EventHandlerEntry[] = [];
 
+  // Import event handlers from modules that exist
+  // Only import modules that are known to exist to avoid build-time errors
+  
+  // Tasks module
   try {
-    // Import inventory module handlers (optional - module may not exist)
-    // @ts-expect-error - Module may not exist, handled by try-catch
-    const { inventoryEventHandlers } = await import('@/modules/inventory/events');
-    allHandlers.push(...inventoryEventHandlers.map((h: any) => ({
-      eventName: h.eventName,
-      handler: h.handler as EventHandler,
-      options: h.options,
-    })));
+    const tasksModule = await import('@/modules/tasks/events');
+    const taskEventHandlers = tasksModule.taskEventHandlers;
+    if (taskEventHandlers && Array.isArray(taskEventHandlers)) {
+      allHandlers.push(...taskEventHandlers.map((h: any) => ({
+        eventName: h.eventName,
+        handler: h.handler as EventHandler,
+        options: h.options,
+      })));
+    }
   } catch (error) {
     // Module doesn't exist or failed to load - this is expected
-    console.warn('[Event Bootstrap] Failed to load inventory event handlers:', error);
-  }
-
-  try {
-    // Import customer management module handlers (optional - module may not exist)
-    // @ts-expect-error - Module may not exist, handled by try-catch
-    const { customerEventHandlers } = await import('@/modules/customer_management/events');
-    allHandlers.push(...customerEventHandlers.map((h: any) => ({
-      eventName: h.eventName,
-      handler: h.handler as EventHandler,
-      options: h.options,
-    })));
-  } catch (error) {
-    // Module doesn't exist or failed to load - this is expected
-    console.warn('[Event Bootstrap] Failed to load customer management event handlers:', error);
+    console.warn('[Event Bootstrap] Failed to load tasks event handlers:', error);
   }
 
   // Add more modules here as they are created
-  // Example:
+  // Only uncomment when the module actually exists:
+  
+  // Inventory module (uncomment when module exists)
   // try {
-  //   const { paymentEventHandlers } = await import('@/modules/payment_management/events');
-  //   allHandlers.push(...paymentEventHandlers.map(h => ({
-  //     eventName: h.eventName,
-  //     handler: h.handler,
-  //     options: h.options,
-  //   })));
+  //   const { inventoryEventHandlers } = await import('@/modules/inventory/events');
+  //   if (inventoryEventHandlers && Array.isArray(inventoryEventHandlers)) {
+  //     allHandlers.push(...inventoryEventHandlers.map((h: any) => ({
+  //       eventName: h.eventName,
+  //       handler: h.handler as EventHandler,
+  //       options: h.options,
+  //     })));
+  //   }
   // } catch (error) {
-  //   console.warn('[Event Bootstrap] Failed to load payment management event handlers:', error);
+  //   console.warn('[Event Bootstrap] Failed to load inventory event handlers:', error);
+  // }
+
+  // Customer management module (uncomment when module exists)
+  // try {
+  //   const { customerEventHandlers } = await import('@/modules/customer_management/events');
+  //   if (customerEventHandlers && Array.isArray(customerEventHandlers)) {
+  //     allHandlers.push(...customerEventHandlers.map((h: any) => ({
+  //       eventName: h.eventName,
+  //       handler: h.handler as EventHandler,
+  //       options: h.options,
+  //     })));
+  //   }
+  // } catch (error) {
+  //   console.warn('[Event Bootstrap] Failed to load customer management event handlers:', error);
   // }
 
   // Register all handlers

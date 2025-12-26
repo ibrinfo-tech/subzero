@@ -1,6 +1,6 @@
 {
-  "id": "76010a3f-0e99-45be-861a-30e3abd030c4",
-  "prevId": "52415721-5d5c-42fa-8c99-1a0da7427de5",
+  "id": "2996d833-2300-477f-acce-892391dde114",
+  "prevId": "76010a3f-0e99-45be-861a-30e3abd030c4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3727,6 +3727,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -3794,6 +3800,21 @@
           "columns": [
             {
               "expression": "assigned_to",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_tasks_project": {
+          "name": "idx_tasks_project",
+          "columns": [
+            {
+              "expression": "project_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3880,7 +3901,21 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "tasks_project_id_projects_id_fk": {
+          "name": "tasks_project_id_projects_id_fk",
+          "tableFrom": "tasks",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

@@ -2,21 +2,8 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
-import { createTask } from '../../services/taskService';
-import { z } from 'zod';
-
-const createTaskSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  status: z.enum(['todo', 'in_progress', 'blocked', 'completed']).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  dueDate: z.string().optional(),
-  assignedTo: z.string().uuid().optional().nullable(),
-  projectId: z.string().uuid().optional().nullable(),
-  relatedEntityType: z.string().optional().nullable(),
-  relatedEntityId: z.string().uuid().optional().nullable(),
-  customFields: z.record(z.any()).optional(),
-});
+import { createProject } from '../../services/projectService';
+import { createProjectSchema } from '../../schemas/projectValidation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +20,7 @@ export async function POST(request: NextRequest) {
     // tenantId can be null in single-tenant mode - that's OK
 
     const body = await request.json();
-    const validation = createTaskSchema.safeParse(body);
+    const validation = createProjectSchema.safeParse(body);
 
     if (!validation.success) {
       return NextResponse.json(
@@ -42,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const record = await createTask({
+    const record = await createProject({
       data: validation.data,
       tenantId,
       userId,
@@ -50,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, data: record }, { status: 201 });
   } catch (error) {
-    console.error('Task create error:', error);
+    console.error('Project create error:', error);
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

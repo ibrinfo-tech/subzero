@@ -46,7 +46,9 @@ const defaultConfig: EventConfig = {
   defaultTimeout: parseInt(process.env.EVENT_DEFAULT_TIMEOUT || '30000', 10),
   maxEventPayloadSize: parseInt(process.env.EVENT_MAX_PAYLOAD_SIZE || '1048576', 10), // 1MB default
   enableEventHistory: process.env.EVENT_HISTORY_ENABLED !== 'false',
-  enableImmediateProcessing: process.env.EVENT_IMMEDIATE_PROCESSING === 'true',
+  // Enable immediate processing by default for better developer experience
+  // Set EVENT_IMMEDIATE_PROCESSING=false to use outbox pattern with worker
+  enableImmediateProcessing: process.env.EVENT_IMMEDIATE_PROCESSING !== 'false',
   circuitBreaker: {
     failureThreshold: parseInt(process.env.EVENT_CIRCUIT_BREAKER_THRESHOLD || '5', 10),
     timeWindow: parseInt(process.env.EVENT_CIRCUIT_BREAKER_TIME_WINDOW || '60000', 10), // 1 minute

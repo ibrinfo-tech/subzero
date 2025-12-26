@@ -10,6 +10,7 @@ export interface TaskRecord {
   priority: TaskPriority;
   dueDate: string | null;
   assignedTo: string | null;
+  projectId: string | null;
   createdBy: string;
   relatedEntityType: string | null;
   relatedEntityId: string | null;
@@ -26,6 +27,7 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   dueDate?: string;
   assignedTo?: string;
+  projectId?: string | null;
   relatedEntityType?: string;
   relatedEntityId?: string;
   customFields?: Record<string, unknown>;
@@ -38,6 +40,7 @@ export interface UpdateTaskInput {
   priority?: TaskPriority;
   dueDate?: string;
   assignedTo?: string;
+  projectId?: string | null;
   relatedEntityType?: string;
   relatedEntityId?: string;
   customFields?: Record<string, unknown>;
@@ -48,6 +51,7 @@ export interface TaskListFilters {
   status?: TaskStatus | 'all';
   priority?: TaskPriority | 'all';
   assignedTo?: string | 'all' | 'me';
+  projectId?: string | 'all';
   dueDate?: string;
   overdue?: boolean;
 }
