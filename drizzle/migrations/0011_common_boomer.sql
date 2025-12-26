@@ -1,1 +1,0 @@
-ALTER TABLE "module_fields" ADD COLUMN "is_system_field" boolean DEFAULT false NOT NULL;

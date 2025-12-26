@@ -347,14 +347,37 @@ async function seed() {
     const permissionData = [...corePermissions, ...dynamicPermissions];
     const existingPermissions = await db.select().from(permissions);
     const existingPermissionCodes = new Set(existingPermissions.map((p) => p.code));
-    const permissionsToInsert = permissionData.filter((p) => !existingPermissionCodes.has(p.code));
+    
+    // Filter out duplicates both from existing DB and within permissionData itself
+    const seenCodes = new Set<string>();
+    const uniquePermissions = permissionData.filter((p) => {
+      if (existingPermissionCodes.has(p.code) || seenCodes.has(p.code)) {
+        return false;
+      }
+      seenCodes.add(p.code);
+      return true;
+    });
+    
+    const permissionsToInsert = uniquePermissions;
 
     let seededPermissions: any[] = existingPermissions;
 
     if (permissionsToInsert.length > 0) {
-      const newPermissions = await db.insert(permissions).values(permissionsToInsert).returning();
-      seededPermissions = [...existingPermissions, ...newPermissions];
-      console.log(`✅ Created ${newPermissions.length} permission(s)`);
+      try {
+        const newPermissions = await db.insert(permissions).values(permissionsToInsert).returning();
+        seededPermissions = [...existingPermissions, ...newPermissions];
+        console.log(`✅ Created ${newPermissions.length} permission(s)`);
+      } catch (error: any) {
+        // Handle case where permissions were added between query and insert
+        if (error?.code === '23505' && error?.constraint_name === 'permissions_code_unique') {
+          console.log(`⚠️  Some permissions already exist, skipping duplicates...`);
+          // Re-fetch to get all permissions including any that were added
+          seededPermissions = await db.select().from(permissions);
+          console.log(`ℹ️  Total permissions: ${seededPermissions.length}`);
+        } else {
+          throw error;
+        }
+      }
     } else {
       console.log(`ℹ️  Permissions already exist (${existingPermissions.length} total)`);
     }
