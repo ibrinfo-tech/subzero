@@ -31,6 +31,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
   const [isLoading, setIsLoading] = useState(true);
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [multiTenantEnabled, setMultiTenantEnabled] = useState(false);
   const { isAuthenticated, _hasHydrated, token } = useAuthStore();
 
   // Helper to check if user has permission (supports wildcards)
@@ -146,7 +147,7 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       }, 50);
     }, 10000);
 
-    // Load navigation and permissions in parallel
+    // Load navigation, permissions, and config in parallel
     Promise.all([
       fetch('/api/modules/navigation', {
         headers,
@@ -158,8 +159,13 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
         credentials: 'include',
         cache: 'no-store',
       }),
+      fetch('/api/auth/config', {
+        headers,
+        credentials: 'include',
+        cache: 'no-store',
+      }),
     ])
-      .then(async ([navRes, permRes]) => {
+      .then(async ([navRes, permRes, configRes]) => {
         clearTimeout(timeoutId);
         
         // Handle navigation
@@ -175,6 +181,12 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
           permissions = permData.permissions || [];
         }
         setUserPermissions(permissions);
+        
+        // Handle config (for multi-tenancy status)
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          setMultiTenantEnabled(configData.multiTenant?.enabled || false);
+        }
         
         // Check if user is super admin by checking their roles
         // Super admin typically has admin:* permission or we can check roles
@@ -244,8 +256,8 @@ export function Sidebar({ onNavigationLoaded, isOpen = false, onClose }: Sidebar
       href: '/settings/general',
       icon: <LucideIcons.Settings className="w-5 h-5" />,
     }] : []),
-    // Add Tenant Management for Super Admin only
-    ...(isSuperAdmin ? [{
+    // Add Tenant Management for Super Admin only (only if multi-tenancy is enabled)
+    ...(isSuperAdmin && multiTenantEnabled ? [{
       label: 'Tenant Management',
       href: '/tenants',
       icon: <LucideIcons.Building2 className="w-5 h-5" />,

@@ -17,7 +17,7 @@ Module brief (fill these before running):
 - Labels needed? (yes/no)
 - Import/export? (yes/no)
 - Duplicate action? (yes/no)
-- Notifications needed? (yes/no) - If yes, specify when to send notifications (e.g., "on assignment", "on status change", "on creation")
+- Notifications needed? (yes/no) - If yes, specify when to send notifications (e.g., "on assignment", "on status change", "on creation", "on deletion", "on completion"). For each event, specify: trigger, recipient user(s), notification type (info/success/warning/error), and priority (low/normal/high/urgent).
 - Special filters / extra actions / behaviors: <...>
 
 Hard requirements:
@@ -28,7 +28,16 @@ Hard requirements:
 - Enforce RBAC end-to-end: module access, data permissions (CRUD, extras), field permissions (visibility/editability). Check permissions in UI and API.
 - If custom_field = true: add customFields JSONB column, hook using useCustomFieldsStore, dynamic rendering, search only text-like types, cache invalidation.
 - If labels needed: use core module_labels, module-specific hook/dialog, permission-gated manage_labels action.
-- If notifications needed: import `createNotification` from `@/core/lib/services/notificationService` and send notifications at specified events. Use appropriate category (e.g., `<module>_assigned`, `<module>_updated`), include actionUrl pointing to the resource, and provide meaningful title/message. See `src/core/lib/services/README_NOTIFICATIONS.md` for examples.
+- If notifications needed: 
+  - Import `createNotification` from `@/core/lib/services/notificationService`
+  - Import `getUserTenantId` from `@/core/lib/permissions` to get tenantId
+  - Send notifications in service functions after successful database operations
+  - Use category format: `<module>_<event>` (e.g., `task_assigned`, `project_updated`, `note_created`)
+  - Always include: tenantId, userId (recipient), title, message, type, category, actionUrl (pointing to resource), actionLabel, resourceType, resourceId
+  - Set priority based on event importance (default: 'normal')
+  - Wrap in try-catch - notification failures should not break main operations
+  - See `src/core/lib/services/README_NOTIFICATIONS.md` for detailed examples
+  - Real-time updates are automatic via SSE - no additional code needed
 - Implement CRUD API handlers with Zod validation, tenancy checks, soft deletes, consistent JSON responses.
 - Implement routes/index.tsx with list/table, filters, debounced search, pagination, dialogs for create/edit, delete confirmation, toasts for feedback; hide/disable actions based on permissions.
 - Implement services with server-side filters/search; include custom field search when applicable; include label handling if enabled.

@@ -1,0 +1,207 @@
+/**
+ * CONDITIONAL SCHEMA EXAMPLE
+ * 
+ * This file demonstrates how to conditionally include tenant tables and tenantId columns
+ * based on MULTI_TENANT_ENABLED environment variable.
+ * 
+ * ⚠️ WARNING: This approach is complex and has significant drawbacks.
+ * See docs/CONDITIONAL_SCHEMA_IMPLEMENTATION.md for details.
+ * 
+ * To use this approach:
+ * 1. Copy patterns from this file to baseSchema.ts
+ * 2. Update all tables that reference tenants
+ * 3. Update all relations
+ * 4. Update all type exports
+ * 5. Update all module schemas
+ */
+
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  jsonb,
+  index,
+  unique,
+} from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+import { MULTI_TENANT_ENABLED } from '@/core/config/tenantConfig';
+
+// ============================================================================
+// CONDITIONAL TENANTS TABLE
+// ============================================================================
+
+// Define tenants table ONLY if multi-tenancy is enabled
+export const tenants = MULTI_TENANT_ENABLED
+  ? pgTable('tenants', {
+      id: uuid('id').primaryKey().defaultRandom(),
+      name: varchar('name', { length: 255 }).notNull(),
+      slug: varchar('slug', { length: 100 }).notNull().unique(),
+      settings: jsonb('settings').default({}),
+      status: varchar('status', { length: 20 }).default('active').notNull(),
+      plan: varchar('plan', { length: 50 }).default('free').notNull(),
+      maxUsers: integer('max_users').default(10),
+      trialEndsAt: timestamp('trial_ends_at'),
+      metadata: jsonb('metadata').default({}),
+      createdAt: timestamp('created_at').defaultNow().notNull(),
+      updatedAt: timestamp('updated_at').defaultNow().notNull(),
+      deletedAt: timestamp('deleted_at'),
+    }, (table) => ({
+      slugIdx: index('idx_tenants_slug').on(table.slug),
+      statusIdx: index('idx_tenants_status').on(table.status),
+      planIdx: index('idx_tenants_plan').on(table.plan),
+    }))
+  : null;
+
+// ============================================================================
+// CONDITIONAL USERS TABLE (with optional tenantId)
+// ============================================================================
+
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // Conditionally include tenantId column
+  ...(MULTI_TENANT_ENABLED && tenants
+    ? { tenantId: uuid('tenant_id').references(() => tenants!.id, { onDelete: 'cascade' }) }
+    : {}),
+  email: varchar('email', { length: 255 }).notNull(),
+  passwordHash: varchar('password_hash', { length: 255 }),
+  fullName: varchar('full_name', { length: 255 }),
+  status: varchar('status', { length: 20 }).default('pending').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at'),
+}, (table) => {
+  // Build indexes conditionally
+  const indexes: Record<string, any> = {
+    emailIdx: index('idx_users_email').on(table.email),
+    deletedIdx: index('idx_users_deleted').on(table.deletedAt),
+    statusIdx: index('idx_users_status').on(table.status),
+  };
+
+  // Conditionally add tenant-related indexes
+  if (MULTI_TENANT_ENABLED && tenants && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_users_tenant').on(table.tenantId);
+    indexes.tenantEmailUnique = unique('users_tenant_email_unique').on(
+      table.tenantId,
+      table.email
+    );
+  }
+
+  return indexes;
+});
+
+// ============================================================================
+// CONDITIONAL USER_ROLES TABLE (requires tenantId when multi-tenant enabled)
+// ============================================================================
+
+// For tables where tenantId is NOT NULL, we need two different table definitions
+export const userRoles = MULTI_TENANT_ENABLED && tenants
+  ? pgTable('user_roles', {
+      id: uuid('id').primaryKey().defaultRandom(),
+      userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+      roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+      tenantId: uuid('tenant_id').notNull().references(() => tenants!.id, { onDelete: 'cascade' }),
+      grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+      isActive: boolean('is_active').default(true).notNull(),
+      assignedAt: timestamp('assigned_at').defaultNow().notNull(),
+    }, (table) => ({
+      userIdx: index('idx_user_roles_user').on(table.userId),
+      roleIdx: index('idx_user_roles_role').on(table.roleId),
+      tenantIdx: index('idx_user_roles_tenant').on(table.tenantId),
+      userRoleTenantUnique: unique('user_roles_user_role_tenant_unique').on(
+        table.userId,
+        table.roleId,
+        table.tenantId
+      ),
+    }))
+  : pgTable('user_roles', {
+      // No tenantId when multi-tenant is disabled
+      id: uuid('id').primaryKey().defaultRandom(),
+      userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+      roleId: uuid('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+      grantedBy: uuid('granted_by').references(() => users.id, { onDelete: 'set null' }),
+      isActive: boolean('is_active').default(true).notNull(),
+      assignedAt: timestamp('assigned_at').defaultNow().notNull(),
+    }, (table) => ({
+      userIdx: index('idx_user_roles_user').on(table.userId),
+      roleIdx: index('idx_user_roles_role').on(table.roleId),
+      userRoleUnique: unique('user_roles_user_role_unique').on(table.userId, table.roleId),
+    }));
+
+// ============================================================================
+// CONDITIONAL RELATIONS
+// ============================================================================
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  // Conditionally include tenant relation
+  ...(MULTI_TENANT_ENABLED && tenants && 'tenantId' in users
+    ? {
+        tenant: one(tenants!, {
+          fields: [users.tenantId],
+          references: [tenants!.id],
+        }),
+      }
+    : {}),
+  // Other relations (always present)
+  // authProviders: many(authProviders),
+  // ...
+}));
+
+// Conditionally export tenants relations
+export const tenantsRelations = MULTI_TENANT_ENABLED && tenants
+  ? relations(tenants!, ({ many }) => ({
+      users: many(users),
+      // ... other relations
+    }))
+  : null;
+
+// ============================================================================
+// CONDITIONAL TYPE EXPORTS
+// ============================================================================
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+// Conditionally export Tenant types
+export type Tenant = MULTI_TENANT_ENABLED && tenants
+  ? typeof tenants.$inferSelect
+  : never;
+export type NewTenant = MULTI_TENANT_ENABLED && tenants
+  ? typeof tenants.$inferInsert
+  : never;
+
+// ============================================================================
+// HELPER: Type guard for tenantId
+// ============================================================================
+
+export function hasTenantId<T extends Record<string, any>>(
+  obj: T
+): obj is T & { tenantId: string | null } {
+  return 'tenantId' in obj;
+}
+
+// ============================================================================
+// USAGE IN CODE
+// ============================================================================
+
+/*
+// In service files, use type guards:
+import { hasTenantId } from '@/core/lib/db/baseSchema';
+
+async function getUsers() {
+  const users = await db.select().from(users);
+  
+  // Type guard to check if tenantId exists
+  if (MULTI_TENANT_ENABLED) {
+    users.forEach(user => {
+      if (hasTenantId(user)) {
+        console.log('User tenant:', user.tenantId);
+      }
+    });
+  }
+}
+*/
+

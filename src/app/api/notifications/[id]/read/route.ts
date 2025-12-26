@@ -18,11 +18,13 @@ export async function PATCH(
     const { id } = await params;
     const tenantId = await getUserTenantId(userId);
 
-    if (!tenantId) {
+    // tenantId is optional - only required in multi-tenant mode
+    const { MULTI_TENANT_ENABLED } = await import('@/core/lib/db/baseSchema');
+    if (MULTI_TENANT_ENABLED && !tenantId) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 400 });
     }
 
-    await markAsRead(id, userId, tenantId);
+    await markAsRead(id, userId, tenantId || undefined);
 
     return NextResponse.json({ success: true });
   } catch (error) {

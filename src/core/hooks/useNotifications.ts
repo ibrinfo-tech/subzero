@@ -62,12 +62,22 @@ export function useNotifications() {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch notifications');
+          let errorMessage = 'Failed to fetch notifications';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            // If response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage;
+          }
+          throw new Error(`${errorMessage} (${response.status})`);
         }
 
         const data = await response.json();
         if (data.success) {
-          setNotifications(data.data);
+          setNotifications(data.data || []);
+        } else {
+          throw new Error(data.error || 'Failed to fetch notifications');
         }
       } catch (err) {
         console.error('Error fetching notifications:', err);
@@ -188,9 +198,14 @@ export function useNotifications() {
     fetchUnreadCount();
 
     // Set up Server-Sent Events connection for real-time updates
-    const eventSource = new EventSource('/api/notifications/stream', {
-      withCredentials: true,
-    });
+    // Note: EventSource doesn't support custom headers, so we pass token via query param
+    // The server will also check cookies as a fallback
+    const eventSource = new EventSource(
+      `/api/notifications/stream?token=${encodeURIComponent(token)}`,
+      {
+        withCredentials: true,
+      }
+    );
 
     eventSource.onmessage = (event) => {
       try {
@@ -206,6 +221,10 @@ export function useNotifications() {
           });
         } else if (data.type === 'error') {
           console.error('SSE error:', data.message);
+          // Close connection on auth errors to prevent infinite reconnection attempts
+          if (data.message?.includes('Unauthorized') || data.message?.includes('Tenant not found')) {
+            eventSource.close();
+          }
         }
       } catch (error) {
         console.error('Error parsing SSE message:', error);
@@ -213,15 +232,23 @@ export function useNotifications() {
     };
 
     eventSource.onerror = (error) => {
-      console.error('SSE connection error:', error);
-      // EventSource will automatically reconnect
+      // EventSource automatically attempts to reconnect
+      // We only log errors here - the connection will retry automatically
+      // If it's a persistent auth error, the server will send an error message
+      // which we handle in onmessage above
+      const readyState = eventSource.readyState;
+      if (readyState === EventSource.CLOSED) {
+        console.error('SSE connection closed');
+      } else if (readyState === EventSource.CONNECTING) {
+        console.log('SSE reconnecting...');
+      }
     };
 
     // Cleanup on unmount
     return () => {
       eventSource.close();
     };
-  }, [isAuthenticated, token, fetchNotifications, unreadCount]);
+  }, [isAuthenticated, token, fetchNotifications]);
 
   return {
     notifications,

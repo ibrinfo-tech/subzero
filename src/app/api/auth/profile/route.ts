@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
-import { users } from '@/core/lib/db/baseSchema';
+import { users, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { verifyAuth } from '@/core/middleware/auth';
 import { getUserRole, getUserPermissionsWithModules } from '@/core/lib/permissions';
 import { eq } from 'drizzle-orm';
@@ -11,31 +11,37 @@ import { updateUserSchema } from '@/core/lib/validations/users';
  * Helper to load the current user's profile with role and permissions
  */
 async function getCurrentUserProfile(userId: string) {
+  const selectFields: any = {
+    id: users.id,
+    email: users.email,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl,
+    isEmailVerified: users.isEmailVerified,
+    phoneNumber: users.phoneNumber,
+    jobTitle: users.jobTitle,
+    department: users.department,
+    companyName: users.companyName,
+    dateOfBirth: users.dateOfBirth,
+    bio: users.bio,
+    addressLine1: users.addressLine1,
+    addressLine2: users.addressLine2,
+    city: users.city,
+    state: users.state,
+    postalCode: users.postalCode,
+    country: users.country,
+    timezone: users.timezone,
+    locale: users.locale,
+    createdAt: users.createdAt,
+    updatedAt: users.updatedAt,
+  };
+
+  // Only select tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+    selectFields.tenantId = users.tenantId;
+  }
+
   const userResult = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      fullName: users.fullName,
-      avatarUrl: users.avatarUrl,
-      isEmailVerified: users.isEmailVerified,
-      tenantId: users.tenantId,
-      phoneNumber: users.phoneNumber,
-      jobTitle: users.jobTitle,
-      department: users.department,
-      companyName: users.companyName,
-      dateOfBirth: users.dateOfBirth,
-      bio: users.bio,
-      addressLine1: users.addressLine1,
-      addressLine2: users.addressLine2,
-      city: users.city,
-      state: users.state,
-      postalCode: users.postalCode,
-      country: users.country,
-      timezone: users.timezone,
-      locale: users.locale,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-    })
+    .select(selectFields)
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
-import { tenants } from '@/core/lib/db/baseSchema';
+import { tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
 
 /**
@@ -15,6 +15,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check if multi-tenancy is enabled
+    if (!MULTI_TENANT_ENABLED || !tenants) {
+      return NextResponse.json(
+        { error: 'Multi-tenancy is not enabled' },
+        { status: 404 }
+      );
+    }
+
     // Verify authentication
     const authMiddleware = requireAuth();
     const authResult = await authMiddleware(request);
@@ -77,6 +85,14 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check if multi-tenancy is enabled
+    if (!MULTI_TENANT_ENABLED || !tenants) {
+      return NextResponse.json(
+        { error: 'Multi-tenancy is not enabled' },
+        { status: 404 }
+      );
+    }
+
     // Verify authentication
     const authMiddleware = requireAuth();
     const authResult = await authMiddleware(request);
@@ -189,6 +205,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Check if multi-tenancy is enabled
+    if (!MULTI_TENANT_ENABLED || !tenants) {
+      return NextResponse.json(
+        { error: 'Multi-tenancy is not enabled' },
+        { status: 404 }
+      );
+    }
+
     // Verify authentication
     const authMiddleware = requireAuth();
     const authResult = await authMiddleware(request);

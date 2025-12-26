@@ -1,6 +1,6 @@
 {
-  "id": "d412186e-b247-4f78-ac1d-edf78c47ed3c",
-  "prevId": "674adadd-8eeb-4c88-a9b2-2ff191053f74",
+  "id": "2c1c9fc8-5820-439c-b67c-bff95ddd1911",
+  "prevId": "1178f699-3b5f-4578-b8ac-8c849fdf80c7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -202,6 +202,8 @@
           "method": "btree",
           "with": {}
         },
+<<<<<<< HEAD
+=======
         "idx_audit_logs_tenant": {
           "name": "idx_audit_logs_tenant",
           "columns": [
@@ -217,6 +219,7 @@
           "method": "btree",
           "with": {}
         },
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         "idx_audit_logs_resource": {
           "name": "idx_audit_logs_resource",
           "columns": [
@@ -252,6 +255,24 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+<<<<<<< HEAD
+        },
+        "idx_audit_logs_tenant": {
+          "name": "idx_audit_logs_tenant",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+=======
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         }
       },
       "foreignKeys": {},
@@ -1685,12 +1706,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+<<<<<<< HEAD
+=======
         "tenant_id": {
           "name": "tenant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         "parent_role_id": {
           "name": "parent_role_id",
           "type": "uuid",
@@ -1775,6 +1799,17 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+<<<<<<< HEAD
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+=======
         }
       },
       "indexes": {
@@ -1793,6 +1828,7 @@
           "method": "btree",
           "with": {}
         },
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         "idx_roles_code": {
           "name": "idx_roles_code",
           "columns": [
@@ -1852,6 +1888,24 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+<<<<<<< HEAD
+        },
+        "idx_roles_tenant": {
+          "name": "idx_roles_tenant",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+=======
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         }
       },
       "foreignKeys": {
@@ -2685,12 +2739,15 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
+<<<<<<< HEAD
+=======
         "tenant_id": {
           "name": "tenant_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         "email": {
           "name": "email",
           "type": "varchar(255)",
@@ -2879,6 +2936,15 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+<<<<<<< HEAD
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+=======
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         }
       },
       "indexes": {
@@ -2897,6 +2963,8 @@
           "method": "btree",
           "with": {}
         },
+<<<<<<< HEAD
+=======
         "idx_users_tenant": {
           "name": "idx_users_tenant",
           "columns": [
@@ -2912,6 +2980,7 @@
           "method": "btree",
           "with": {}
         },
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         "idx_users_deleted": {
           "name": "idx_users_deleted",
           "columns": [
@@ -2956,6 +3025,24 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+<<<<<<< HEAD
+        },
+        "idx_users_tenant": {
+          "name": "idx_users_tenant",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+=======
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
         }
       },
       "foreignKeys": {
@@ -3624,6 +3711,8 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+<<<<<<< HEAD
+=======
     },
     "public.event_dead_letter": {
       "name": "event_dead_letter",
@@ -4606,6 +4695,7 @@
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
+>>>>>>> ddd8b9665c396902652b225b121dc094652a5a11
     }
   },
   "enums": {},
