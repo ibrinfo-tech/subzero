@@ -1,47 +1,84 @@
-Create a NEW dynamic module called "<MODULE_NAME>" for this subzero_2.0 RAD framework.
+# Create New Dynamic Module: <MODULE_NAME>
 
-Follow ALL rules (structure, UX, seeding, permissions) from:
-- .cursor/rules/cursor.rules.md
-- .cursor/templates/custom-fields-module-template.md
-- .cursor/templates/static-module-template.md
-- Use existing templates in src/modules/_template, _template_custom, _template_static as patterns.
+**Reference**: `.cursor/rules/cursor.rules.md` for complete patterns. Follow module examples: `src/modules/notes` (static) or `src/modules/students` (custom fields).
 
-Module brief (fill these before running):
-- Purpose (1–2 lines): <...>
-- Sidebar label + icon (Lucide): "<Label>", "<IconName>"
-- Entity singular/plural: "<Entity>" / "<Entities>"
-- Domain fields (non-core): 
-  - <field_code>: <type> – <description>
-  - <field_code>: <type> – <description>
-- Custom fields via Settings? (yes/no)
-- Labels needed? (yes/no)
-- Import/export? (yes/no)
-- Duplicate action? (yes/no)
-- Notifications needed? (yes/no) - If yes, specify when to send notifications (e.g., "on assignment", "on status change", "on creation", "on deletion", "on completion"). For each event, specify: trigger, recipient user(s), notification type (info/success/warning/error), and priority (low/normal/high/urgent).
-- Special filters / extra actions / behaviors: <...>
+## Quick Setup
 
-Hard requirements:
-- Place module in src/modules/<module-name>/ with the exact folder structure from the rules (config, api/handlers, routes, components, services, schemas, seeds, store, hooks, types, utils, index.ts).
-- module.config.json must be correct (id, name, routes, api endpoints, permissions, navigation, fields config path, custom_field flag if enabled).
-- Seed must live in src/modules/<module>/seeds/seed.ts (or moduleRegistration.ts) and register the module row, permissions, module_fields, field permissions; wire it so main scripts/seed.ts discovers and runs it (no per-module hardcoding in scripts/seed.ts).
-- Use ShadCN UI from src/core/components/ui; responsive layout; debounced search (useDebounce), filters with “Clear filters”.
-- Enforce RBAC end-to-end: module access, data permissions (CRUD, extras), field permissions (visibility/editability). Check permissions in UI and API.
-- If custom_field = true: add customFields JSONB column, hook using useCustomFieldsStore, dynamic rendering, search only text-like types, cache invalidation.
-- If labels needed: use core module_labels, module-specific hook/dialog, permission-gated manage_labels action.
-- If notifications needed: 
-  - Import `createNotification` from `@/core/lib/services/notificationService`
-  - Import `getUserTenantId` from `@/core/lib/permissions` to get tenantId
-  - Send notifications in service functions after successful database operations
-  - Use category format: `<module>_<event>` (e.g., `task_assigned`, `project_updated`, `note_created`)
-  - Always include: tenantId, userId (recipient), title, message, type, category, actionUrl (pointing to resource), actionLabel, resourceType, resourceId
-  - Set priority based on event importance (default: 'normal')
-  - Wrap in try-catch - notification failures should not break main operations
-  - See `src/core/lib/services/README_NOTIFICATIONS.md` for detailed examples
-  - Real-time updates are automatic via SSE - no additional code needed
-- Implement CRUD API handlers with Zod validation, tenancy checks, soft deletes, consistent JSON responses.
-- Implement routes/index.tsx with list/table, filters, debounced search, pagination, dialogs for create/edit, delete confirmation, toasts for feedback; hide/disable actions based on permissions.
-- Implement services with server-side filters/search; include custom field search when applicable; include label handling if enabled.
-- Add export/import/duplicate only if requested; guard with permissions.
-- Fix all linting for touched files.
+| Item | Details |
+|------|---------|
+| **Purpose** | <1-2 line description> |
+| **Sidebar** | Label="<Label>", Icon="<IconName>" (Lucide: e.g., FileText, Users) |
+| **Entity** | Singular="<Entity>", Plural="<Entities>" |
+| **Fields** | Format: `code:type - description` (e.g., `title:text - Task title`) |
+| **Features** | Custom Fields: yes/no \| Labels: yes/no \| Import/Export: yes/no \| Duplicate: yes/no |
+| **Notifications** | yes/no — If yes: `on <event>` → recipient, type, priority |
 
-Deliverables: full module code in place, ready to run `npm run build` and `npm run seed` without errors.
+## Implementation Checklist
+
+### Core Files
+- [ ] **module.config.json**: `id`, `name`, `version`, `enabled: true`, `routes`, `api.basePath`, `api.endpoints`, `navigation`, `permissions`, `fields`
+- [ ] **Schema** (`schemas/[module]Schema.ts`): System fields (`id`, `tenant_id` [conditional], `created_by`, `updated_by`, `created_at`, `updated_at`, `deleted_at`), domain fields, `customFields` jsonb (if enabled)
+- [ ] **Validation** (`schemas/[module]Validation.ts`): `create[Module]Schema`, `update[Module]Schema` (partial), export types
+- [ ] **Service** (`services/[module]Service.ts`): `list()` (tenant filter + soft delete), `getById()`, `create()`, `update()`, `delete()` (soft)
+- [ ] **API Handlers** (`api/handlers/*.ts`): Auth → `getUserTenantId()` → validate → service → response
+- [ ] **Routes** (`routes/index.tsx`): `<ProtectedPage>`, search (debounced 300ms), filters, pagination, CRUD dialogs, permission gates
+- [ ] **Seed** (`seeds/seed.ts`): Register module, permissions (CRUD + extras), system fields, field permissions
+
+### Optional Features
+- [ ] **Custom Fields Hook** (`hooks/use[Module]CustomFields.ts`): Fetch from `/api/settings/custom-fields?moduleId=`, integrate in forms/tables
+- [ ] **Labels Hook**: Use `module_labels` table, gate with `[module]:manage_labels`
+- [ ] **Notifications**: Import `createNotification` + `getUserTenantId`, send after DB ops (category: `[module]_[event]`)
+
+## Multi-Tenancy (CRITICAL - Must Work Both Modes)
+
+**Conditionally include tenant_id in schema:**
+```typescript
+import { MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
+export const table = pgTable('[module]', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ...(MULTI_TENANT_ENABLED ? { tenantId: uuid('tenant_id') } : {}),
+  // ... other fields
+});
+```
+
+**Service queries — build conditions array:**
+```typescript
+const conditions = [isNull(deletedAt)];
+if (MULTI_TENANT_ENABLED && 'tenantId' in table && tenantId) {
+  conditions.push(eq(table.tenantId, tenantId));
+}
+return db.select().from(table).where(and(...conditions));
+```
+
+**Service inserts — conditionally add tenantId:**
+```typescript
+const insertData: any = { createdBy: userId, updatedBy: userId, ...fields };
+if (MULTI_TENANT_ENABLED && 'tenantId' in table && tenantId) {
+  insertData.tenantId = tenantId;
+}
+await db.insert(table).values(insertData);
+```
+
+**API handlers — pass tenantId (can be null in single-tenant):**
+```typescript
+const tenantId = await getUserTenantId(userId); // null if single-tenant
+await service.list(tenantId, filters); // service handles null
+```
+
+## Critical Errors to Avoid
+- ❌ Using `tenantId` without `MULTI_TENANT_ENABLED` check (crashes)
+- ❌ Assuming `tenantId` column exists (must check: `'tenantId' in table`)
+- ❌ Missing `deletedAt IS NULL` filter in queries
+- ❌ Hard delete instead of soft delete
+- ❌ Missing permissions gates in UI + API
+- ❌ Forgetting `createdBy`/`updatedBy` in inserts
+- ❌ Not debouncing search (use 300ms)
+- ❌ Skipping seed registration
+- ❌ Custom fields enabled but missing schema column
+
+## Testing
+- ✅ Builds without errors
+- ✅ Seeds without errors (idempotent)
+- ✅ Test in **BOTH** single-tenant (`MULTI_TENANT_ENABLED=false`) and multi-tenant (`MULTI_TENANT_ENABLED=true`) modes
+- ✅ No TypeScript errors
+- ✅ No linting errors
