@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/core/lib/tokens';
 
 /**
- * Extract token from request headers or cookies
+ * Extract token from request headers, cookies, or query parameters
  */
 export function getAuthToken(request: NextRequest): string | null {
   // Try Authorization header first
@@ -19,8 +19,15 @@ export function getAuthToken(request: NextRequest): string | null {
     return cookieToken;
   }
   
-  // console.log('[Auth] No token found in headers or cookies');
-  console.log('[Auth] Available cookies:', request.cookies.getAll().map(c => c.name));
+  // Fallback to query parameter (for SSE/EventSource which doesn't support custom headers)
+  const { searchParams } = new URL(request.url);
+  const queryToken = searchParams.get('token');
+  if (queryToken) {
+    // console.log('[Auth] Token found in query parameter');
+    return queryToken;
+  }
+  
+  // console.log('[Auth] No token found in headers, cookies, or query');
   return null;
 }
 

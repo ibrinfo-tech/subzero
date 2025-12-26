@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
-import { tenants } from '@/core/lib/db/baseSchema';
+import { tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, or, like, isNull, sql } from 'drizzle-orm';
 
 /**
@@ -12,6 +12,14 @@ import { eq, and, or, like, isNull, sql } from 'drizzle-orm';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Check if multi-tenancy is enabled
+    if (!MULTI_TENANT_ENABLED || !tenants) {
+      return NextResponse.json(
+        { error: 'Multi-tenancy is not enabled' },
+        { status: 404 }
+      );
+    }
+
     // Verify authentication
     const authMiddleware = requireAuth();
     const authResult = await authMiddleware(request);
@@ -96,6 +104,14 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Check if multi-tenancy is enabled
+    if (!MULTI_TENANT_ENABLED || !tenants) {
+      return NextResponse.json(
+        { error: 'Multi-tenancy is not enabled' },
+        { status: 404 }
+      );
+    }
+
     // Verify authentication
     const authMiddleware = requireAuth();
     const authResult = await authMiddleware(request);

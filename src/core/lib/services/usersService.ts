@@ -1,5 +1,5 @@
 import { db } from '@/core/lib/db';
-import { users, roles, userRoles, tenants } from '@/core/lib/db/baseSchema';
+import { users, roles, userRoles, tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, or, like, isNull, desc, count, sql, lte, gte } from 'drizzle-orm';
 import type { User, NewUser } from '@/core/lib/db/baseSchema';
 import { hashPassword } from '@/core/lib/utils';
@@ -50,13 +50,15 @@ export async function getUsers(options?: {
   
   // Tenant isolation: if currentUserTenantId is provided (not null), filter by it
   // If currentUserTenantId is null (Super Admin), show all users
-  if (currentUserTenantId !== undefined && currentUserTenantId !== null) {
-    conditions.push(eq(users.tenantId, currentUserTenantId));
-  }
-  
-  // Additional tenant filter
-  if (tenantId) {
-    conditions.push(eq(users.tenantId, tenantId));
+  if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+    if (currentUserTenantId !== undefined && currentUserTenantId !== null) {
+      conditions.push(eq(users.tenantId, currentUserTenantId));
+    }
+    
+    // Additional tenant filter
+    if (tenantId) {
+      conditions.push(eq(users.tenantId, tenantId));
+    }
   }
   
   if (status) {
@@ -182,9 +184,9 @@ export async function getUserWithRoles(id: string) {
     )
     .orderBy(desc(roles.priority));
 
-  // Get tenant info
+  // Get tenant info (only if multi-tenancy is enabled)
   let tenant = null;
-  if (user.tenantId) {
+  if (MULTI_TENANT_ENABLED && tenants && user.tenantId) {
     const tenantResult = await db
       .select()
       .from(tenants)
@@ -211,29 +213,35 @@ export async function createUser(data: CreateUserInput, createdBy: string): Prom
   
   const hashedPassword = await hashPassword(data.password);
   
+  const userData: any = {
+    email: data.email,
+    passwordHash: hashedPassword,
+    fullName: data.fullName,
+    status: data.status || 'active',
+    isEmailVerified: false,
+    twoFactorEnabled: false,
+    failedLoginAttempts: 0,
+    timezone: 'UTC',
+    locale: 'en',
+    metadata: {},
+  };
+
+  // Only include tenantId if multi-tenancy is enabled
+  if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+    userData.tenantId = data.tenantId || null;
+  }
+
   const result = await db
     .insert(users)
-    .values({
-      email: data.email,
-      passwordHash: hashedPassword,
-      fullName: data.fullName,
-      tenantId: data.tenantId || null,
-      status: data.status || 'active',
-      isEmailVerified: false,
-      twoFactorEnabled: false,
-      failedLoginAttempts: 0,
-      timezone: 'UTC',
-      locale: 'en',
-      metadata: {},
-    })
+    .values(userData)
     .returning();
   
   const newUser = result[0];
   
   console.log('[createUser] User created in DB:', { id: newUser.id, email: newUser.email, tenantId: newUser.tenantId });
   
-  // Assign default "USER" role if user has a tenant
-  if (newUser.tenantId) {
+  // Assign default "USER" role if user has a tenant (only in multi-tenant mode)
+  if (MULTI_TENANT_ENABLED && 'tenantId' in newUser && newUser.tenantId) {
     console.log('[createUser] User has tenant, looking for default role');
     const { getDefaultUserRole } = await import('@/core/lib/roles');
     const defaultRole = await getDefaultUserRole(newUser.tenantId);
@@ -241,18 +249,43 @@ export async function createUser(data: CreateUserInput, createdBy: string): Prom
     if (defaultRole) {
       console.log('[createUser] Assigning default role:', defaultRole.code, '(', defaultRole.id, ') to user:', newUser.id);
       
+      const roleAssignmentData: any = {
+        userId: newUser.id,
+        roleId: defaultRole.id,
+        grantedBy: createdBy,
+        isActive: true,
+        metadata: {},
+      };
+
+      // Only include tenantId if multi-tenancy is enabled and column exists
+      if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+        roleAssignmentData.tenantId = newUser.tenantId;
+      }
+
+      const roleAssignment = await db.insert(userRoles).values(roleAssignmentData).returning();
+      
+      console.log('[createUser] Role assigned successfully:', roleAssignment[0]?.id);
+    } else {
+      console.warn('[createUser] No default role found for tenant:', newUser.tenantId);
+    }
+  } else if (!MULTI_TENANT_ENABLED) {
+    // In single-tenant mode, assign default role without tenantId
+    console.log('[createUser] Single-tenant mode, looking for default role');
+    const { getDefaultUserRole } = await import('@/core/lib/roles');
+    const defaultRole = await getDefaultUserRole();
+    
+    if (defaultRole) {
+      console.log('[createUser] Assigning default role:', defaultRole.code, '(', defaultRole.id, ') to user:', newUser.id);
+      
       const roleAssignment = await db.insert(userRoles).values({
         userId: newUser.id,
         roleId: defaultRole.id,
-        tenantId: newUser.tenantId,
         grantedBy: createdBy,
         isActive: true,
         metadata: {},
       }).returning();
       
       console.log('[createUser] Role assigned successfully:', roleAssignment[0]?.id);
-    } else {
-      console.warn('[createUser] No default role found for tenant:', newUser.tenantId);
     }
   } else {
     console.warn('[createUser] User has no tenant, skipping role assignment');
@@ -312,22 +345,6 @@ export async function updateUser(
   if (data.roleId !== undefined) {
     console.log('[updateUser] Updating role for user:', id, 'to roleId:', data.roleId);
     
-    // Get the tenant_id for the role assignment
-    // If user has no tenant (e.g., Super Admin), get the tenant from the updater
-    let tenantIdForRole = result[0].tenantId;
-    
-    if (!tenantIdForRole) {
-      // Get the updater's tenant
-      const updater = await db
-        .select({ tenantId: users.tenantId })
-        .from(users)
-        .where(eq(users.id, updatedBy))
-        .limit(1);
-      
-      tenantIdForRole = updater[0]?.tenantId || null;
-      console.log('[updateUser] User has no tenant, using updater tenant:', tenantIdForRole);
-    }
-    
     // Remove existing roles for this user
     const deletedRoles = await db
       .delete(userRoles)
@@ -336,20 +353,50 @@ export async function updateUser(
     
     console.log('[updateUser] Deleted existing roles:', deletedRoles.length);
     
-    // Add new role (only if we have a valid tenant_id)
-    if (data.roleId && tenantIdForRole) {
-      const newUserRole = await db.insert(userRoles).values({
-        userId: id,
-        roleId: data.roleId,
-        tenantId: tenantIdForRole,
-        grantedBy: updatedBy,
-        isActive: true,
-        metadata: {},
-      }).returning();
-      
-      console.log('[updateUser] Created new user role:', newUserRole[0]);
-    } else if (data.roleId && !tenantIdForRole) {
-      console.error('[updateUser] Cannot assign role: no tenant_id available');
+    // Add new role
+    if (data.roleId) {
+      if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+        // Multi-tenant mode: need tenantId
+        let tenantIdForRole = 'tenantId' in result[0] ? result[0].tenantId : null;
+        
+        if (!tenantIdForRole) {
+          // Get the updater's tenant
+          const updater = await db
+            .select({ tenantId: users.tenantId })
+            .from(users)
+            .where(eq(users.id, updatedBy))
+            .limit(1);
+          
+          tenantIdForRole = updater[0]?.tenantId || null;
+          console.log('[updateUser] User has no tenant, using updater tenant:', tenantIdForRole);
+        }
+        
+        if (tenantIdForRole) {
+          const newUserRole = await db.insert(userRoles).values({
+            userId: id,
+            roleId: data.roleId,
+            tenantId: tenantIdForRole,
+            grantedBy: updatedBy,
+            isActive: true,
+            metadata: {},
+          }).returning();
+          
+          console.log('[updateUser] Created new user role:', newUserRole[0]);
+        } else {
+          console.error('[updateUser] Cannot assign role: no tenant_id available');
+        }
+      } else {
+        // Single-tenant mode: no tenantId needed
+        const newUserRole = await db.insert(userRoles).values({
+          userId: id,
+          roleId: data.roleId,
+          grantedBy: updatedBy,
+          isActive: true,
+          metadata: {},
+        }).returning();
+        
+        console.log('[updateUser] Created new user role:', newUserRole[0]);
+      }
     }
   }
   
@@ -395,16 +442,22 @@ export async function assignRoleToUser(
   grantedBy: string,
   validUntil?: Date
 ): Promise<void> {
-  await db.insert(userRoles).values({
+  const roleData: any = {
     userId,
     roleId,
-    tenantId,
     grantedBy,
     validFrom: new Date(),
     validUntil: validUntil || null,
     isActive: true,
     metadata: {},
-  });
+  };
+
+  // Only include tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+    roleData.tenantId = tenantId;
+  }
+
+  await db.insert(userRoles).values(roleData);
 }
 
 /**
@@ -415,22 +468,36 @@ export async function removeRoleFromUser(
   roleId: string,
   tenantId: string
 ): Promise<void> {
+  const whereConditions = [
+    eq(userRoles.userId, userId),
+    eq(userRoles.roleId, roleId),
+  ];
+
+  // Only check tenantId if multi-tenancy is enabled and column exists
+  if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles) {
+    whereConditions.push(eq(userRoles.tenantId, tenantId));
+  }
+
   await db
     .update(userRoles)
     .set({ isActive: false })
-    .where(
-      and(
-        eq(userRoles.userId, userId),
-        eq(userRoles.roleId, roleId),
-        eq(userRoles.tenantId, tenantId)
-      )
-    );
+    .where(and(...whereConditions));
 }
 
 /**
  * Get count of users in a tenant
  */
 export async function getUserCountByTenant(tenantId: string): Promise<number> {
+  if (!MULTI_TENANT_ENABLED || !('tenantId' in users)) {
+    // In single-tenant mode, return total user count
+    const result = await db
+      .select({ count: count() })
+      .from(users)
+      .where(isNull(users.deletedAt));
+    
+    return result[0]?.count || 0;
+  }
+
   const result = await db
     .select({ count: count() })
     .from(users)

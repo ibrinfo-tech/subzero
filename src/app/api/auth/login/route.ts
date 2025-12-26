@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
-import { users } from '@/core/lib/db/baseSchema';
+import { users, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { loginSchema } from '@/core/lib/validations/auth';
 import { verifyPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
@@ -32,16 +32,22 @@ export async function POST(request: NextRequest) {
     const { email, password } = validation.data;
     
     // Find user by email
+    const selectFields: any = {
+      id: users.id,
+      email: users.email,
+      passwordHash: users.passwordHash,
+      fullName: users.fullName,
+      isEmailVerified: users.isEmailVerified,
+      status: users.status,
+    };
+
+    // Only select tenantId if multi-tenancy is enabled and column exists
+    if (MULTI_TENANT_ENABLED && 'tenantId' in users) {
+      selectFields.tenantId = users.tenantId;
+    }
+
     const userResult = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        passwordHash: users.passwordHash,
-        fullName: users.fullName,
-        isEmailVerified: users.isEmailVerified,
-        status: users.status,
-        tenantId: users.tenantId,
-      })
+      .select(selectFields)
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
@@ -121,16 +127,22 @@ export async function POST(request: NextRequest) {
     // });
     
     // Create response with user data (without password) and tokens
+    const userResponse: any = {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      isEmailVerified: user.isEmailVerified,
+    };
+
+    // Only include tenantId if it exists
+    if ('tenantId' in user) {
+      userResponse.tenantId = user.tenantId;
+    }
+
     const response = NextResponse.json(
       {
         success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          isEmailVerified: user.isEmailVerified,
-          tenantId: user.tenantId,
-        },
+        user: userResponse,
         accessToken,
         refreshToken,
         expiresAt: accessExpiresAt.toISOString(),

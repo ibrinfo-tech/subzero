@@ -1,27 +1,18 @@
 /**
- * Database Seed Script - Dynamic RBAC System
+ * Database Seed Script - Conditional Multi-Tenancy Support
  * 
- * This seed script implements a fully dynamic Role-Based Access Control (RBAC) system
- * that automatically discovers and registers modules from the filesystem.
+ * This seed script supports both multi-tenant and single-tenant modes
+ * based on the MULTI_TENANT_ENABLED environment variable.
  * 
- * Key Features:
- * 1. Dynamic Module Discovery: Automatically scans src/modules/ directory
- * 2. Dynamic Permission Generation: Creates permissions based on module.config.json
- * 3. Core + Dynamic Modules: Supports both core system modules and custom modules
- * 4. Navigation Integration: Discovered modules appear in the sidebar automatically
+ * Multi-Tenant Mode (MULTI_TENANT_ENABLED=true):
+ * - Creates tenants table and default tenant
+ * - Adds tenantId to users, roles, and user_roles
+ * - Supports multiple organizations
  * 
- * How it works:
- * - Core modules (Dashboard, Users, Roles, Profile) are always included
- * - Custom modules in src/modules/ are discovered via moduleLoader
- * - Each module's permissions are generated from its module.config.json
- * - Modules are saved to the database and linked to permissions
- * - Navigation API reads from database to show all available modules
- * 
- * To add a new module:
- * 1. Create a folder in src/modules/your-module/
- * 2. Add module.config.json with permissions defined
- * 3. Run npm run seed - your module will be automatically discovered!
- * 4. The module will appear in navigation and permission assignment UI
+ * Single-Tenant Mode (MULTI_TENANT_ENABLED=false):
+ * - No tenants table
+ * - No tenantId columns
+ * - Simpler schema for single organization
  */
 
 import * as dotenv from 'dotenv';
@@ -47,6 +38,9 @@ for (const envPath of envPaths) {
         const dbUrl = process.env.DATABASE_URL;
         const maskedUrl = dbUrl.replace(/:([^:@]+)@/, ':****@');
         console.log(`✓ DATABASE_URL found: ${maskedUrl.substring(0, 50)}...`);
+      }
+      if (process.env.MULTI_TENANT_ENABLED !== undefined) {
+        console.log(`✓ MULTI_TENANT_ENABLED: ${process.env.MULTI_TENANT_ENABLED}`);
       }
       break;
     } else {
@@ -74,12 +68,10 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 /**
- * Comprehensive seed file aligned with core.sql RBAC schema
- * Implements proper module:action permission codes
- * Run with: npm run seed
+ * Main seed function with conditional multi-tenancy support
  */
 async function seed() {
   const { db } = await import('../src/core/lib/db');
@@ -92,55 +84,61 @@ async function seed() {
     users,
     userRoles,
     authProviders,
+    MULTI_TENANT_ENABLED,
   } = await import('../src/core/lib/db/baseSchema');
   const { moduleFields, roleModuleAccess } = await import('../src/core/lib/db/permissionSchema');
   const { hashPassword } = await import('../src/core/lib/utils');
 
-  console.log('🌱 Starting database seed (aligned with core.sql)...\n');
+  console.log('🌱 Starting database seed...\n');
+  console.log(`🔧 Multi-Tenancy Mode: ${MULTI_TENANT_ENABLED ? 'ENABLED ✅' : 'DISABLED ❌'}\n`);
 
   try {
     // ============================================================================
-    // 1. TENANTS (Must be first - referenced by users and roles)
+    // 1. TENANTS (Only if multi-tenancy is enabled)
     // ============================================================================
-    console.log('🏢 Seeding default tenant...');
-    const tenantData = [
-      {
-        name: 'Default Organization',
-        slug: 'default',
-        status: 'active',
-        plan: 'free',
-        maxUsers: 100,
-        settings: { theme: 'light', timezone: 'UTC' },
-        metadata: {},
-      },
-    ];
+    let seededTenants: any[] = [];
 
-    const existingTenants = await db.select().from(tenants);
-    const existingSlugs = new Set(existingTenants.map((t) => t.slug));
-    const tenantsToInsert = tenantData.filter((t) => !existingSlugs.has(t.slug));
+    if (MULTI_TENANT_ENABLED) {
+      console.log('🏢 Seeding tenants...');
 
-    let seededTenants = [...existingTenants];
-
-    if (tenantsToInsert.length > 0) {
-      const newTenants = await db.insert(tenants).values(tenantsToInsert).returning();
-      seededTenants = [...seededTenants, ...newTenants];
-      console.log(`✅ Created default tenant: "${newTenants[0].name}"`);
-    } else {
-      const defaultTenant = existingTenants.find((t) => t.slug === 'default');
-      if (defaultTenant) {
-        console.log(`ℹ️  Default tenant already exists: "${defaultTenant.name}"`);
-      } else {
-        console.log(`ℹ️  ${existingTenants.length} tenant(s) exist`);
+      if (!tenants) {
+        throw new Error('MULTI_TENANT_ENABLED=true but tenants table is null. Check baseSchema.ts');
       }
+
+      const tenantData = [
+        {
+          name: 'Default Organization',
+          slug: 'default',
+          status: 'active' as const,
+          plan: 'free' as const,
+          maxUsers: 100,
+          settings: { theme: 'light', timezone: 'UTC' },
+          metadata: {},
+        },
+      ];
+
+      const existingTenants = await db.select().from(tenants);
+      const existingSlugs = new Set(existingTenants.map((t) => t.slug));
+      const tenantsToInsert = tenantData.filter((t) => !existingSlugs.has(t.slug));
+
+      if (tenantsToInsert.length > 0) {
+        const newTenants = await db.insert(tenants).values(tenantsToInsert).returning();
+        seededTenants = [...existingTenants, ...newTenants];
+        console.log(`✅ Created ${newTenants.length} tenant(s)`);
+      } else {
+        seededTenants = existingTenants;
+        console.log(`ℹ️  Tenants already exist (${existingTenants.length} total)`);
+      }
+      console.log('');
+    } else {
+      console.log('⏭️  Skipping tenant seeding (multi-tenancy disabled)\n');
     }
-    console.log('');
 
     // ============================================================================
-    // 2. MODULES (Dynamically discovered from filesystem + core modules)
+    // 2. MODULES
     // ============================================================================
     console.log('📦 Seeding modules...');
-    
-    // Core modules (always present)
+
     const coreModuleData = [
       {
         name: 'Dashboard',
@@ -169,7 +167,7 @@ async function seed() {
       {
         name: 'Role Management',
         code: 'ROLES',
-        description: 'Manage roles and their permissions',
+        description: 'Manage roles and permissions',
         icon: 'Shield',
         sortOrder: 4,
         isActive: true,
@@ -177,17 +175,17 @@ async function seed() {
       {
         name: 'Settings',
         code: 'SETTINGS',
-        description: 'System settings and configuration',
+        description: 'System settings',
         icon: 'Settings',
         sortOrder: 5,
         isActive: true,
       },
     ];
 
-    // Discover dynamic modules from src/modules directory
+    // Discover dynamic modules
     const { discoverModules, loadModuleConfig } = await import('../src/core/lib/moduleLoader');
     const discoveredModuleIds = discoverModules();
-    console.log(`   Found ${discoveredModuleIds.length} dynamic module(s): ${discoveredModuleIds.join(', ')}`);
+    console.log(`   Found ${discoveredModuleIds.length} dynamic module(s)`);
 
     const dynamicModuleData = [];
     let maxSortOrder = Math.max(...coreModuleData.map(m => m.sortOrder), 0);
@@ -207,27 +205,24 @@ async function seed() {
       }
     }
 
-    // Combine core and dynamic modules
     const moduleData = [...coreModuleData, ...dynamicModuleData];
-
     const existingModules = await db.select().from(modules);
     const existingModuleCodes = new Set(existingModules.map((m) => m.code));
     const modulesToInsert = moduleData.filter((m) => !existingModuleCodes.has(m.code));
 
-    let seededModules = [...existingModules];
+    let seededModules: any[] = existingModules;
 
     if (modulesToInsert.length > 0) {
       const newModules = await db.insert(modules).values(modulesToInsert).returning();
-      seededModules = [...seededModules, ...newModules];
-      console.log(`✅ Created ${newModules.length} new modules (${existingModules.length} already existed)`);
-      console.log(`   Core modules: ${coreModuleData.length}, Dynamic modules: ${dynamicModuleData.length}`);
+      seededModules = [...existingModules, ...newModules];
+      console.log(`✅ Created ${newModules.length} module(s)`);
     } else {
-      console.log(`ℹ️  All modules already exist (${existingModules.length} total)`);
+      console.log(`ℹ️  Modules already exist (${existingModules.length} total)`);
     }
     console.log('');
 
     // ============================================================================
-    // 2B. MODULE FIELDS (for field-level permissions)
+    // 3. MODULE FIELDS
     // ============================================================================
     console.log('🧩 Seeding module fields...');
     const moduleByCode = new Map(seededModules.map((m) => [m.code, m]));
@@ -242,43 +237,21 @@ async function seed() {
     };
 
     const moduleFieldDefinitions: Record<string, ModuleFieldSeed[]> = {
-      // Core module fields derived from schema expectations
       USERS: [
         { name: 'Full Name', code: 'full_name', label: 'Full Name', fieldType: 'text', description: 'User full name', sortOrder: 1 },
-        { name: 'Email', code: 'email', label: 'Email', fieldType: 'email', description: 'Primary login email', sortOrder: 2 },
-        { name: 'Job Title', code: 'job_title', label: 'Job Title', fieldType: 'text', description: 'Role or title', sortOrder: 3 },
-        { name: 'Department', code: 'department', label: 'Department', fieldType: 'text', description: 'Department or team', sortOrder: 4 },
-        { name: 'Phone Number', code: 'phone_number', label: 'Phone Number', fieldType: 'text', description: 'Contact phone', sortOrder: 5 },
-        { name: 'Status', code: 'status', label: 'Status', fieldType: 'text', description: 'Account status', sortOrder: 6 },
-        { name: 'Locale', code: 'locale', label: 'Locale', fieldType: 'text', description: 'Preferred locale', sortOrder: 7 },
-        { name: 'Timezone', code: 'timezone', label: 'Timezone', fieldType: 'text', description: 'Preferred timezone', sortOrder: 8 },
-        { name: 'Email Verified', code: 'email_verified', label: 'Email Verified', fieldType: 'boolean', description: 'Whether email is verified', sortOrder: 9 },
-        { name: 'Two Factor Enabled', code: 'two_factor_enabled', label: 'Two Factor Enabled', fieldType: 'boolean', description: '2FA status', sortOrder: 10 },
-        { name: 'Last Login At', code: 'last_login_at', label: 'Last Login At', fieldType: 'datetime', description: 'Most recent login', sortOrder: 11 },
-        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Record creation time', sortOrder: 98 },
-        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Record update time', sortOrder: 99 },
+        { name: 'Email', code: 'email', label: 'Email', fieldType: 'email', description: 'Primary email', sortOrder: 2 },
+        { name: 'Status', code: 'status', label: 'Status', fieldType: 'text', description: 'Account status', sortOrder: 3 },
       ],
       ROLES: [
-        { name: 'Role Name', code: 'name', label: 'Role Name', fieldType: 'text', description: 'Display name of the role', sortOrder: 1 },
-        { name: 'Role Code', code: 'code', label: 'Role Code', fieldType: 'text', description: 'Unique role identifier', sortOrder: 2 },
-        { name: 'Description', code: 'description', label: 'Description', fieldType: 'text', description: 'What this role is for', sortOrder: 3 },
-        { name: 'Priority', code: 'priority', label: 'Priority', fieldType: 'number', description: 'Role precedence (0-100)', sortOrder: 4 },
-        { name: 'Status', code: 'status', label: 'Status', fieldType: 'text', description: 'Active/Inactive/Deprecated', sortOrder: 5 },
-        { name: 'Color', code: 'color', label: 'Color', fieldType: 'text', description: 'Badge color (hex)', sortOrder: 6 },
-        { name: 'System Role', code: 'is_system', label: 'System Role', fieldType: 'boolean', description: 'System-managed role', sortOrder: 7 },
-        { name: 'Default Role', code: 'is_default', label: 'Default Role', fieldType: 'boolean', description: 'Assigned by default', sortOrder: 8 },
-        { name: 'Created At', code: 'created_at', label: 'Created At', fieldType: 'datetime', description: 'Record creation time', sortOrder: 98 },
-        { name: 'Updated At', code: 'updated_at', label: 'Updated At', fieldType: 'datetime', description: 'Record update time', sortOrder: 99 },
+        { name: 'Role Name', code: 'name', label: 'Role Name', fieldType: 'text', description: 'Display name', sortOrder: 1 },
+        { name: 'Role Code', code: 'code', label: 'Role Code', fieldType: 'text', description: 'Unique identifier', sortOrder: 2 },
+        { name: 'Priority', code: 'priority', label: 'Priority', fieldType: 'number', description: 'Role precedence', sortOrder: 3 },
       ],
     };
 
     for (const [moduleCode, fields] of Object.entries(moduleFieldDefinitions)) {
       const moduleRecord = moduleByCode.get(moduleCode);
-
-      if (!moduleRecord) {
-        console.log(`ℹ️  ${moduleCode} module not found - skipping module_fields seeding for it`);
-        continue;
-      }
+      if (!moduleRecord) continue;
 
       const existingFields = await db
         .select()
@@ -295,263 +268,196 @@ async function seed() {
 
       if (fieldsToInsert.length > 0) {
         await db.insert(moduleFields).values(fieldsToInsert);
-        console.log(`✅ Added ${fieldsToInsert.length} field(s) to ${moduleRecord.name} module`);
-      } else {
-        console.log(`ℹ️  ${moduleRecord.name} module fields already exist`);
+        console.log(`✅ Added ${fieldsToInsert.length} field(s) to ${moduleRecord.name}`);
       }
     }
     console.log('');
 
     // ============================================================================
-    // 3. PERMISSIONS (module:action format - dynamically generated)
+    // 4. PERMISSIONS
     // ============================================================================
-    console.log('🔐 Seeding permissions (module:action format)...');
-    
-    // Core permissions for core modules
+    console.log('🔐 Seeding permissions...');
+
     const corePermissions = [
-      // User Management Permissions
-      { code: 'users:create', name: 'Create User', module: 'users', action: 'create', resource: 'user', isDangerous: false, requiresMfa: false, description: 'Create new users' },
-      { code: 'users:read', name: 'View Users', module: 'users', action: 'read', resource: 'user', isDangerous: false, requiresMfa: false, description: 'View user details' },
-      { code: 'users:update', name: 'Edit User', module: 'users', action: 'update', resource: 'user', isDangerous: false, requiresMfa: false, description: 'Modify user information' },
-      { code: 'users:delete', name: 'Delete User', module: 'users', action: 'delete', resource: 'user', isDangerous: true, requiresMfa: true, description: 'Remove users from system' },
-      { code: 'users:manage', name: 'Manage Users', module: 'users', action: 'manage', resource: 'user', isDangerous: false, requiresMfa: false, description: 'Full user management capabilities' },
-      { code: 'users:*', name: 'All User Permissions', module: 'users', action: 'manage', resource: 'user', isDangerous: true, requiresMfa: false, description: 'Wildcard - all user permissions' },
-      
-      // Role Management Permissions
-      { code: 'roles:create', name: 'Create Role', module: 'roles', action: 'create', resource: 'role', isDangerous: false, requiresMfa: false, description: 'Create new roles' },
-      { code: 'roles:read', name: 'View Roles', module: 'roles', action: 'read', resource: 'role', isDangerous: false, requiresMfa: false, description: 'View role details' },
-      { code: 'roles:update', name: 'Edit Role', module: 'roles', action: 'update', resource: 'role', isDangerous: false, requiresMfa: false, description: 'Modify role information' },
-      { code: 'roles:delete', name: 'Delete Role', module: 'roles', action: 'delete', resource: 'role', isDangerous: true, requiresMfa: false, description: 'Remove roles' },
-      { code: 'roles:assign', name: 'Assign Roles', module: 'roles', action: 'execute', resource: 'user_role', isDangerous: false, requiresMfa: false, description: 'Assign roles to users' },
-      { code: 'roles:*', name: 'All Role Permissions', module: 'roles', action: 'manage', resource: 'role', isDangerous: true, requiresMfa: false, description: 'Wildcard - all role permissions' },
-      
-      // Dashboard Permissions
-      { code: 'dashboard:read', name: 'View Dashboard', module: 'dashboard', action: 'read', resource: 'dashboard', isDangerous: false, requiresMfa: false, description: 'View dashboard' },
-      
-      // Profile Permissions
-      { code: 'profile:read', name: 'View Profile', module: 'profile', action: 'read', resource: 'profile', isDangerous: false, requiresMfa: false, description: 'View own profile' },
-      { code: 'profile:update', name: 'Update Profile', module: 'profile', action: 'update', resource: 'profile', isDangerous: false, requiresMfa: false, description: 'Update own profile' },
-      
-      // Settings Permissions (Main)
-      { code: 'settings:read', name: 'View Settings', module: 'settings', action: 'read', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'View settings' },
-      { code: 'settings:update', name: 'Update Settings', module: 'settings', action: 'update', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'Update settings' },
-      { code: 'settings:*', name: 'All Settings Permissions', module: 'settings', action: 'manage', resource: 'settings', isDangerous: false, requiresMfa: false, description: 'Wildcard - all settings permissions' },
-      
-      // Settings Submenu Permissions - General
-      { code: 'settings:general:read', name: 'View General Settings', module: 'settings', action: 'read', resource: 'settings_general', isDangerous: false, requiresMfa: false, description: 'View general settings' },
-      { code: 'settings:general:update', name: 'Update General Settings', module: 'settings', action: 'update', resource: 'settings_general', isDangerous: false, requiresMfa: false, description: 'Update general settings' },
-      
-      // Settings Submenu Permissions - Registration
-      { code: 'settings:registration:read', name: 'View Registration Settings', module: 'settings', action: 'read', resource: 'settings_registration', isDangerous: false, requiresMfa: false, description: 'View registration settings' },
-      { code: 'settings:registration:update', name: 'Update Registration Settings', module: 'settings', action: 'update', resource: 'settings_registration', isDangerous: false, requiresMfa: false, description: 'Update registration settings' },
-      
-      // Settings Submenu Permissions - Notification Methods
-      { code: 'settings:notification-methods:read', name: 'View Notification Methods', module: 'settings', action: 'read', resource: 'settings_notification_methods', isDangerous: false, requiresMfa: false, description: 'View notification methods settings' },
-      { code: 'settings:notification-methods:update', name: 'Update Notification Methods', module: 'settings', action: 'update', resource: 'settings_notification_methods', isDangerous: false, requiresMfa: false, description: 'Update notification methods settings' },
-      
-      // Settings Submenu Permissions - SMTP Settings
-      { code: 'settings:smtp-settings:read', name: 'View SMTP Settings', module: 'settings', action: 'read', resource: 'settings_smtp', isDangerous: false, requiresMfa: false, description: 'View SMTP settings' },
-      { code: 'settings:smtp-settings:update', name: 'Update SMTP Settings', module: 'settings', action: 'update', resource: 'settings_smtp', isDangerous: true, requiresMfa: true, description: 'Update SMTP settings (sensitive)' },
-      
-      // Settings Submenu Permissions - Custom Fields
-      { code: 'settings:custom-fields:read', name: 'View Custom Fields', module: 'settings', action: 'read', resource: 'settings_custom_fields', isDangerous: false, requiresMfa: false, description: 'View custom fields settings' },
-      { code: 'settings:custom-fields:update', name: 'Update Custom Fields', module: 'settings', action: 'update', resource: 'settings_custom_fields', isDangerous: false, requiresMfa: false, description: 'Update custom fields settings' },
-      
-      // System Permissions
-      { code: 'system:*', name: 'System Administrator', module: 'system', action: 'manage', resource: null, isDangerous: true, requiresMfa: true, description: 'Full system access' },
-      
-      // Admin Wildcard (grants everything)
-      { code: 'admin:*', name: 'Super Admin (All)', module: 'admin', action: 'manage', resource: null, isDangerous: true, requiresMfa: true, description: 'Wildcard - grants all permissions' },
+      // User Management
+      { code: 'users:create', name: 'Create User', module: 'users', action: 'create', resource: 'user', isDangerous: false, requiresMfa: false },
+      { code: 'users:read', name: 'View Users', module: 'users', action: 'read', resource: 'user', isDangerous: false, requiresMfa: false },
+      { code: 'users:update', name: 'Edit User', module: 'users', action: 'update', resource: 'user', isDangerous: false, requiresMfa: false },
+      { code: 'users:delete', name: 'Delete User', module: 'users', action: 'delete', resource: 'user', isDangerous: true, requiresMfa: true },
+      { code: 'users:*', name: 'All User Permissions', module: 'users', action: 'manage', resource: 'user', isDangerous: true, requiresMfa: false },
+
+      // Role Management
+      { code: 'roles:create', name: 'Create Role', module: 'roles', action: 'create', resource: 'role', isDangerous: false, requiresMfa: false },
+      { code: 'roles:read', name: 'View Roles', module: 'roles', action: 'read', resource: 'role', isDangerous: false, requiresMfa: false },
+      { code: 'roles:update', name: 'Edit Role', module: 'roles', action: 'update', resource: 'role', isDangerous: false, requiresMfa: false },
+      { code: 'roles:delete', name: 'Delete Role', module: 'roles', action: 'delete', resource: 'role', isDangerous: true, requiresMfa: false },
+      { code: 'roles:assign', name: 'Assign Roles', module: 'roles', action: 'execute', resource: 'user_role', isDangerous: false, requiresMfa: false },
+      { code: 'roles:*', name: 'All Role Permissions', module: 'roles', action: 'manage', resource: 'role', isDangerous: true, requiresMfa: false },
+
+      // Dashboard
+      { code: 'dashboard:read', name: 'View Dashboard', module: 'dashboard', action: 'read', resource: 'dashboard', isDangerous: false, requiresMfa: false },
+
+      // Profile
+      { code: 'profile:read', name: 'View Profile', module: 'profile', action: 'read', resource: 'profile', isDangerous: false, requiresMfa: false },
+      { code: 'profile:update', name: 'Update Profile', module: 'profile', action: 'update', resource: 'profile', isDangerous: false, requiresMfa: false },
+
+      // Settings
+      { code: 'settings:read', name: 'View Settings', module: 'settings', action: 'read', resource: 'settings', isDangerous: false, requiresMfa: false },
+      { code: 'settings:update', name: 'Update Settings', module: 'settings', action: 'update', resource: 'settings', isDangerous: false, requiresMfa: false },
+      { code: 'settings:*', name: 'All Settings Permissions', module: 'settings', action: 'manage', resource: 'settings', isDangerous: false, requiresMfa: false },
+
+      // System
+      { code: 'system:*', name: 'System Administrator', module: 'system', action: 'manage', resource: null, isDangerous: true, requiresMfa: true },
+      { code: 'admin:*', name: 'Super Admin (All)', module: 'admin', action: 'manage', resource: null, isDangerous: true, requiresMfa: true },
     ];
 
     // Generate permissions for dynamic modules
-    // For consistency, we seed ALL discovered modules based on their
-    // module.config.json permissions. Modules with their own registration will
-    // simply be de-duplicated by existingPermissionCodes.
     const dynamicPermissions = [];
     for (const moduleId of discoveredModuleIds) {
       const config = loadModuleConfig(moduleId);
       if (config && config.enabled !== false && config.permissions) {
         const moduleName = config.id.toLowerCase();
-        const moduleDisplayName = config.name;
 
-        // If module has custom permissions defined, use them
         if (typeof config.permissions === 'object') {
           for (const [action, code] of Object.entries(config.permissions)) {
             dynamicPermissions.push({
               code: code as string,
-              name: `${action.charAt(0).toUpperCase() + action.slice(1)} ${moduleDisplayName}`,
+              name: `${action.charAt(0).toUpperCase() + action.slice(1)} ${config.name}`,
               module: moduleName,
               action: action,
               resource: moduleName,
               isDangerous: action === 'delete',
               requiresMfa: false,
-              description: `${action.charAt(0).toUpperCase() + action.slice(1)} ${moduleDisplayName.toLowerCase()}`,
             });
           }
         }
-        
-        // Always add wildcard permission for the module
+
         dynamicPermissions.push({
           code: `${moduleName}:*`,
-          name: `All ${moduleDisplayName} Permissions`,
+          name: `All ${config.name} Permissions`,
           module: moduleName,
           action: 'manage',
           resource: moduleName,
           isDangerous: true,
           requiresMfa: false,
-          description: `Wildcard - all ${moduleDisplayName.toLowerCase()} permissions`,
         });
       }
     }
 
-    // Deduplicate permissions by code (module.config may already include a wildcard we also add)
-    const permissionDataAll = [...corePermissions, ...dynamicPermissions];
-    const permissionMap = new Map<string, typeof permissionDataAll[number]>();
-    for (const perm of permissionDataAll) {
-      if (!permissionMap.has(perm.code)) {
-        permissionMap.set(perm.code, perm);
-      }
-    }
-
-    const permissionData = Array.from(permissionMap.values());
-
-    console.log(
-      `   Generated ${corePermissions.length} core permissions + ${dynamicPermissions.length} dynamic permissions (deduped to ${permissionData.length} total)`,
-    );
-
+    const permissionData = [...corePermissions, ...dynamicPermissions];
     const existingPermissions = await db.select().from(permissions);
     const existingPermissionCodes = new Set(existingPermissions.map((p) => p.code));
     const permissionsToInsert = permissionData.filter((p) => !existingPermissionCodes.has(p.code));
 
-    let seededPermissions = [...existingPermissions];
+    let seededPermissions: any[] = existingPermissions;
 
     if (permissionsToInsert.length > 0) {
       const newPermissions = await db.insert(permissions).values(permissionsToInsert).returning();
-      seededPermissions = [...seededPermissions, ...newPermissions];
-      console.log(`✅ Created ${newPermissions.length} new permissions (${existingPermissions.length} already existed)`);
+      seededPermissions = [...existingPermissions, ...newPermissions];
+      console.log(`✅ Created ${newPermissions.length} permission(s)`);
     } else {
-      console.log(`ℹ️  All permissions already exist (${existingPermissions.length} total)`);
+      console.log(`ℹ️  Permissions already exist (${existingPermissions.length} total)`);
     }
     console.log('');
 
     // ============================================================================
-    // 4. ROLES (System roles - aligned with core.sql)
+    // 5. ROLES
     // ============================================================================
     console.log('👥 Seeding roles...');
-    const roleData = [
+
+    const baseRoleData = [
       {
-        tenantId: null, // System role
         name: 'Super Admin',
         code: 'SUPER_ADMIN',
-        description: 'Full system access with all permissions. Can manage all tenants. Does not belong to any tenant.',
+        description: 'Full system access',
         isSystem: true,
         isDefault: false,
         priority: 100,
-        status: 'active',
+        status: 'active' as const,
         color: '#dc2626',
         metadata: {},
       },
       {
-        tenantId: null, // System role
-        name: 'Tenant Admin',
-        code: 'TENANT_ADMIN',
-        description: 'Full tenant administration. Can manage users, roles, and all resources within their tenant.',
+        name: 'Admin',
+        code: 'ADMIN',
+        description: 'Administrative access',
         isSystem: true,
         isDefault: false,
         priority: 80,
-        status: 'active',
+        status: 'active' as const,
         color: '#ea580c',
         metadata: {},
       },
       {
-        tenantId: null, // System role
         name: 'Manager',
         code: 'MANAGER',
-        description: 'Team management capabilities. Can manage teams and users.',
+        description: 'Team management',
         isSystem: true,
         isDefault: false,
         priority: 60,
-        status: 'active',
+        status: 'active' as const,
         color: '#ca8a04',
         metadata: {},
       },
       {
-        tenantId: null, // System role
-        name: 'Editor',
-        code: 'EDITOR',
-        description: 'Content editing capabilities.',
-        isSystem: true,
-        isDefault: false,
-        priority: 40,
-        status: 'active',
-        color: '#16a34a',
-        metadata: {},
-      },
-      {
-        tenantId: null, // System role
         name: 'User',
         code: 'USER',
-        description: 'Standard user with basic access. Default role for new registrations.',
+        description: 'Standard user',
         isSystem: true,
-        isDefault: true, // Default role for new users
+        isDefault: true,
         priority: 30,
-        status: 'active',
+        status: 'active' as const,
         color: '#8b5cf6',
         metadata: {},
       },
       {
-        tenantId: null, // System role
         name: 'Viewer',
         code: 'VIEWER',
-        description: 'Read-only access to users and billing data.',
+        description: 'Read-only access',
         isSystem: true,
         isDefault: false,
         priority: 20,
-        status: 'active',
+        status: 'active' as const,
         color: '#2563eb',
         metadata: {},
       },
-      {
-        tenantId: null, // System role
-        name: 'Guest',
-        code: 'GUEST',
-        description: 'Limited guest access.',
-        isSystem: true,
-        isDefault: false,
-        priority: 10,
-        status: 'active',
-        color: '#64748b',
-        metadata: {},
-      },
     ];
+
+    // Add tenantId: null only if multi-tenancy is enabled
+    const roleData = baseRoleData.map(role => {
+      if (MULTI_TENANT_ENABLED) {
+        return { ...role, tenantId: null };
+      }
+      return role;
+    });
 
     const existingRoles = await db.select().from(roles);
     const existingRoleCodes = new Set(existingRoles.map((r) => r.code));
     const rolesToInsert = roleData.filter((r) => !existingRoleCodes.has(r.code));
 
-    let seededRoles = [...existingRoles];
+    let seededRoles: any[] = existingRoles;
 
     if (rolesToInsert.length > 0) {
       const newRoles = await db.insert(roles).values(rolesToInsert).returning();
-      seededRoles = [...seededRoles, ...newRoles];
-      console.log(`✅ Created ${newRoles.length} new roles (${existingRoles.length} already existed)`);
+      seededRoles = [...existingRoles, ...newRoles];
+      console.log(`✅ Created ${newRoles.length} role(s)`);
     } else {
-      console.log(`ℹ️  All roles already exist (${existingRoles.length} total)`);
+      console.log(`ℹ️  Roles already exist (${existingRoles.length} total)`);
     }
     console.log('');
 
     // ============================================================================
-    // 5. ROLE PERMISSIONS (Assign permissions to roles)
+    // 6. ROLE PERMISSIONS
     // ============================================================================
     console.log('🔗 Assigning permissions to roles...');
-    
-    const superAdminRole = seededRoles.find((r) => r.code === 'SUPER_ADMIN')!;
-    const tenantAdminRole = seededRoles.find((r) => r.code === 'TENANT_ADMIN')!;
-    const managerRole = seededRoles.find((r) => r.code === 'MANAGER')!;
-    const editorRole = seededRoles.find((r) => r.code === 'EDITOR')!;
-    const userRole = seededRoles.find((r) => r.code === 'USER')!;
-    const viewerRole = seededRoles.find((r) => r.code === 'VIEWER')!;
+
+    const superAdminRole = seededRoles.find((r) => r.code === 'SUPER_ADMIN');
+    const adminRole = seededRoles.find((r) => r.code === 'ADMIN');
+    const userRole = seededRoles.find((r) => r.code === 'USER');
+
+    if (!superAdminRole || !adminRole || !userRole) {
+      throw new Error('Required roles not found');
+    }
 
     const existingRolePermissions = await db.select().from(rolePermissions);
     const existingRolePermissionKeys = new Set(
@@ -560,8 +466,7 @@ async function seed() {
 
     const insertRolePermissions = async (
       role: typeof superAdminRole,
-      permissionCodes: string[],
-      roleName: string
+      permissionCodes: string[]
     ) => {
       const permissionsToAssign = seededPermissions.filter((p) => permissionCodes.includes(p.code));
       const toInsert = permissionsToAssign
@@ -579,11 +484,10 @@ async function seed() {
       return 0;
     };
 
-    // Super Admin gets ALL permissions explicitly (full system access)
+    // Super Admin gets ALL permissions
     let superAdminCount = 0;
     {
-      const permissionsToAssign = seededPermissions;
-      const toInsert = permissionsToAssign
+      const toInsert = seededPermissions
         .map((perm) => ({
           roleId: superAdminRole.id,
           permissionId: perm.id,
@@ -597,103 +501,54 @@ async function seed() {
       }
     }
 
-    // Tenant Admin gets all permissions except system:* and admin:*
-    const tenantAdminCount = await insertRolePermissions(
-      tenantAdminRole,
-      ['users:*', 'roles:*', 'billing:*', 'audit:read'],
-      'Tenant Admin'
-    );
+    const adminCount = await insertRolePermissions(adminRole, [
+      'users:*',
+      'roles:*',
+      'settings:*',
+    ]);
 
-    // Manager gets management permissions
-    const managerCount = await insertRolePermissions(
-      managerRole,
-      [
-        'users:read',
-        'users:create',
-        'users:update',
-        'roles:read',
-        'roles:assign',
-        'billing:read',
-      ],
-      'Manager'
-    );
+    const userCount = await insertRolePermissions(userRole, [
+      'dashboard:read',
+      'profile:read',
+      'profile:update',
+    ]);
 
-    // Editor gets project editing permissions
-    const editorCount = await insertRolePermissions(
-      editorRole,
-      ['users:read'],
-      'Editor'
-    );
-
-    // User gets basic access (dashboard, profile, read own data)
-    const userCount = await insertRolePermissions(
-      userRole,
-      ['dashboard:read', 'profile:read', 'profile:update'],
-      'User'
-    );
-
-    // Viewer gets read-only permissions
-    const viewerCount = await insertRolePermissions(
-      viewerRole,
-      ['users:read', 'billing:read'],
-      'Viewer'
-    );
-
-    console.log(`✅ Assigned ${superAdminCount} new permissions to Super Admin`);
-    console.log(`✅ Assigned ${tenantAdminCount} new permissions to Tenant Admin`);
-    console.log(`✅ Assigned ${managerCount} new permissions to Manager`);
-    console.log(`✅ Assigned ${editorCount} new permissions to Editor`);
-    console.log(`✅ Assigned ${userCount} new permissions to User`);
-    console.log(`✅ Assigned ${viewerCount} new permissions to Viewer\n`);
+    console.log(`✅ Assigned ${superAdminCount} permissions to Super Admin`);
+    console.log(`✅ Assigned ${adminCount} permissions to Admin`);
+    console.log(`✅ Assigned ${userCount} permissions to User`);
+    console.log('');
 
     // ============================================================================
-    // 5b. ROLE MODULE ACCESS (New permission system - takes precedence over legacy)
+    // 7. ROLE MODULE ACCESS
     // ============================================================================
-    console.log('🔐 Setting up new permission system (role_module_access)...');
-    
-    // Get all modules and roles
+    console.log('🔐 Setting up role-module access...');
+
     const allModulesForAccess = await db.select().from(modules).where(eq(modules.isActive, true));
-    const allRolesForAccess = seededRoles;
-    
-    // Check existing entries
     const existingModuleAccess = await db.select().from(roleModuleAccess);
     const existingAccessKeys = new Set(
       existingModuleAccess.map(ma => `${ma.roleId}-${ma.moduleId}`)
     );
-    
+
     const moduleAccessToInsert: Array<{
       roleId: string;
       moduleId: string;
       hasAccess: boolean;
       dataAccess: 'none' | 'own' | 'team' | 'all';
     }> = [];
-    
-    // For each role and module combination, set default access
-    for (const role of allRolesForAccess) {
+
+    for (const role of seededRoles) {
       for (const module of allModulesForAccess) {
         const key = `${role.id}-${module.id}`;
         if (existingAccessKeys.has(key)) continue;
-        
+
         let hasAccess = false;
         let dataAccess: 'none' | 'own' | 'team' | 'all' = 'none';
-        
-        // Super Admin: full access to all modules
+
         if (role.code === 'SUPER_ADMIN') {
           hasAccess = true;
           dataAccess = 'all';
         }
-        // Tenant Admin: NO access by default (must be explicitly granted)
-        // This ensures the new permission system takes precedence
-        else if (role.code === 'TENANT_ADMIN') {
-          hasAccess = false; // Explicitly set to false - Super Admin must enable
-          dataAccess = 'none';
-        }
-        // Other roles: no access by default
-        else {
-          hasAccess = false;
-          dataAccess = 'none';
-        }
-        
+
         moduleAccessToInsert.push({
           roleId: role.id,
           moduleId: module.id,
@@ -702,121 +557,115 @@ async function seed() {
         });
       }
     }
-    
+
     if (moduleAccessToInsert.length > 0) {
       await db.insert(roleModuleAccess).values(moduleAccessToInsert);
       console.log(`✅ Created ${moduleAccessToInsert.length} role-module access entries`);
-      console.log(`   ℹ️  All modules are set to 'no access' by default for non-Super Admin roles`);
-      console.log(`   ℹ️  Super Admin must explicitly enable access through Role Management UI\n`);
     } else {
-      console.log(`ℹ️  All role-module access entries already exist\n`);
+      console.log(`ℹ️  Role-module access entries already exist`);
     }
+    console.log('');
 
     // ============================================================================
-    // 6. SUPER ADMIN USER (create only if no users exist)
+    // 8. SUPER ADMIN USER
     // ============================================================================
-    console.log('👤 Seeding Super Admin user (if none exist)...');
+    console.log('👤 Seeding Super Admin user...');
 
     const existingUsers = await db.select().from(users).limit(1);
 
     if (existingUsers.length === 0) {
-      const defaultTenant = seededTenants.find((t) => t.slug === 'default') || seededTenants[0];
-      const superAdminRoleRecord = seededRoles.find((r) => r.code === 'SUPER_ADMIN');
+      const superAdminEmail = process.env.SEED_SUPERADMIN_EMAIL || 'superadmin@example.com';
+      const superAdminPassword = process.env.SEED_SUPERADMIN_PASSWORD || 'SuperAdmin123!';
 
-      if (!defaultTenant || !superAdminRoleRecord) {
-        console.warn(
-          '⚠️  Cannot create Super Admin user: default tenant or SUPER_ADMIN role not found.'
-        );
-      } else {
-        const superAdminEmail = process.env.SEED_SUPERADMIN_EMAIL || 'superadmin@example.com';
-        const superAdminPassword = process.env.SEED_SUPERADMIN_PASSWORD || 'SuperAdmin123!';
+      console.log(`   Creating Super Admin: ${superAdminEmail}`);
 
-        console.log(`   Creating Super Admin user: ${superAdminEmail}`);
+      const passwordHash = await hashPassword(superAdminPassword);
 
-        const passwordHash = await hashPassword(superAdminPassword);
+      // Build user data conditionally
+      const userData: any = {
+        email: superAdminEmail,
+        passwordHash,
+        fullName: 'Super Administrator',
+        status: 'active' as const,
+        isEmailVerified: true,
+        timezone: 'UTC',
+        locale: 'en',
+        metadata: {},
+      };
 
-        const [superAdminUser] = await db
-          .insert(users)
-          .values({
-            email: superAdminEmail,
-            passwordHash,
-            fullName: 'Super Administrator',
-            tenantId: defaultTenant.id,
-            status: 'active',
-            isEmailVerified: true,
-            timezone: 'UTC',
-            locale: 'en',
-            metadata: {},
-          })
-          .returning();
-
-        // Create auth provider entry for password auth
-        await db.insert(authProviders).values({
-          userId: superAdminUser.id,
-          provider: 'password',
-        });
-
-        // Assign SUPER_ADMIN role via userRoles (system role, no tenant) if needed
-        await db.insert(userRoles).values({
-          userId: superAdminUser.id,
-          roleId: superAdminRoleRecord.id,
-          tenantId: defaultTenant.id,
-          grantedBy: superAdminUser.id,
-          isActive: true,
-          metadata: {},
-        });
-
-        console.log('   ✅ Super Admin user created successfully');
-        console.log('   👉 Credentials:');
-        console.log(`      Email   : ${superAdminEmail}`);
-        console.log(
-          `      Password: ${process.env.SEED_SUPERADMIN_PASSWORD ? '(from SEED_SUPERADMIN_PASSWORD env)' : superAdminPassword
-          }`
-        );
+      // Add tenantId only if multi-tenancy is enabled
+      if (MULTI_TENANT_ENABLED && seededTenants.length > 0) {
+        const defaultTenant = seededTenants.find((t) => t.slug === 'default') || seededTenants[0];
+        userData.tenantId = defaultTenant.id;
       }
+
+      const [superAdminUser] = await db.insert(users).values(userData).returning();
+
+      // Create auth provider
+      await db.insert(authProviders).values({
+        userId: superAdminUser.id,
+        provider: 'password',
+      });
+
+      // Assign role
+      const userRoleData: any = {
+        userId: superAdminUser.id,
+        roleId: superAdminRole.id,
+        grantedBy: superAdminUser.id,
+        isActive: true,
+        metadata: {},
+      };
+
+      // Add tenantId only if multi-tenancy is enabled
+      if (MULTI_TENANT_ENABLED && seededTenants.length > 0) {
+        const defaultTenant = seededTenants.find((t) => t.slug === 'default') || seededTenants[0];
+        userRoleData.tenantId = defaultTenant.id;
+      }
+
+      await db.insert(userRoles).values(userRoleData);
+
+      console.log('   ✅ Super Admin user created');
+      console.log('   📧 Email:', superAdminEmail);
+      console.log('   🔑 Password:', process.env.SEED_SUPERADMIN_PASSWORD ? '(from env)' : superAdminPassword);
     } else {
-      console.log('ℹ️  Users already exist - skipping Super Admin user creation');
+      console.log('ℹ️  Users already exist - skipping');
     }
     console.log('');
 
+    // ============================================================================
+    // SUMMARY
+    // ============================================================================
     console.log('✨ Seed completed successfully!\n');
     console.log('📊 Summary:');
-    console.log(`   - ${seededTenants.length} tenant(s) - Default tenant for new registrations`);
-    console.log(`   - ${seededModules.length} modules`);
-    console.log(`   - ${seededPermissions.length} permissions (module:action format)`);
-    console.log(`   - ${seededRoles.length} roles (including default "USER" role)\n`);
-    
-    console.log('✅ System is ready for user registration!');
-    console.log('   - New users will be assigned to the "default" tenant');
-    console.log('   - New users will automatically get the "USER" role');
-    console.log('   - Users can register via the registration form\n');
-    
-    console.log('📋 Permission System:');
-    console.log('   - Format: module:action (e.g., users:create)');
-    console.log('   - Wildcards: users:* grants all user permissions');
-    console.log('   - admin:* grants ALL permissions (Super Admin only)');
-    console.log('   - Supports role hierarchy and temporal access\n');
-    
-    console.log('🎯 Role Structure:');
-    console.log('   1. Super Admin: admin:* (everything)');
-    console.log('   2. Tenant Admin: Full tenant management (users:*, roles:*, billing:*)');
-    console.log('   3. Manager: Team management (users:read/create/update, roles:read/assign)');
-    console.log('   4. Editor: Content editing (users:read)');
-    console.log('   5. User: Basic access (dashboard, profile)');
-    console.log('   6. Viewer: Read-only (users:read, billing:read)\n');
+    if (MULTI_TENANT_ENABLED) {
+      console.log(`   - Multi-Tenancy: ENABLED ✅`);
+      console.log(`   - Tenants: ${seededTenants.length}`);
+    } else {
+      console.log(`   - Multi-Tenancy: DISABLED ❌`);
+      console.log(`   - Single-tenant mode active`);
+    }
+    console.log(`   - Modules: ${seededModules.length}`);
+    console.log(`   - Permissions: ${seededPermissions.length}`);
+    console.log(`   - Roles: ${seededRoles.length}\n`);
+
+    console.log('✅ System ready!');
+    if (MULTI_TENANT_ENABLED) {
+      console.log('   - New users will be assigned to default tenant');
+    }
+    console.log('   - New users get "USER" role by default\n');
+
   } catch (error) {
-    console.error('❌ Seed failed:', error);
+    console.error('\n❌ Seed failed:', error);
     throw error;
   }
 }
 
 // Run seed
 seed()
-  .then(() => {
-    console.log('✅ Seed script completed');
-    process.exit(0);
-  })
   .catch((error) => {
-    console.error('❌ Seed script failed:', error);
+    console.error('Fatal error:', error);
     process.exit(1);
+  })
+  .finally(() => {
+    process.exit(0);
   });

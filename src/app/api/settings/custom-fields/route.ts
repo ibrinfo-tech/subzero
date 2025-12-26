@@ -3,7 +3,7 @@ import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { getEligibleModules, getCustomFieldsForModule, createCustomField } from '@/core/lib/services/customFieldsService';
 import { db } from '@/core/lib/db';
-import { modules } from '@/core/lib/db/baseSchema';
+import { modules, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -20,10 +20,14 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = authResult;
-    const tenantId = await getUserTenantId(userId);
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+    
+    // Only require tenantId if multi-tenancy is enabled
+    // Custom fields don't actually need tenant isolation, but we check for consistency
+    if (MULTI_TENANT_ENABLED) {
+      const tenantId = await getUserTenantId(userId);
+      if (!tenantId) {
+        return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+      }
     }
 
     const url = new URL(request.url);

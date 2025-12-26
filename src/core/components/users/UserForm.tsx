@@ -36,6 +36,7 @@ export function UserForm({
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [tenants, setTenants] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
+  const [multiTenantEnabled, setMultiTenantEnabled] = useState(false);
   
   // Check if user is super admin
   const isSuperAdmin = permissions?.includes('admin:*') || false;
@@ -43,6 +44,22 @@ export function UserForm({
   // Get selected role code
   const selectedRole = roles.find(r => r.id === formData.roleId);
   const isTenantAdminRole = selectedRole?.code === 'TENANT_ADMIN';
+  
+  // Fetch multi-tenancy config on mount
+  useEffect(() => {
+    fetch('/api/auth/config', {
+      credentials: 'include',
+      cache: 'no-store',
+    })
+      .then(res => res.json())
+      .then(data => {
+        setMultiTenantEnabled(data.multiTenant?.enabled || false);
+      })
+      .catch(err => {
+        console.error('Failed to fetch config:', err);
+        setMultiTenantEnabled(false);
+      });
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -57,16 +74,26 @@ export function UserForm({
     }
   }, [initialData]);
 
-  // Fetch tenants when super admin selects Tenant Admin role
+  // Fetch tenants when super admin selects Tenant Admin role (only if multi-tenancy is enabled)
   useEffect(() => {
-    if (isSuperAdmin && isTenantAdminRole && !initialData && token) {
+    if (multiTenantEnabled && isSuperAdmin && isTenantAdminRole && !initialData && token) {
       setIsLoadingTenants(true);
       fetch('/api/tenants', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            // If multi-tenancy is disabled, API will return 404
+            if (res.status === 404) {
+              setMultiTenantEnabled(false);
+              return { success: false };
+            }
+            throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          return res.json();
+        })
         .then(data => {
           if (data.success && data.data) {
             setTenants(data.data);
@@ -76,8 +103,11 @@ export function UserForm({
           console.error('Failed to fetch tenants:', err);
         })
         .finally(() => setIsLoadingTenants(false));
+    } else {
+      // Clear tenants if multi-tenancy is disabled or conditions not met
+      setTenants([]);
     }
-  }, [isSuperAdmin, isTenantAdminRole, initialData, token]);
+  }, [multiTenantEnabled, isSuperAdmin, isTenantAdminRole, initialData, token]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -278,8 +308,8 @@ export function UserForm({
           />
         </div>
 
-        {/* Tenant Selection - Only show for Super Admin creating Tenant Admin */}
-        {isSuperAdmin && isTenantAdminRole && !initialData && (
+        {/* Tenant Selection - Only show for Super Admin creating Tenant Admin (only if multi-tenancy is enabled) */}
+        {multiTenantEnabled && isSuperAdmin && isTenantAdminRole && !initialData && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-2">
               <div className="p-2 rounded-lg bg-primary/10">

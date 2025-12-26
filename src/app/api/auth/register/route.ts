@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/core/lib/db';
-import { users, authProviders, tenants } from '@/core/lib/db/baseSchema';
+import { users, authProviders, tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { registerSchema } from '@/core/lib/validations/auth';
 import { hashPassword } from '@/core/lib/utils';
 import { validateRequest } from '@/core/middleware/validation';
@@ -58,36 +58,38 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(password);
     
-    // Get or create default tenant for self-registered users
-    let defaultTenant = await db
-      .select()
-      .from(tenants)
-      .where(eq(tenants.slug, 'default'))
-      .limit(1);
+    // Get or create default tenant for self-registered users (only in multi-tenant mode)
+    let tenantId: string | undefined;
     
-    let tenantId: string;
-    
-    if (defaultTenant.length === 0) {
-      // Create default tenant if it doesn't exist
-      console.log('[Register] Creating default tenant for self-registered users');
-      const newTenant = await db
-        .insert(tenants)
-        .values({
-          name: 'Default Organization',
-          slug: 'default',
-          status: 'active',
-          plan: 'free',
-          maxUsers: 100,
-          metadata: {},
-        })
-        .returning();
-      tenantId = newTenant[0].id;
-    } else {
-      tenantId = defaultTenant[0].id;
+    if (MULTI_TENANT_ENABLED && tenants) {
+      let defaultTenant = await db
+        .select()
+        .from(tenants)
+        .where(eq(tenants.slug, 'default'))
+        .limit(1);
+      
+      if (defaultTenant.length === 0) {
+        // Create default tenant if it doesn't exist
+        console.log('[Register] Creating default tenant for self-registered users');
+        const newTenant = await db
+          .insert(tenants)
+          .values({
+            name: 'Default Organization',
+            slug: 'default',
+            status: 'active',
+            plan: 'free',
+            maxUsers: 100,
+            metadata: {},
+          })
+          .returning();
+        tenantId = newTenant[0].id;
+      } else {
+        tenantId = defaultTenant[0].id;
+      }
     }
     
     // Get default "User" role for new registrations (system role with isDefault = true)
-    const defaultRole = await getDefaultUserRole();
+    const defaultRole = await getDefaultUserRole(tenantId);
     
     if (!defaultRole) {
       console.error('[Register] Default "USER" role not found. Please run seed script.');
@@ -100,21 +102,27 @@ export async function POST(request: NextRequest) {
     console.log('[Register] Found default role:', defaultRole.code, '(', defaultRole.id, ')');
     
     // Create new user with 'pending' status until email is verified
+    const userData: any = {
+      email,
+      passwordHash: hashedPassword,
+      fullName: name || null,
+      isEmailVerified: false,
+      status: 'pending', // Will be changed to 'active' after email verification
+      twoFactorEnabled: false,
+      failedLoginAttempts: 0,
+      timezone: 'UTC',
+      locale: 'en',
+      metadata: {},
+    };
+
+    // Only include tenantId if multi-tenancy is enabled and column exists
+    if (MULTI_TENANT_ENABLED && 'tenantId' in users && tenantId) {
+      userData.tenantId = tenantId;
+    }
+
     const newUser = await db
       .insert(users)
-      .values({
-        email,
-        passwordHash: hashedPassword,
-        fullName: name || null,
-        isEmailVerified: false,
-        status: 'pending', // Will be changed to 'active' after email verification
-        tenantId: tenantId,
-        twoFactorEnabled: false,
-        failedLoginAttempts: 0,
-        timezone: 'UTC',
-        locale: 'en',
-        metadata: {},
-      })
+      .values(userData)
       .returning();
     
     const user = newUser[0];
@@ -127,14 +135,20 @@ export async function POST(request: NextRequest) {
     
     // Assign default role to user
     const { userRoles } = await import('@/core/lib/db/baseSchema');
-    await db.insert(userRoles).values({
+    const roleData: any = {
       userId: user.id,
       roleId: defaultRole.id,
-      tenantId: tenantId,
       grantedBy: user.id, // Self-assigned
       isActive: true,
       metadata: {},
-    });
+    };
+
+    // Only include tenantId if multi-tenancy is enabled and column exists
+    if (MULTI_TENANT_ENABLED && 'tenantId' in userRoles && tenantId) {
+      roleData.tenantId = tenantId;
+    }
+
+    await db.insert(userRoles).values(roleData);
     
     // Generate JWT email verification token (no database storage needed)
     const verificationToken = generateEmailVerificationToken(user.email, 24); // 24 hours expiry
