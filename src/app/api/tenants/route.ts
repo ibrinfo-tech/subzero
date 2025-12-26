@@ -4,6 +4,7 @@ import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { tenants, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, or, like, isNull, sql } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/tenants
@@ -11,6 +12,7 @@ import { eq, and, or, like, isNull, sql } from 'drizzle-orm';
  * Requires: Super Admin only
  */
 export async function GET(request: NextRequest) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Check if multi-tenancy is enabled
     if (!MULTI_TENANT_ENABLED || !tenants) {
@@ -22,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -103,6 +105,7 @@ export async function GET(request: NextRequest) {
  * Requires: Super Admin only
  */
 export async function POST(request: NextRequest) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Check if multi-tenancy is enabled
     if (!MULTI_TENANT_ENABLED || !tenants) {
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest) {
 
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response

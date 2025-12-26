@@ -1,0 +1,38 @@
+{
+  "id": "logs",
+  "name": "System Logs",
+  "version": "1.0.0",
+  "description": "Centralized logging system for all modules with real-time monitoring and CSV export",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/logs",
+      "component": "index",
+      "title": "System Logs",
+      "requiresAuth": true
+    }
+  ],
+  "api": {
+    "basePath": "/api/logs",
+    "endpoints": [
+      { "method": "GET", "path": "", "handler": "list", "requiresAuth": true },
+      { "method": "GET", "path": "/stats", "handler": "stats", "requiresAuth": true },
+      { "method": "GET", "path": "/export", "handler": "export", "requiresAuth": true }
+    ]
+  },
+  "navigation": {
+    "label": "System Logs",
+    "icon": "FileText",
+    "path": "/logs",
+    "order": 10
+  },
+  "permissions": {
+    "read": "logs:read",
+    "export": "logs:export",
+    "manage": "logs:*"
+  },
+  "fields": {
+    "enabled": false
+  }
+}
+

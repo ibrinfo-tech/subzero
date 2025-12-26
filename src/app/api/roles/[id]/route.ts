@@ -6,6 +6,7 @@ import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { Role, roles } from '@/core/lib/db/baseSchema';
 import { eq } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/roles/:id
@@ -17,10 +18,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
+    const { id } = await params;
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -30,13 +33,11 @@ export async function GET(
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:read');
-    const permissionResult = await permissionMiddleware(request);
+    const permissionResult = await permissionMiddleware(req);
     
     if (permissionResult instanceof NextResponse) {
       return permissionResult; // Forbidden response
     }
-    
-    const { id } = await params;
     
     // Get role
     const result = await getRoleWithUserCount(id);
@@ -73,6 +74,7 @@ export async function GET(
       { status: 500 }
     );
   }
+  });
 }
 
 /**
@@ -88,7 +90,7 @@ export async function PATCH(
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -98,7 +100,7 @@ export async function PATCH(
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:update');
-    const permissionResult = await permissionMiddleware(request);
+    const permissionResult = await permissionMiddleware(req);
     
     if (permissionResult instanceof NextResponse) {
       return permissionResult; // Forbidden response
@@ -119,7 +121,7 @@ export async function PATCH(
     }
     
     // Parse and validate request body
-    const body = await request.json();
+    const body = await req.json();
     const { validateRequest } = await import('@/core/middleware/validation');
     const { updateRoleSchema } = await import('@/core/lib/validations/roles');
     const validation = validateRequest(updateRoleSchema, body);
@@ -186,6 +188,7 @@ export async function PATCH(
       { status: 500 }
     );
   }
+  });
 }
 
 /**
@@ -201,7 +204,7 @@ export async function DELETE(
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -211,7 +214,7 @@ export async function DELETE(
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:delete');
-    const permissionResult = await permissionMiddleware(request);
+    const permissionResult = await permissionMiddleware(req);
     
     if (permissionResult instanceof NextResponse) {
       return permissionResult; // Forbidden response
@@ -265,5 +268,6 @@ export async function DELETE(
       { status: 500 }
     );
   }
+  });
 }
 

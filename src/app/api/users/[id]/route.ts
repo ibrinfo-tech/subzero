@@ -6,6 +6,7 @@ import { getRoleById } from '@/core/lib/roles';
 import { db } from '@/core/lib/db';
 import { users, MULTI_TENANT_ENABLED } from '@/core/lib/db/baseSchema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/users/:id
@@ -95,6 +96,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
+    const { id } = await params;
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
@@ -115,8 +118,6 @@ export async function PATCH(
         { status: 403 }
       );
     }
-    
-    const { id } = await params;
     
     // Get target user
     const targetUser = await db
@@ -145,7 +146,7 @@ export async function PATCH(
     }
     
     // Parse and validate request body
-    const body = await request.json();
+    const body = await req.json();
     console.log('[User Update] Request body:', body);
     
     const { validateRequest } = await import('@/core/middleware/validation');
@@ -277,6 +278,7 @@ export async function PATCH(
       { status: 500 }
     );
   }
+  });
 }
 
 /**
@@ -289,6 +291,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
+    const { id } = await params;
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
@@ -311,8 +315,6 @@ export async function DELETE(
         { status: 403 }
       );
     }
-    
-    const { id } = await params;
     
     console.log('[User Delete] Attempting to delete user:', id, 'by:', userId);
     
@@ -380,4 +382,5 @@ export async function DELETE(
       { status: 500 }
     );
   }
+  });
 }
