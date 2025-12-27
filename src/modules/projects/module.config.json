@@ -1,0 +1,52 @@
+{
+  "id": "projects",
+  "name": "Projects",
+  "version": "1.0.0",
+  "description": "Manage projects with lifecycle, ownership, timelines, and linked entities such as tasks, leads, or customers",
+  "enabled": true,
+  "routes": [
+    {
+      "path": "/projects",
+      "component": "index",
+      "title": "Projects",
+      "requiresAuth": true
+    }
+  ],
+  "api": {
+    "basePath": "/api/projects",
+    "endpoints": [
+      { "method": "GET", "path": "", "handler": "list", "requiresAuth": true },
+      { "method": "POST", "path": "", "handler": "create", "requiresAuth": true },
+      { "method": "GET", "path": "/:id", "handler": "getById", "requiresAuth": true },
+      { "method": "PATCH", "path": "/:id", "handler": "update", "requiresAuth": true },
+      { "method": "DELETE", "path": "/:id", "handler": "delete", "requiresAuth": true },
+      { "method": "POST", "path": "/:id/duplicate", "handler": "duplicate", "requiresAuth": true },
+      { "method": "POST", "path": "/export", "handler": "export", "requiresAuth": true },
+      { "method": "POST", "path": "/import", "handler": "import", "requiresAuth": true }
+    ]
+  },
+  "permissions": {
+    "create": "projects:create",
+    "read": "projects:read",
+    "update": "projects:update",
+    "delete": "projects:delete",
+    "archive": "projects:archive",
+    "manage_team": "projects:manage_team",
+    "export": "projects:export",
+    "import": "projects:import",
+    "duplicate": "projects:duplicate",
+    "manage_labels": "projects:manage_labels",
+    "manage": "projects:*"
+  },
+  "navigation": {
+    "icon": "FolderKanban",
+    "label": "Projects",
+    "order": 20
+  },
+  "fields": {
+    "enabled": true,
+    "configPath": "./config/fields.config.ts"
+  },
+  "custom_field": true
+}
+

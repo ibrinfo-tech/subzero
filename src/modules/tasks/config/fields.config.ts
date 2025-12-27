@@ -60,12 +60,20 @@ export const TASK_FIELDS: TaskFieldDefinition[] = [
     sortOrder: 6,
   },
   {
+    name: 'Project',
+    code: 'project_id',
+    label: 'Project',
+    fieldType: 'uuid',
+    description: 'Project this task belongs to',
+    sortOrder: 7,
+  },
+  {
     name: 'Created By',
     code: 'created_by',
     label: 'Created By',
     fieldType: 'uuid',
     description: 'User who created the task',
-    sortOrder: 7,
+    sortOrder: 8,
   },
   {
     name: 'Related Entity Type',
@@ -73,7 +81,7 @@ export const TASK_FIELDS: TaskFieldDefinition[] = [
     label: 'Related Entity Type',
     fieldType: 'text',
     description: 'Optional reference type',
-    sortOrder: 8,
+    sortOrder: 9,
   },
   {
     name: 'Related Entity ID',
@@ -81,7 +89,7 @@ export const TASK_FIELDS: TaskFieldDefinition[] = [
     label: 'Related Entity ID',
     fieldType: 'uuid',
     description: 'Optional reference ID',
-    sortOrder: 9,
+    sortOrder: 10,
   },
 ];
 

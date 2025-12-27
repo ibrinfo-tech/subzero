@@ -26,6 +26,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=$DATABASE_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+RUN npm run db:init
+RUN npm run db:generate
+RUN npm run db:migrate
+RUN npm run db:seed
+
 RUN npm run build
 
 # Production image

@@ -350,6 +350,58 @@ These rules exist because the app must run in **both** modes:
 - `MULTI_TENANT_ENABLED = true` (tenants + `tenantId` columns exist)
 - `MULTI_TENANT_ENABLED = false` (no tenants table, no `tenantId` on core tables that are conditional)
 
+### 16.1 SCHEMA DEFINITIONS (MANDATORY)
+
+**⚠️ CRITICAL:** When creating module schemas with `tenantId` columns, you MUST use conditional patterns. Unconditional references will cause `npm run db:generate` and `npm run db:migrate` to fail when `MULTI_TENANT_ENABLED=false`.
+
+**Required imports:**
+```typescript
+import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
+```
+
+**✅ CORRECT Pattern for Module Schemas:**
+```typescript
+export const yourTable = pgTable(
+  'your_table',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // ✅ CORRECT: Conditional tenantId with reference
+    tenantId: MULTI_TENANT_ENABLED && tenants
+      ? uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' })
+      : uuid('tenant_id'),
+    // ... other columns
+  },
+  (table) => ({
+    // ✅ CORRECT: Conditional tenant index
+    ...(MULTI_TENANT_ENABLED && 'tenantId' in table
+      ? { tenantIdx: index('idx_your_table_tenant').on(table.tenantId) }
+      : {}),
+    // ... other indexes
+  })
+);
+```
+
+**❌ WRONG Patterns (Will Cause Errors):**
+```typescript
+// ❌ WRONG: Unconditional reference
+tenantId: uuid('tenant_id')
+  .notNull()
+  .references(() => tenants.id, { onDelete: 'cascade' }), // Fails when tenants is null
+
+// ❌ WRONG: Unconditional index
+(table) => ({
+  tenantIdx: index('idx_table_tenant').on(table.tenantId), // Fails if tenantId doesn't exist
+})
+```
+
+**Testing Requirements:**
+- After creating/modifying schemas, test both modes:
+  - `MULTI_TENANT_ENABLED=true`: `npm run db:generate && npm run db:migrate`
+  - `MULTI_TENANT_ENABLED=false`: `npm run db:generate && npm run db:migrate`
+- Both must complete without errors.
+
+### 16.2 RUNTIME CODE PATTERNS
+
 When writing **any** new code (modules, APIs, services, seeds) that touches tenants or tenant-specific data:
 
 1. **Always import the flag**

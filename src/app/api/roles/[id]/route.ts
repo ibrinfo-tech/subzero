@@ -6,6 +6,7 @@ import { isUserSuperAdmin } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { Role, roles } from '@/core/lib/db/baseSchema';
 import { eq } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/roles/:id
@@ -17,10 +18,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Verify authentication
+  return withCoreRouteLogging(request, async (req) => {
+    const { id } = await params;
+    try {
+      // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -30,13 +33,11 @@ export async function GET(
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:read');
-    const permissionResult = await permissionMiddleware(request);
+    const permissionResult = await permissionMiddleware(req);
     
     if (permissionResult instanceof NextResponse) {
       return permissionResult; // Forbidden response
     }
-    
-    const { id } = await params;
     
     // Get role
     const result = await getRoleWithUserCount(id);
@@ -59,20 +60,21 @@ export async function GET(
       }
     }
     
-    return NextResponse.json(
-      {
-        success: true,
-        data: result,
-      },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error('Get role by ID error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+      return NextResponse.json(
+        {
+          success: true,
+          data: result,
+        },
+        { status: 200 }
+      );
+    } catch (error) {
+      console.error('Get role by ID error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
 }
 
 /**
@@ -85,10 +87,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -98,94 +101,95 @@ export async function PATCH(
     
     // Check permission
     const permissionMiddleware = requirePermission('roles:update');
-    const permissionResult = await permissionMiddleware(request);
+    const permissionResult = await permissionMiddleware(req);
     
     if (permissionResult instanceof NextResponse) {
       return permissionResult; // Forbidden response
     }
     
-    const { id } = await params;
-    
-    // Check if this is Super Admin role and user is not Super Admin
-    const targetRole = await getRoleById(id);
-    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
-      const isSuperAdmin = await isUserSuperAdmin(userId);
-      if (!isSuperAdmin) {
-        return NextResponse.json(
-          { error: 'Forbidden - Only Super Admins can modify the Super Admin role' },
-          { status: 403 }
-        );
-      }
-    }
-    
-    // Parse and validate request body
-    const body = await request.json();
-    const { validateRequest } = await import('@/core/middleware/validation');
-    const { updateRoleSchema } = await import('@/core/lib/validations/roles');
-    const validation = validateRequest(updateRoleSchema, body);
-    
-    if (!validation.success) {
-      return NextResponse.json(
-        {
-          error: 'Validation failed',
-          details: validation.error.errors,
-        },
-        { status: 400 }
-      );
-    }
-    
-    const data = validation.data;
-    
-    // Check if code is being changed and if it's already taken
-    if (data.code) {
-      const existingRole = await db
-        .select()
-        .from(roles)
-        .where(eq(roles.code, data.code.toUpperCase()))
-        .limit(1);
+      const { id } = await params;
       
-      if (existingRole.length > 0 && existingRole[0].id !== id) {
-        return NextResponse.json(
-          { error: 'Role code already exists' },
-          { status: 409 }
-        );
-      }
-    }
-    
-    // Update role
-    try {
-      const role = await updateRole(id, data, userId);
-      
-      if (!role) {
-        return NextResponse.json(
-          { error: 'Role not found' },
-          { status: 404 }
-        );
+      // Check if this is Super Admin role and user is not Super Admin
+      const targetRole = await getRoleById(id);
+      if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+        const isSuperAdmin = await isUserSuperAdmin(userId);
+        if (!isSuperAdmin) {
+          return NextResponse.json(
+            { error: 'Forbidden - Only Super Admins can modify the Super Admin role' },
+            { status: 403 }
+          );
+        }
       }
       
-      return NextResponse.json(
-        {
-          success: true,
-          data: role,
-        },
-        { status: 200 }
-      );
-    } catch (error) {
-      if (error instanceof Error) {
+      // Parse and validate request body
+      const body = await req.json();
+      const { validateRequest } = await import('@/core/middleware/validation');
+      const { updateRoleSchema } = await import('@/core/lib/validations/roles');
+      const validation = validateRequest(updateRoleSchema, body);
+      
+      if (!validation.success) {
         return NextResponse.json(
-          { error: error.message },
+          {
+            error: 'Validation failed',
+            details: validation.error.errors,
+          },
           { status: 400 }
         );
       }
-      throw error;
+      
+      const data = validation.data;
+      
+      // Check if code is being changed and if it's already taken
+      if (data.code) {
+        const existingRole = await db
+          .select()
+          .from(roles)
+          .where(eq(roles.code, data.code.toUpperCase()))
+          .limit(1);
+        
+        if (existingRole.length > 0 && existingRole[0].id !== id) {
+          return NextResponse.json(
+            { error: 'Role code already exists' },
+            { status: 409 }
+          );
+        }
+      }
+      
+      // Update role
+      try {
+        const role = await updateRole(id, data, userId);
+        
+        if (!role) {
+          return NextResponse.json(
+            { error: 'Role not found' },
+            { status: 404 }
+          );
+        }
+        
+        return NextResponse.json(
+          {
+            success: true,
+            data: role,
+          },
+          { status: 200 }
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: 400 }
+          );
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Update role error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
     }
-  } catch (error) {
-    console.error('Update role error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  });
 }
 
 /**
@@ -198,72 +202,74 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    // Verify authentication
-    const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
-    
-    if (authResult instanceof NextResponse) {
-      return authResult; // Unauthorized response
-    }
-    
-    const userId = authResult;
-    
-    // Check permission
-    const permissionMiddleware = requirePermission('roles:delete');
-    const permissionResult = await permissionMiddleware(request);
-    
-    if (permissionResult instanceof NextResponse) {
-      return permissionResult; // Forbidden response
-    }
-    
-    const { id } = await params;
-    
-    // Check if this is Super Admin role and user is not Super Admin
-    const targetRole = await getRoleById(id);
-    if (targetRole && targetRole.code === 'SUPER_ADMIN') {
-      const isSuperAdmin = await isUserSuperAdmin(userId);
-      if (!isSuperAdmin) {
-        return NextResponse.json(
-          { error: 'Forbidden - Only Super Admins can delete the Super Admin role' },
-          { status: 403 }
-        );
-      }
-    }
-    
-    // Delete role
+  return withCoreRouteLogging(request, async (req) => {
     try {
-      const success = await deleteRole(id, userId);
+      // Verify authentication
+      const authMiddleware = requireAuth();
+      const authResult = await authMiddleware(req);
       
-      if (!success) {
-        return NextResponse.json(
-          { error: 'Role not found' },
-          { status: 404 }
-        );
+      if (authResult instanceof NextResponse) {
+        return authResult; // Unauthorized response
       }
       
-      return NextResponse.json(
-        {
-          success: true,
-          message: 'Role deleted successfully',
-        },
-        { status: 200 }
-      );
+      const userId = authResult;
+      
+      // Check permission
+      const permissionMiddleware = requirePermission('roles:delete');
+      const permissionResult = await permissionMiddleware(req);
+      
+      if (permissionResult instanceof NextResponse) {
+        return permissionResult; // Forbidden response
+      }
+      
+      const { id } = await params;
+      
+      // Check if this is Super Admin role and user is not Super Admin
+      const targetRole = await getRoleById(id);
+      if (targetRole && targetRole.code === 'SUPER_ADMIN') {
+        const isSuperAdmin = await isUserSuperAdmin(userId);
+        if (!isSuperAdmin) {
+          return NextResponse.json(
+            { error: 'Forbidden - Only Super Admins can delete the Super Admin role' },
+            { status: 403 }
+          );
+        }
+      }
+      
+      // Delete role
+      try {
+        const success = await deleteRole(id, userId);
+        
+        if (!success) {
+          return NextResponse.json(
+            { error: 'Role not found' },
+            { status: 404 }
+          );
+        }
+        
+        return NextResponse.json(
+          {
+            success: true,
+            message: 'Role deleted successfully',
+          },
+          { status: 200 }
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: 400 }
+          );
+        }
+        throw error;
+      }
     } catch (error) {
-      if (error instanceof Error) {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 400 }
-        );
-      }
-      throw error;
+      console.error('Delete role error:', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
     }
-  } catch (error) {
-    console.error('Delete role error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
+  });
 }
 

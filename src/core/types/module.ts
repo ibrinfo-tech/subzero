@@ -48,6 +48,10 @@ export interface ModuleConfig {
   api?: ModuleApiConfig;
   navigation?: ModuleNavigation;
   permissions?: ModulePermissions;
+  activityLogs?: {
+    enabled?: boolean; // Enable/disable automatic activity logging for this module (default: false)
+    excludeActions?: string[]; // List of actions to exclude from logging (e.g., ['read', 'list'])
+  };
 }
 
 export interface LoadedModule {

@@ -66,6 +66,7 @@ export async function getFirstAccessibleRoute(userId: string): Promise<string | 
             { path: '/settings/notification-methods', permission: 'settings:notification-methods:read' },
             { path: '/settings/smtp-settings', permission: 'settings:smtp-settings:read' },
             { path: '/settings/custom-fields', permission: 'settings:custom-fields:read' },
+            { path: '/settings/sidebar-settings', permission: 'settings:sidebar-settings:read' },
           ];
 
           // Check for first accessible settings submenu
