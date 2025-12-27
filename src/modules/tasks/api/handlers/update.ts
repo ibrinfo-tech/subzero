@@ -4,6 +4,7 @@ import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { updateTask } from '../../services/taskService';
 import { z } from 'zod';
+import { UpdateTaskInput } from '../../types';
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
@@ -12,6 +13,7 @@ const updateTaskSchema = z.object({
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
   dueDate: z.string().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
+  projectId: z.string().uuid().optional().nullable(),
   relatedEntityType: z.string().optional().nullable(),
   relatedEntityId: z.string().uuid().optional().nullable(),
   customFields: z.record(z.any()).optional(),
@@ -54,7 +56,7 @@ export async function PATCH(
       id: taskId,
       tenantId,
       userId,
-      data: validation.data,
+      data: validation.data as UpdateTaskInput,
     });
 
     if (!record) {

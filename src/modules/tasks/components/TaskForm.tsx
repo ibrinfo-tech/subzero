@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Input } from '@/core/components/ui/input';
 import { Label } from '@/core/components/ui/label';
 import { Textarea } from '@/core/components/ui/textarea';
@@ -8,6 +9,7 @@ import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import { useTaskCustomFields } from '../hooks/useTaskCustomFields';
 import { TASK_STATUSES, TASK_PRIORITIES } from '../utils/constants';
 import type { CreateTaskInput } from '../types';
+import { useAuthStore } from '@/core/store/authStore';
 
 interface TaskFormProps {
   form: CreateTaskInput;
@@ -21,12 +23,45 @@ const STANDARD_FIELD_CONFIG = [
   { code: 'priority', label: 'Priority', type: 'select' as const },
   { code: 'due_date', label: 'Due Date', type: 'date' as const },
   { code: 'assigned_to', label: 'Assigned To', type: 'uuid' as const },
+  { code: 'project_id', label: 'Project', type: 'uuid' as const },
 ] as const;
 
 export function TaskForm({ form, onChange }: TaskFormProps) {
   const { isFieldVisible, isFieldEditable, loading: loadingPerms } =
     useFieldPermissions('tasks');
   const { customFields, loading: loadingCustomFields } = useTaskCustomFields();
+  const { token } = useAuthStore();
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Fetch projects for project selection
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const res = await fetch('/api/projects', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setProjects(data.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    fetchProjects();
+  }, [token]);
 
   const updateField = <K extends keyof CreateTaskInput>(
     key: K,
@@ -176,6 +211,29 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                     value={form.dueDate || ''}
                     onChange={(e) => updateField('dueDate', e.target.value || undefined)}
                     disabled={!editable}
+                  />
+                </div>
+              );
+            }
+
+            if (field.code === 'project_id') {
+              return (
+                <div key={field.code}>
+                  <Label>
+                    {field.label}
+                    {!editable && (
+                      <span className="text-xs text-muted-foreground ml-2">(Read-only)</span>
+                    )}
+                  </Label>
+                  <Select
+                    value={form.projectId || ''}
+                    onChange={(e) => updateField('projectId', e.target.value || null)}
+                    disabled={!editable || loadingProjects}
+                    options={[
+                      { value: '', label: 'Select project...' },
+                      ...projects.map((p) => ({ value: p.id, label: p.name })),
+                    ]}
+                    className="w-full"
                   />
                 </div>
               );

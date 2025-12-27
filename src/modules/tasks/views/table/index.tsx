@@ -25,6 +25,7 @@ const defaultForm: CreateTaskInput = {
   priority: 'normal',
   dueDate: undefined,
   assignedTo: undefined,
+  projectId: undefined,
   relatedEntityType: undefined,
   relatedEntityId: undefined,
   customFields: {},
@@ -37,7 +38,9 @@ export default function TasksTablePage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [assignedToFilter, setAssignedToFilter] = useState<string>('all');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [showOverdue, setShowOverdue] = useState(false);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateTaskInput>(defaultForm);
@@ -46,8 +49,34 @@ export default function TasksTablePage() {
   const [taskToDelete, setTaskToDelete] = useState<TaskRecord | null>(null);
 
   const { hasPermission } = usePermissions();
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, token } = useAuthStore();
   const debouncedSearch = useDebounce(search, 500);
+
+  // Fetch projects for filter
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch('/api/projects', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setProjects(data.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+      }
+    };
+
+    fetchProjects();
+  }, [token]);
 
   const canCreate = hasPermission('tasks:create') || hasPermission('tasks:*');
   const canUpdate = hasPermission('tasks:update') || hasPermission('tasks:*');
@@ -74,6 +103,9 @@ export default function TasksTablePage() {
           params.set('assignedTo', assignedToFilter);
         }
       }
+      if (projectFilter !== 'all') {
+        params.set('projectId', projectFilter);
+      }
       if (showOverdue) params.set('overdue', 'true');
 
       const query = params.toString();
@@ -93,7 +125,7 @@ export default function TasksTablePage() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, priorityFilter, assignedToFilter, showOverdue]);
+  }, [debouncedSearch, statusFilter, priorityFilter, assignedToFilter, projectFilter, showOverdue]);
 
   useEffect(() => {
     fetchTasks();
@@ -129,6 +161,7 @@ export default function TasksTablePage() {
       priority: task.priority,
       dueDate: task.dueDate || undefined,
       assignedTo: task.assignedTo || undefined,
+      projectId: task.projectId || undefined,
       relatedEntityType: task.relatedEntityType || undefined,
       relatedEntityId: task.relatedEntityId || undefined,
       customFields: task.customFields || {},
@@ -321,11 +354,12 @@ export default function TasksTablePage() {
     setStatusFilter('all');
     setPriorityFilter('all');
     setAssignedToFilter('all');
+    setProjectFilter('all');
     setShowOverdue(false);
   };
 
   const hasActiveFilters =
-    search || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all' || showOverdue;
+    search || statusFilter !== 'all' || priorityFilter !== 'all' || assignedToFilter !== 'all' || projectFilter !== 'all' || showOverdue;
 
   const statusOptions = [
     { value: 'all', label: 'All Statuses' },
@@ -341,6 +375,11 @@ export default function TasksTablePage() {
     { value: 'all', label: 'All Assignees' },
     { value: 'me', label: 'My Tasks' },
     { value: 'unassigned', label: 'Unassigned' },
+  ];
+
+  const projectOptions = [
+    { value: 'all', label: 'All Projects' },
+    ...projects.map((p) => ({ value: p.id, label: p.name })),
   ];
 
   return (
@@ -415,6 +454,12 @@ export default function TasksTablePage() {
                   value={assignedToFilter}
                   onChange={(e) => setAssignedToFilter(e.target.value)}
                   options={assignedToOptions}
+                  className="w-[140px]"
+                />
+                <Select
+                  value={projectFilter}
+                  onChange={(e) => setProjectFilter(e.target.value)}
+                  options={projectOptions}
                   className="w-[140px]"
                 />
                 <Button

@@ -557,6 +557,47 @@ const notificationsSingleTable = pgTable('notifications', {
 export const notifications = (MULTI_TENANT_ENABLED ? notificationsMultiTable : notificationsSingleTable) as any;
 
 // ============================================================================
+// 6. SYSTEM LOGS - Centralized logging for all modules
+// ============================================================================
+
+export const systemLogs = pgTable('system_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ...(MULTI_TENANT_ENABLED
+    ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) }
+    : {}),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  module: varchar('module', { length: 100 }).notNull(), // Module identifier (e.g., 'users', 'inventory_management')
+  level: varchar('level', { length: 20 }).default('info').notNull(), // info, warning, error, debug, success
+  message: text('message').notNull(),
+  context: jsonb('context').default({}), // Additional context data (request details, metadata, etc.)
+  resourceType: varchar('resource_type', { length: 100 }), // Type of resource being logged
+  resourceId: uuid('resource_id'), // ID of the resource
+  action: varchar('action', { length: 100 }), // Action performed (e.g., 'create', 'update', 'delete', 'login')
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  duration: integer('duration'), // Duration in milliseconds (for performance logs)
+  statusCode: integer('status_code'), // HTTP status code if applicable
+  errorStack: text('error_stack'), // Error stack trace for error logs
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+} as any, (table: any) => {
+  const indexes: Record<string, any> = {
+    userIdx: index('idx_system_logs_user').on(table.userId),
+    moduleIdx: index('idx_system_logs_module').on(table.module),
+    levelIdx: index('idx_system_logs_level').on(table.level),
+    createdIdx: index('idx_system_logs_created').on(table.createdAt),
+    moduleLevelIdx: index('idx_system_logs_module_level').on(table.module, table.level),
+    resourceIdx: index('idx_system_logs_resource').on(table.resourceType, table.resourceId),
+  };
+
+  // Conditionally add tenant-related indexes
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_system_logs_tenant').on(table.tenantId);
+  }
+
+  return indexes;
+});
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -579,6 +620,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   resourcePermissions: many(resourcePermissions),
   sessions: many(sessions),
   notifications: many(notifications),
+  systemLogs: many(systemLogs),
 }));
 
 export const modulesRelations = relations(modules, ({ many }) => ({
@@ -677,17 +719,16 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
     : {}),
 }));
 
-// Conditionally export tenants relations
-export const tenantsRelations = MULTI_TENANT_ENABLED
-  ? relations(tenantsTable, ({ many }) => ({
+export const tenantsRelations = MULTI_TENANT_ENABLED && tenants
+  ? relations(tenants, ({ many }) => ({
     users: many(users),
     roles: many(roles),
-    tenantUsers: many(tenantUsersTable),
+    tenantUsers: many(tenantUsers),
     userRoles: many(userRoles),
     resourcePermissions: many(resourcePermissions),
     sessions: many(sessions),
     notifications: many(notifications),
-    moduleLabels: many(moduleLabelsTable),
+    systemLogs: many(systemLogs),
   }))
   : null as any;
 
@@ -723,10 +764,27 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const systemLogsRelations = relations(systemLogs, ({ one }) => ({
+  ...(MULTI_TENANT_ENABLED && tenants
+    ? {
+      tenant: one(tenants, {
+        fields: [systemLogs.tenantId],
+        references: [tenants.id],
+      }),
+    }
+    : {}),
+  user: one(users, {
+    fields: [systemLogs.userId],
+    references: [users.id],
+  }),
+}));
+
 // ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
+export type Tenant = typeof tenantsTable.$inferSelect;
+export type NewTenant = typeof tenantsTable.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AuthProvider = typeof authProviders.$inferSelect;
@@ -757,35 +815,5 @@ export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
-
-// Conditional types for multi-tenant tables
-export type Tenant = typeof tenantsTable.$inferSelect;
-export type NewTenant = typeof tenantsTable.$inferInsert;
-export type TenantUser = typeof tenantUsersTable.$inferSelect;
-export type NewTenantUser = typeof tenantUsersTable.$inferInsert;
-export type ModuleLabel = typeof moduleLabelsTable.$inferSelect;
-export type NewModuleLabel = typeof moduleLabelsTable.$inferInsert;
-export type PermissionGroup = typeof permissionGroups.$inferSelect;
-export type NewPermissionGroup = typeof permissionGroups.$inferInsert;
-export type PermissionGroupItem = typeof permissionGroupItems.$inferSelect;
-export type NewPermissionGroupItem = typeof permissionGroupItems.$inferInsert;
-
-// ============================================================================
-// TYPE GUARDS & UTILITIES
-// ============================================================================
-
-/**
- * Type guard to check if an object has a tenantId property
- */
-export function hasTenantId<T extends Record<string, any>>(
-  obj: T
-): obj is T & { tenantId: string | null } {
-  return 'tenantId' in obj;
-}
-
-/**
- * Type guard to check if multi-tenancy is enabled at runtime
- */
-export function isMultiTenantMode(): boolean {
-  return MULTI_TENANT_ENABLED;
-}
+export type SystemLog = typeof systemLogs.$inferSelect;
+export type NewSystemLog = typeof systemLogs.$inferInsert;

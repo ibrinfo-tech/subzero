@@ -6,6 +6,7 @@ import { getAuthToken } from '@/core/middleware/auth';
 import { readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ModuleApiEndpoint } from '@/core/types/module';
+import { withActivityLogging } from './activityLogger';
 
 const MODULES_DIR = join(process.cwd(), 'src', 'modules');
 
@@ -169,17 +170,30 @@ export async function routeApiRequest(
   }
 
   try {
-    // Handlers are Next.js route handlers that receive NextRequest and params
-    // Pass params as a plain object (not a Promise) to match Next.js 15 handler signature
-    const result = await handler(request, { params: routeParams });
-
-    // Handlers should return NextResponse
-    if (result instanceof NextResponse) {
-      return result;
-    }
-
-    // Fallback: wrap in NextResponse if handler returns plain object
-    return NextResponse.json(result);
+    // Wrap handler with activity logging if enabled for this module
+    const wrappedHandler = async (req: NextRequest, params: { params: Record<string, string> }) => {
+      const result = await handler(req, params);
+      
+      // Handlers should return NextResponse
+      if (result instanceof NextResponse) {
+        return result;
+      }
+      
+      // Fallback: wrap in NextResponse if handler returns plain object
+      return NextResponse.json(result);
+    };
+    
+    // Execute handler with activity logging middleware
+    const result = await withActivityLogging(
+      request,
+      moduleId,
+      module.config,
+      wrappedHandler,
+      routeParams,
+      fullPath
+    );
+    
+    return result;
   } catch (error) {
     console.error(`Error executing handler ${endpoint.handler} from module ${moduleId}:`, error);
     return NextResponse.json(

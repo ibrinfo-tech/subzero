@@ -11,6 +11,7 @@ import { registerEventHandler, executeHandlers, getHandlers } from './event-regi
 import { storeInOutbox, reconstructEvent } from './outbox';
 import { executeWithMiddleware } from './middleware';
 import { getEventConfig, isEventSystemEnabled } from './config';
+import { bootstrapEventHandlers } from './bootstrap';
 
 /**
  * In-memory storage for query responses
@@ -21,6 +22,12 @@ const queryResponseMap = new Map<string, {
   reject: (error: Error) => void;
   timeout: NodeJS.Timeout;
 }>();
+
+/**
+ * Track if event handlers have been bootstrapped
+ */
+let handlersBootstrapped = false;
+let bootstrapPromise: Promise<void> | null = null;
 
 /**
  * Generate event metadata
@@ -119,9 +126,13 @@ export async function emitEvent<T = unknown>(
   // Immediate processing if enabled
   if (config.enableImmediateProcessing) {
     // Process asynchronously without blocking
+    console.log(`[Event Bus] Processing event immediately: ${eventName}`);
     processEventImmediately(event).catch((error) => {
       console.error(`[Event Bus] Failed to process event immediately: ${eventName}`, error);
     });
+  } else {
+    console.log(`[Event Bus] Event stored in outbox (immediate processing disabled): ${eventName}`);
+    console.log(`[Event Bus] To enable immediate processing, set EVENT_IMMEDIATE_PROCESSING=true`);
   }
 }
 
@@ -129,17 +140,57 @@ export async function emitEvent<T = unknown>(
  * Process event immediately (bypass outbox)
  * Used when immediate processing is enabled
  */
+/**
+ * Ensure event handlers are bootstrapped (lazy initialization)
+ */
+async function ensureHandlersBootstrapped(): Promise<void> {
+  if (handlersBootstrapped) {
+    return;
+  }
+
+  if (bootstrapPromise) {
+    // Bootstrap already in progress, wait for it
+    return bootstrapPromise;
+  }
+
+  // Start bootstrap
+  bootstrapPromise = (async () => {
+    try {
+      console.log('[Event Bus] Bootstrapping event handlers...');
+      await bootstrapEventHandlers();
+      handlersBootstrapped = true;
+      console.log('[Event Bus] Event handlers bootstrapped successfully');
+    } catch (error) {
+      console.error('[Event Bus] Failed to bootstrap event handlers:', error);
+      // Reset so we can try again
+      handlersBootstrapped = false;
+      bootstrapPromise = null;
+      throw error;
+    }
+  })();
+
+  return bootstrapPromise;
+}
+
 async function processEventImmediately(event: Event): Promise<void> {
+  // Ensure handlers are bootstrapped before processing
+  await ensureHandlersBootstrapped();
+
   const handlers = getHandlers(event.metadata.eventName);
   
+  console.log(`[Event Bus] Found ${handlers.length} handler(s) for event: ${event.metadata.eventName}`);
+  
   if (handlers.length === 0) {
+    console.warn(`[Event Bus] No handlers registered for event: ${event.metadata.eventName}`);
     return;
   }
 
   // Execute all handlers
   for (const config of handlers) {
     try {
+      console.log(`[Event Bus] Executing handler for ${event.metadata.eventName} (module: ${config.options.module})`);
       await executeWithMiddleware(event, config.handler, config.options);
+      console.log(`[Event Bus] Handler completed successfully for ${event.metadata.eventName}`);
     } catch (error) {
       console.error(`[Event Bus] Handler failed for ${event.metadata.eventName}:`, error);
       // Continue with other handlers even if one fails

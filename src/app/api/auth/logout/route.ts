@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthToken } from '@/core/middleware/auth';
 import { revokeAccessToken, revokeRefreshToken, revokeAllUserTokens } from '@/core/lib/tokens';
 import { verifyAccessToken } from '@/core/lib/tokens';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * POST /api/auth/logout
  * Logout endpoint - revokes current tokens
  */
 export async function POST(request: NextRequest) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
-    const accessToken = getAuthToken(request);
-    const refreshToken = request.cookies.get('refresh-token')?.value;
+    const accessToken = getAuthToken(req);
+    const refreshToken = req.cookies.get('refresh-token')?.value;
 
     // Revoke tokens if they exist
     if (accessToken) {
@@ -48,4 +50,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }

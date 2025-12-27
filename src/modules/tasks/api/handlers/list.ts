@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const priority = searchParams.get('priority') || undefined;
     const assignedTo = searchParams.get('assignedTo') || undefined;
+    const projectId = searchParams.get('projectId') || undefined;
     const dueDate = searchParams.get('dueDate') || undefined;
     const overdue = searchParams.get('overdue') === 'true';
 
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
       status: status as any,
       priority: priority as any,
       assignedTo: assignedTo as any,
+      projectId: projectId as any,
       dueDate,
       overdue,
     };

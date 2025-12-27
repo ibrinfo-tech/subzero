@@ -6,6 +6,7 @@ import { getUserTenantId, userHasPermission } from '@/core/lib/permissions';
 import { db } from '@/core/lib/db';
 import { users, authProviders } from '@/core/lib/db/baseSchema';
 import { eq } from 'drizzle-orm';
+import { withCoreRouteLogging } from '@/core/lib/api/coreRouteLogger';
 
 /**
  * GET /api/users
@@ -83,10 +84,11 @@ export async function GET(request: NextRequest) {
  * Tenant isolation: Non-super-admin users can only create users in their tenant
  */
 export async function POST(request: NextRequest) {
+  return withCoreRouteLogging(request, async (req) => {
   try {
     // Verify authentication
     const authMiddleware = requireAuth();
-    const authResult = await authMiddleware(request);
+    const authResult = await authMiddleware(req);
     
     if (authResult instanceof NextResponse) {
       return authResult; // Unauthorized response
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
     const userTenantId = await getUserTenantId(userId);
     
     // Parse and validate request body
-    const body = await request.json();
+    const body = await req.json();
     const { validateRequest } = await import('@/core/middleware/validation');
     const { createUserSchema } = await import('@/core/lib/validations/users');
     const validation = validateRequest(createUserSchema, body);
@@ -281,4 +283,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }
