@@ -1,38 +1,53 @@
 import { useDroppable } from "@dnd-kit/core";
 import { KanbanTask } from "./KanbanTask";
+import { Card } from "@/core/components/ui/card";
+import { Badge } from "@/core/components/ui/badge";
+import { cn } from "@/core/lib/utils";
+import type { KanbanColumn as KanbanColumnType, Task } from "../types";
 
 export function KanbanColumn({
   column,
   tasks,
 }: {
-  column: { id: string; title: string; color: string };
-  tasks: any[];
+  column: KanbanColumnType;
+  tasks: Task[];
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
 
   return (
-    <div
+    <Card
       ref={setNodeRef}
-      className={`
-        h-full rounded-xl border-t-4 shadow-sm flex flex-col transition z-50
-        ${column.color}
-        ${isOver ? "bg-transparent" : ""}
-      `}
+      className={cn(
+        "h-full flex flex-col transition-all duration-200 z-50 overflow-hidden",
+        "border-l-4 shadow-md hover:shadow-lg",
+        "bg-card/95 backdrop-blur-sm",
+        column.color,
+        isOver && "ring-2 ring-primary ring-offset-2 bg-accent/10 scale-[1.02]"
+      )}
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b flex items-center justify-between">
-        <h3 className="font-semibold text-sm">{column.title}</h3>
-        <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full">
+      <div className="px-4 py-3 border-b border-border bg-gradient-to-r from-card/80 to-card/40 backdrop-blur-sm flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", column.accentColor)} />
+          <h3 className="font-semibold text-sm text-card-foreground tracking-tight">
+            {column.title}
+          </h3>
+        </div>
+        <Badge variant="secondary" className="font-medium min-w-[24px] justify-center">
           {tasks.length}
-        </span>
+        </Badge>
       </div>
 
       {/* Tasks */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {tasks.map((task) => (
-          <KanbanTask key={task.id} task={task} />
-        ))}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+        {tasks.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+            <p className="opacity-50">No tasks</p>
+          </div>
+        ) : (
+          tasks.map((task) => <KanbanTask key={task.id} task={task} />)
+        )}
       </div>
-    </div>
+    </Card>
   );
 }

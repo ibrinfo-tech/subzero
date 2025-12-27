@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'completed';
+export type TaskStatus = 'todo' | 'in_progress' | 'hold' | 'next_sprint' | 'completed';
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface TaskRecord {
@@ -24,10 +24,10 @@ export interface CreateTaskInput {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  dueDate?: string;
-  assignedTo?: string;
-  relatedEntityType?: string;
-  relatedEntityId?: string;
+  dueDate?: string | null;
+  assignedTo?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
   customFields?: Record<string, unknown>;
 }
 
@@ -36,10 +36,10 @@ export interface UpdateTaskInput {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  dueDate?: string;
-  assignedTo?: string;
-  relatedEntityType?: string;
-  relatedEntityId?: string;
+  dueDate?: string | null;
+  assignedTo?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
   customFields?: Record<string, unknown>;
 }
 

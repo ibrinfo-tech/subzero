@@ -319,8 +319,9 @@ export async function updateTask(params: {
       const statusLabels: Record<string, string> = {
         todo: 'To Do',
         in_progress: 'In Progress',
-        blocked: 'Blocked',
+        hold: 'hold',
         completed: 'Completed',
+        next_sprint: 'Next Sprint',
       };
 
       for (const recipientId of recipients) {
