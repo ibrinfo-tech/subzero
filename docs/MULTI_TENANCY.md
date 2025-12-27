@@ -69,6 +69,176 @@ MULTI_TENANT_ENABLED=false
 
 ---
 
+## Schema Development Patterns
+
+### ⚠️ CRITICAL: Always Use Conditional Patterns
+
+When creating new schemas or modifying existing ones, **you MUST** use conditional patterns for any tenant-related columns. Failure to do so will cause migration errors when `MULTI_TENANT_ENABLED=false`.
+
+### Correct Pattern for Module Schemas
+
+When adding a `tenantId` column to a module schema, **always** use this pattern:
+
+```typescript
+import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
+
+export const yourTable = pgTable(
+  'your_table',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // ✅ CORRECT: Conditional tenantId with reference
+    tenantId: MULTI_TENANT_ENABLED && tenants
+      ? uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' })
+      : uuid('tenant_id'),
+    // ... other columns
+  },
+  (table) => ({
+    // ✅ CORRECT: Conditional tenant index
+    ...(MULTI_TENANT_ENABLED && 'tenantId' in table
+      ? { tenantIdx: index('idx_your_table_tenant').on(table.tenantId) }
+      : {}),
+    // ... other indexes
+  })
+);
+```
+
+### ❌ Common Mistakes to Avoid
+
+#### 1. Unconditional Reference to `tenants.id`
+
+**❌ WRONG:**
+```typescript
+tenantId: uuid('tenant_id')
+  .notNull()
+  .references(() => tenants.id, { onDelete: 'cascade' }), // ❌ Will fail when tenants is null
+```
+
+**✅ CORRECT:**
+```typescript
+tenantId: MULTI_TENANT_ENABLED && tenants
+  ? uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' })
+  : uuid('tenant_id'),
+```
+
+#### 2. Unconditional Index on tenantId
+
+**❌ WRONG:**
+```typescript
+(table) => ({
+  tenantIdx: index('idx_table_tenant').on(table.tenantId), // ❌ Will fail if tenantId doesn't exist
+  // ...
+})
+```
+
+**✅ CORRECT:**
+```typescript
+(table: any) => {
+  const indexes: Record<string, any> = {
+    // ... other indexes
+  };
+  
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_table_tenant').on(table.tenantId);
+  }
+  
+  return indexes;
+}
+```
+
+#### 3. Using `tenants` Directly Instead of `tenantsTable`
+
+**❌ WRONG:**
+```typescript
+import { tenants } from '@/core/lib/db/baseSchema';
+
+// This will be null when MULTI_TENANT_ENABLED=false
+tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' }), // ❌
+```
+
+**✅ CORRECT:**
+```typescript
+import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
+
+// Use conditional check
+tenantId: MULTI_TENANT_ENABLED && tenants
+  ? uuid('tenant_id').references(() => tenants.id, { onDelete: 'cascade' })
+  : uuid('tenant_id'),
+```
+
+**Note:** In `baseSchema.ts`, internal references use `tenantsTable` (the const), but exported schemas should use the conditional pattern with the exported `tenants` variable.
+
+### Required Imports
+
+Always import both `MULTI_TENANT_ENABLED` and `tenants`:
+
+```typescript
+import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
+```
+
+### Pattern for Always-Exported Tables
+
+For tables that are always exported (like `systemLogs`), use the spread operator pattern:
+
+```typescript
+export const systemLogs = pgTable('system_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // ✅ CORRECT: Conditional tenantId using spread operator
+  ...(MULTI_TENANT_ENABLED
+    ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) }
+    : {}),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  // ... other columns
+} as any, (table: any) => {
+  const indexes: Record<string, any> = {
+    // ... base indexes
+  };
+
+  // ✅ CORRECT: Conditional tenant index
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_system_logs_tenant').on(table.tenantId);
+  }
+
+  return indexes;
+});
+```
+
+### Testing Your Schema
+
+After creating or modifying a schema:
+
+1. **Test with multi-tenancy enabled:**
+   ```bash
+   # Set MULTI_TENANT_ENABLED=true in .env.local
+   npm run db:generate
+   npm run db:migrate
+   ```
+
+2. **Test with multi-tenancy disabled:**
+   ```bash
+   # Set MULTI_TENANT_ENABLED=false in .env.local
+   npm run db:generate
+   npm run db:migrate
+   ```
+
+Both commands should complete without errors. If you see errors like:
+- `TypeError: Cannot read properties of null (reading 'id')`
+- `error: relation "public.tenants" does not exist`
+
+Then you have an unconditional reference that needs to be fixed.
+
+### Checklist for New Schemas
+
+- [ ] Import `MULTI_TENANT_ENABLED` and `tenants` from `@/core/lib/db/baseSchema`
+- [ ] Use conditional pattern for `tenantId` column
+- [ ] Use conditional pattern for tenant-related indexes
+- [ ] Use conditional pattern for tenant-related relations
+- [ ] Test with both `MULTI_TENANT_ENABLED=true` and `MULTI_TENANT_ENABLED=false`
+- [ ] Verify `npm run db:generate` works in both modes
+- [ ] Verify `npm run db:migrate` works in both modes
+
+---
+
 ## Setup Workflow
 
 ### Initial Setup
@@ -286,6 +456,32 @@ await db.insert(tenantUsers!).values({
 ---
 
 ## Troubleshooting
+
+### Schema Generation Errors
+
+**Problem:** `TypeError: Cannot read properties of null (reading 'id')` when running `npm run db:generate`
+
+**Cause:** Unconditional reference to `tenants.id` in a schema file.
+
+**Solution:** 
+1. Find the schema file causing the error (check the stack trace)
+2. Update the `tenantId` column to use the conditional pattern:
+   ```typescript
+   tenantId: MULTI_TENANT_ENABLED && tenants
+     ? uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' })
+     : uuid('tenant_id'),
+   ```
+3. Ensure you've imported `MULTI_TENANT_ENABLED` from `@/core/lib/db/baseSchema`
+
+**Problem:** `error: relation "public.tenants" does not exist` when running `npm run db:migrate`
+
+**Cause:** Drizzle-kit is trying to introspect the database and finds a reference to the `tenants` table that doesn't exist when `MULTI_TENANT_ENABLED=false`.
+
+**Solution:**
+1. Check all schema files for unconditional references to `tenants` or `tenantsTable`
+2. Make sure all `tenantId` columns use conditional patterns
+3. Make sure all tenant-related indexes are conditional
+4. See the "Schema Development Patterns" section above for correct patterns
 
 ### Migration Errors
 

@@ -1,5 +1,5 @@
 import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
-import { tenants } from '@/core/lib/db/baseSchema';
+import { MULTI_TENANT_ENABLED, tenants } from '@/core/lib/db/baseSchema';
 import { users } from '@/core/lib/db/baseSchema';
 
 /**
@@ -10,9 +10,9 @@ export const leads = pgTable(
   'leads',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    tenantId: uuid('tenant_id')
-      .notNull()
-      .references(() => tenants.id, { onDelete: 'cascade' }),
+    tenantId: MULTI_TENANT_ENABLED && tenants
+      ? uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' })
+      : uuid('tenant_id'),
     // Domain fields
     leadName: varchar('lead_name', { length: 255 }).notNull(),
     email: varchar('email', { length: 255 }),
