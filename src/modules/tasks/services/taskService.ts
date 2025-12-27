@@ -56,7 +56,10 @@ export async function listTasks(
   // Assigned to filter
   if (assignedTo) {
     if (assignedTo === 'me') {
+      console.log("usersss", userId)
       conditions.push(eq(tasks.assignedTo, userId));
+    } else if (assignedTo === 'unassigned') {
+      conditions.push(isNull(tasks.assignedTo));
     } else if (assignedTo !== 'all') {
       conditions.push(eq(tasks.assignedTo, assignedTo));
     }
@@ -328,8 +331,9 @@ export async function updateTask(params: {
       const statusLabels: Record<string, string> = {
         todo: 'To Do',
         in_progress: 'In Progress',
-        blocked: 'Blocked',
+        hold: 'hold',
         completed: 'Completed',
+        next_sprint: 'Next Sprint',
       };
 
       for (const recipientId of recipients) {

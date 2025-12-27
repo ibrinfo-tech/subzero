@@ -3,15 +3,15 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { createTask } from '../../services/taskService';
+import type { CreateTaskInput } from '../../types';
 import { z } from 'zod';
-import { CreateTaskInput } from '../../types';
 
 const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  status: z.enum(['todo', 'in_progress', 'blocked', 'completed']).optional(),
+  status: z.enum(['todo', 'in_progress', 'hold','next_sprint', 'completed']).optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  dueDate: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
   relatedEntityType: z.string().optional().nullable(),

@@ -19,6 +19,8 @@ import { useProjectLabels } from '../hooks/useProjectLabels';
 import type { ProjectRecord } from '../types';
 import { PROJECT_STATUSES, PROJECT_PRIORITIES } from '../utils/constants';
 import { useAuthStore } from '@/core/store/authStore';
+import { ReferenceFieldCell } from '@/core/components/common/ReferenceFieldCell';
+import React from 'react';
 
 interface ProjectTableProps {
   records: ProjectRecord[];
@@ -312,10 +314,18 @@ export function ProjectTable({
                 )}
                 {visibleCustomFields.map((field) => {
                   const value = record.customFields?.[field.code];
-                  let displayValue: string = '-';
+                  let displayValue: React.ReactNode = '-';
 
                   if (value !== null && value !== undefined) {
-                    if (typeof value === 'boolean') {
+                    if (field.fieldType === 'reference') {
+                      // For reference fields, show the label instead of ID
+                      displayValue = (
+                        <ReferenceFieldCell
+                          field={field}
+                          referenceId={value as string}
+                        />
+                      );
+                    } else if (typeof value === 'boolean') {
                       displayValue = value ? 'Yes' : 'No';
                     } else if (value instanceof Date || (typeof value === 'string' && field.fieldType === 'date')) {
                       displayValue = new Date(value as string).toLocaleDateString();

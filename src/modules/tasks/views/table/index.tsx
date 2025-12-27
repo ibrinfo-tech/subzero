@@ -13,10 +13,12 @@ import { LoadingSpinner } from '@/core/components/common/LoadingSpinner';
 import { usePermissions } from '@/core/hooks/usePermissions';
 import { useDebounce } from '@/core/hooks/useDebounce';
 import { useAuthStore } from '@/core/store/authStore';
-import type { TaskRecord, CreateTaskInput } from '../../types';
+import type { TaskRecord, CreateTaskInput, TaskStatus, TaskPriority } from '../../types';
 import { TaskForm } from '../../components/TaskForm';
 import { TaskTable } from '../../components/TaskTable';
 import { TASK_STATUSES, TASK_PRIORITIES } from '../../utils/constants';
+
+import KanbanView from '../kanban'
 
 const defaultForm: CreateTaskInput = {
   title: '',
@@ -47,6 +49,8 @@ export default function TasksTablePage() {
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<TaskRecord | null>(null);
+
+  const [isKanbanView, setIsKanbanView] = useState(true);
 
   const { hasPermission } = usePermissions();
   const { user: currentUser, token } = useAuthStore();
@@ -478,12 +482,21 @@ export default function TasksTablePage() {
                 <LoadingSpinner />
               </div>
             ) : (
-              <TaskTable
-                records={tasks}
-                onEdit={canUpdate ? openEdit : undefined}
-                onDelete={canDelete ? handleDelete : undefined}
-                showActions={showActions}
-              />
+              isKanbanView ? 
+              <KanbanView 
+                filters={{
+                  search: debouncedSearch || undefined,
+                  status: statusFilter !== 'all' ? (statusFilter as TaskStatus) : undefined,
+                  priority: priorityFilter !== 'all' ? (priorityFilter as TaskPriority) : undefined,
+                  assignedTo: assignedToFilter !== 'all' ? assignedToFilter : undefined,
+                  overdue: showOverdue || undefined,
+                }}
+              /> :   <TaskTable
+              records={tasks}
+              onEdit={canUpdate ? openEdit : undefined}
+              onDelete={canDelete ? handleDelete : undefined}
+              showActions={showActions}
+            />
             )}
           </CardContent>
         </Card>

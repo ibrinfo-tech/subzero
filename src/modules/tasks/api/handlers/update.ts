@@ -3,13 +3,13 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/core/middleware/auth';
 import { getUserTenantId } from '@/core/lib/permissions';
 import { updateTask } from '../../services/taskService';
+import type { UpdateTaskInput } from '../../types';
 import { z } from 'zod';
-import { UpdateTaskInput } from '../../types';
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional(),
-  status: z.enum(['todo', 'in_progress', 'blocked', 'completed']).optional(),
+  status: z.enum(['todo', 'in_progress', 'hold','next_sprint', 'completed']).optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
   dueDate: z.string().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
