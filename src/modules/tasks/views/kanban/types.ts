@@ -15,3 +15,5 @@ export interface KanbanColumn {
   accentColor?: string;
 }
 
+export type SortState = 'dueDate_asc' | 'dueDate_desc' | 'title_asc' | 'title_desc' | null;
+
