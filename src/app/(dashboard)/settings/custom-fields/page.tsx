@@ -69,8 +69,9 @@ export default function CustomFieldsSettingsPage() {
   const { invalidateCache } = useCustomFieldsStore();
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState<ModuleWithFields[]>([]);
-  const [selectedModule, setSelectedModule] = useState<string>('');
+  const [selectedModule, setSelectedModule] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [allFields, setAllFields] = useState<CustomField[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [saving, setSaving] = useState(false);
@@ -92,6 +93,55 @@ export default function CustomFieldsSettingsPage() {
   const [referenceColumns, setReferenceColumns] = useState<Array<{ name: string; type: string; isUnique: boolean }>>([]);
   const [referenceLabelColumns, setReferenceLabelColumns] = useState<Array<{ name: string; type: string }>>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
+
+  const loadAllFields = async (modulesData?: ModuleWithFields[]) => {
+    if (!accessToken) return;
+
+    const modulesToUse = modulesData || modules;
+    if (modulesToUse.length === 0) return;
+
+    try {
+      // Load all fields from all modules
+      const allFieldsData: Array<CustomField & { moduleName?: string }> = [];
+      
+      for (const module of modulesToUse) {
+        const res = await fetch(`/api/settings/custom-fields?moduleId=${module.id}`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            // Add module info to each field for display
+            const fieldsWithModule = data.data.map((field: CustomField) => ({
+              ...field,
+              moduleName: module.name,
+            }));
+            allFieldsData.push(...fieldsWithModule);
+          }
+        }
+      }
+
+      // Filter by search term if provided
+      let filteredFields = allFieldsData;
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        filteredFields = allFieldsData.filter(
+          field =>
+            field.name.toLowerCase().includes(searchLower) ||
+            field.code.toLowerCase().includes(searchLower) ||
+            field.label?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      setAllFields(filteredFields as CustomField[]);
+    } catch (error) {
+      console.error('Load all fields error:', error);
+      toast.error('Failed to load all fields');
+    }
+  };
 
   const loadModules = async () => {
     setLoading(true);
@@ -115,8 +165,11 @@ export default function CustomFieldsSettingsPage() {
       const data = await res.json();
       if (data.success) {
         setModules(data.data);
-        if (data.data.length > 0 && !selectedModule) {
-          setSelectedModule(data.data[0].id);
+        // Set default to 'all' if not already set
+        if (selectedModule === 'all' || !selectedModule) {
+          setSelectedModule('all');
+          // Load all fields when 'all' is selected
+          loadAllFields(data.data);
         }
       }
     } catch (error) {
@@ -163,13 +216,26 @@ export default function CustomFieldsSettingsPage() {
   };
 
   useEffect(() => {
-    if (selectedModule) {
+    if (selectedModule === 'all') {
+      loadAllFields();
+    } else if (selectedModule) {
       loadFieldsForModule(selectedModule);
     }
   }, [selectedModule, searchTerm]);
 
   const currentModule = modules.find(m => m.id === selectedModule);
-  const currentFields = currentModule?.fields || [];
+  const currentFields = selectedModule === 'all' 
+    ? allFields 
+    : (currentModule?.fields || []);
+  
+  // Helper to get module name for a field
+  const getModuleNameForField = (field: CustomField & { moduleName?: string }) => {
+    if (selectedModule === 'all') {
+      // When showing all, use the moduleName we added, or find it from modules
+      return field.moduleName || modules.find(m => m.id === field.moduleId)?.name || 'Unknown';
+    }
+    return currentModule?.name || 'Unknown';
+  };
 
   const resetForm = () => {
     // Auto-select first eligible module if available
@@ -278,12 +344,18 @@ export default function CustomFieldsSettingsPage() {
 
       toast.success('Custom field deleted successfully');
 
-      // Invalidate cache for the active module
-      if (selectedModule) {
-        invalidateCache(selectedModule);
+      // Invalidate cache for the affected module
+      const fieldModuleId = currentFields.find(f => f.id === fieldId)?.moduleId;
+      if (fieldModuleId) {
+        invalidateCache(fieldModuleId);
       }
 
-      loadFieldsForModule(selectedModule);
+      // Reload fields based on current selection
+      if (selectedModule === 'all') {
+        loadAllFields();
+      } else if (selectedModule) {
+        loadFieldsForModule(selectedModule);
+      }
     } catch (error) {
       console.error('Delete error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to delete custom field');
@@ -374,7 +446,13 @@ export default function CustomFieldsSettingsPage() {
 
       setDialogOpen(false);
       resetForm();
-      loadFieldsForModule(selectedModule);
+      
+      // Reload fields based on current selection
+      if (selectedModule === 'all') {
+        loadAllFields();
+      } else if (selectedModule) {
+        loadFieldsForModule(selectedModule);
+      }
     } catch (error) {
       console.error('Save error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to save custom field');
@@ -440,17 +518,18 @@ export default function CustomFieldsSettingsPage() {
         </Card>
       ) : (
         <>
-          {modules.length > 1 && (
-            <div className="flex gap-2 items-center">
-              <label className="text-sm font-medium">Module:</label>
-              <Select
-                value={selectedModule}
-                onChange={(e) => setSelectedModule(e.target.value)}
-                options={modules.map(m => ({ value: m.id, label: m.name }))}
-                className="w-64"
-              />
-            </div>
-          )}
+          <div className="flex gap-2 items-center">
+            <label className="text-sm font-medium">Module:</label>
+            <Select
+              value={selectedModule}
+              onChange={(e) => setSelectedModule(e.target.value)}
+              options={[
+                { value: 'all', label: 'All' },
+                ...modules.map(m => ({ value: m.id, label: m.name })),
+              ]}
+              className="w-64"
+            />
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Custom Fields</CardTitle>
@@ -478,7 +557,7 @@ export default function CustomFieldsSettingsPage() {
                       {currentFields.map((field) => (
                         <TableRow key={field.id}>
                           <TableCell className="font-medium">{field.name}</TableCell>
-                          <TableCell>{currentModule?.name || 'Unknown'}</TableCell>
+                          <TableCell>{getModuleNameForField(field)}</TableCell>
                           <TableCell>{getFieldTypeLabel(field.fieldType)}</TableCell>
                           <TableCell>
                             {field.metadata?.isRequired ? (
@@ -628,6 +707,10 @@ export default function CustomFieldsSettingsPage() {
                     }}
                     options={[
                       { value: '', label: 'Select a module' },
+                      // Special tables
+                      { value: 'users', label: 'Users' },
+                      { value: 'roles', label: 'Roles' },
+                      // Regular modules
                       ...modules.map(m => ({ value: m.code, label: m.name })),
                     ]}
                   />

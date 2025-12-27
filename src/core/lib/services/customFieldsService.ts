@@ -47,24 +47,36 @@ export interface UpdateCustomFieldInput {
 }
 
 /**
- * Get table columns for a module
+ * Get table columns for a module or special table
  * Returns columns with their types and uniqueness information
+ * Supports special tables: "users", "roles"
  */
 export async function getModuleTableColumns(moduleCode: string) {
-  // Get module from database
-  const module = await db
-    .select()
-    .from(modules)
-    .where(eq(modules.code, moduleCode.toUpperCase()))
-    .limit(1);
+  // Special tables that don't have module entries
+  const specialTables = ['users', 'roles'];
+  const isSpecialTable = specialTables.includes(moduleCode.toLowerCase());
 
-  if (module.length === 0) {
-    throw new Error(`Module "${moduleCode}" not found`);
+  let tableName: string;
+
+  if (isSpecialTable) {
+    // For special tables, use the code directly as table name
+    tableName = moduleCode.toLowerCase();
+  } else {
+    // Get module from database
+    const module = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.code, moduleCode.toUpperCase()))
+      .limit(1);
+
+    if (module.length === 0) {
+      throw new Error(`Module "${moduleCode}" not found`);
+    }
+
+    // Table name is typically the module code (lowercase)
+    // For modules like "customers", "leads", etc.
+    tableName = moduleCode.toLowerCase();
   }
-
-  // Table name is typically the module code (lowercase)
-  // For modules like "customers", "leads", etc.
-  const tableName = moduleCode.toLowerCase();
 
   // Get all columns with their types and uniqueness info
   const columns = await db.execute(sql`
@@ -266,20 +278,26 @@ export async function createCustomField(
       referenceLabel: string;
     };
 
-    // Validate that the referenced module exists and supports custom fields
-    const referencedModule = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.code, metadata.referenceModule.toUpperCase()))
-      .limit(1);
+    // Special tables that don't have module entries
+    const specialTables = ['users', 'roles'];
+    const isSpecialTable = specialTables.includes(metadata.referenceModule.toLowerCase());
 
-    if (referencedModule.length === 0) {
-      throw new Error(`Referenced module "${metadata.referenceModule}" not found`);
-    }
+    if (!isSpecialTable) {
+      // Validate that the referenced module exists and supports custom fields
+      const referencedModule = await db
+        .select()
+        .from(modules)
+        .where(eq(modules.code, metadata.referenceModule.toUpperCase()))
+        .limit(1);
 
-    const referencedModuleConfig = moduleRegistry.getModule(metadata.referenceModule.toLowerCase());
-    if (!referencedModuleConfig || (referencedModuleConfig.config as any).custom_field !== true) {
-      throw new Error(`Referenced module "${metadata.referenceModule}" does not support custom fields`);
+      if (referencedModule.length === 0) {
+        throw new Error(`Referenced module "${metadata.referenceModule}" not found`);
+      }
+
+      const referencedModuleConfig = moduleRegistry.getModule(metadata.referenceModule.toLowerCase());
+      if (!referencedModuleConfig || (referencedModuleConfig.config as any).custom_field !== true) {
+        throw new Error(`Referenced module "${metadata.referenceModule}" does not support custom fields`);
+      }
     }
 
     // Validate that the reference column exists and is unique
@@ -413,6 +431,69 @@ export async function updateCustomField(
   if (input.sortOrder !== undefined) updateData.sortOrder = input.sortOrder;
 
   if (input.metadata !== undefined) {
+    // Validate reference field configuration if fieldType is 'reference' or if updating metadata for an existing reference field
+    const fieldType = input.fieldType !== undefined ? input.fieldType : field[0].fieldType;
+    const isReferenceField = fieldType === 'reference';
+    
+    if (isReferenceField && input.metadata.referenceModule) {
+      const metadata = input.metadata as {
+        referenceModule: string;
+        referenceColumn: string;
+        referenceLabel: string;
+      };
+
+      if (!metadata.referenceModule || !metadata.referenceColumn || !metadata.referenceLabel) {
+        throw new Error('Reference fields require referenceModule, referenceColumn, and referenceLabel in metadata');
+      }
+
+      // Special tables that don't have module entries
+      const specialTables = ['users', 'roles'];
+      const isSpecialTable = specialTables.includes(metadata.referenceModule.toLowerCase());
+
+      if (!isSpecialTable) {
+        // Validate that the referenced module exists and supports custom fields
+        const referencedModule = await db
+          .select()
+          .from(modules)
+          .where(eq(modules.code, metadata.referenceModule.toUpperCase()))
+          .limit(1);
+
+        if (referencedModule.length === 0) {
+          throw new Error(`Referenced module "${metadata.referenceModule}" not found`);
+        }
+
+        const referencedModuleConfig = moduleRegistry.getModule(metadata.referenceModule.toLowerCase());
+        if (!referencedModuleConfig || (referencedModuleConfig.config as any).custom_field !== true) {
+          throw new Error(`Referenced module "${metadata.referenceModule}" does not support custom fields`);
+        }
+      }
+
+      // Validate that the reference column exists and is unique
+      try {
+        const columns = await getModuleTableColumns(metadata.referenceModule);
+        
+        const referenceColumn = columns.find((col: { name: string; isUnique: boolean }) => col.name === metadata.referenceColumn);
+        if (!referenceColumn) {
+          throw new Error(`Column "${metadata.referenceColumn}" does not exist in module "${metadata.referenceModule}"`);
+        }
+
+        if (!referenceColumn.isUnique) {
+          throw new Error(`Column "${metadata.referenceColumn}" must be a unique column (primary key or unique constraint) in module "${metadata.referenceModule}"`);
+        }
+
+        // Validate that the reference label column exists
+        const labelColumn = columns.find((col: { name: string }) => col.name === metadata.referenceLabel);
+        if (!labelColumn) {
+          throw new Error(`Label column "${metadata.referenceLabel}" does not exist in module "${metadata.referenceModule}"`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('not found')) {
+          throw error;
+        }
+        throw new Error(`Failed to validate reference field configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
     updateData.description = JSON.stringify(input.metadata);
   }
 

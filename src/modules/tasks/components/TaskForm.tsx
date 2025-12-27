@@ -10,6 +10,7 @@ import { useTaskCustomFields } from '../hooks/useTaskCustomFields';
 import { TASK_STATUSES, TASK_PRIORITIES } from '../utils/constants';
 import type { CreateTaskInput } from '../types';
 import { useAuthStore } from '@/core/store/authStore';
+import { ReferenceFieldSelect } from '@/core/components/common/ReferenceFieldSelect';
 
 interface TaskFormProps {
   form: CreateTaskInput;
@@ -258,7 +259,7 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visibleCustomFields.map((field: { id: string; code: string; label: string; fieldType: string; metadata?: { isRequired?: boolean }; description?: string }) => {
+              {visibleCustomFields.map((field: { id: string; code: string; label: string; fieldType: string; metadata?: { isRequired?: boolean; referenceModule?: string; referenceColumn?: string; referenceLabel?: string }; description?: string }) => {
                 const value = form.customFields?.[field.code] ?? '';
                 const isRequired = field.metadata?.isRequired ?? false;
                 const editable = isFieldEditable('tasks', field.code);
@@ -273,7 +274,15 @@ export function TaskForm({ form, onChange }: TaskFormProps) {
                       )}
                     </Label>
 
-                    {field.fieldType === 'textarea' ? (
+                    {field.fieldType === 'reference' ? (
+                      <ReferenceFieldSelect
+                        field={field as any}
+                        value={value as string}
+                        onChange={(newValue) => updateCustomField(field.code, newValue)}
+                        disabled={!editable}
+                        required={isRequired}
+                      />
+                    ) : field.fieldType === 'textarea' ? (
                       <Textarea
                         value={value as string}
                         onChange={(e) => updateCustomField(field.code, e.target.value)}

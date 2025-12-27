@@ -12,6 +12,9 @@ import { TableActions } from '@/core/components/common/TableActions';
 import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import { useCustomTemplateCustomFields } from '../hooks/useCustomTemplateCustomFields';
 import type { CustomTemplateRecord } from '../types';
+import { ReferenceFieldCell } from '@/core/components/common/ReferenceFieldCell';
+import React from 'react';
+import { format } from 'date-fns';
 
 interface CustomTemplateTableProps {
   records: CustomTemplateRecord[];
@@ -87,10 +90,28 @@ export function CustomTemplateTable({
               ))}
               {visibleCustomFields.map((field) => {
                 const value = record.customFields?.[field.code];
-                let displayValue: string = '-';
+                let displayValue: React.ReactNode = '-';
 
                 if (value !== null && value !== undefined) {
-                  displayValue = String(value);
+                  if (field.fieldType === 'reference') {
+                    // For reference fields, show the label instead of ID
+                    displayValue = (
+                      <ReferenceFieldCell
+                        field={field}
+                        referenceId={value as string}
+                      />
+                    );
+                  } else if (field.fieldType === 'boolean') {
+                    displayValue = value ? 'Yes' : 'No';
+                  } else if (field.fieldType === 'date' && value) {
+                    try {
+                      displayValue = format(new Date(value as string), 'MMM d, yyyy');
+                    } catch {
+                      displayValue = String(value);
+                    }
+                  } else {
+                    displayValue = String(value);
+                  }
                 }
 
                 return <TableCell key={field.id}>{displayValue}</TableCell>;

@@ -23,10 +23,21 @@ export async function GET(
     }
 
     const userId = authResult;
-    const tenantId = await getUserTenantId(userId);
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+    
+    const { moduleCode: moduleCodeParam } = await params;
+    const moduleCode = moduleCodeParam.toLowerCase();
+    
+    // Special tables that don't have module entries
+    const specialTables = ['users', 'roles'];
+    const isSpecialTable = specialTables.includes(moduleCode);
+    
+    // Only require tenantId for regular modules (special tables might not have tenant isolation)
+    let tenantId: string | null = null;
+    if (!isSpecialTable) {
+      tenantId = await getUserTenantId(userId);
+      if (!tenantId) {
+        return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+      }
     }
 
     const url = new URL(request.url);
@@ -41,53 +52,84 @@ export async function GET(
       );
     }
 
-    const { moduleCode: moduleCodeParam } = await params;
-    const moduleCode = moduleCodeParam.toLowerCase();
-    
-    // Get module from database
-    const module = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.code, moduleCode.toUpperCase()))
-      .limit(1);
+    let tableName: string;
 
-    if (module.length === 0) {
-      return NextResponse.json(
-        { error: `Module "${moduleCode}" not found` },
-        { status: 404 }
-      );
+    if (isSpecialTable) {
+      // For special tables, use the code directly as table name
+      tableName = moduleCode;
+    } else {
+      // Get module from database
+      const module = await db
+        .select()
+        .from(modules)
+        .where(eq(modules.code, moduleCode.toUpperCase()))
+        .limit(1);
+
+      if (module.length === 0) {
+        return NextResponse.json(
+          { error: `Module "${moduleCode}" not found` },
+          { status: 404 }
+        );
+      }
+
+      // Table name is typically the module code (lowercase)
+      tableName = moduleCode;
     }
-
-    // Table name is typically the module code (lowercase)
-    const tableName = moduleCode;
 
     // Fetch data from the module's table
     // We'll use raw SQL to dynamically query the table
     let query;
-    if (id) {
-      // If ID is provided, fetch only that specific record
-      query = sql`
-        SELECT 
-          ${sql.identifier(column)} as value,
-          ${sql.identifier(label)} as label
-        FROM ${sql.identifier(tableName)}
-        WHERE tenant_id = ${tenantId}
-          AND deleted_at IS NULL
-          AND ${sql.identifier(column)} = ${id}
-        LIMIT 1
-      `;
+    
+    // Special tables might not have tenant_id or deleted_at columns
+    if (isSpecialTable) {
+      if (id) {
+        // If ID is provided, fetch only that specific record
+        query = sql`
+          SELECT 
+            ${sql.identifier(column)} as value,
+            ${sql.identifier(label)} as label
+          FROM ${sql.identifier(tableName)}
+          WHERE ${sql.identifier(column)} = ${id}
+          LIMIT 1
+        `;
+      } else {
+        // Otherwise, fetch all records
+        query = sql`
+          SELECT 
+            ${sql.identifier(column)} as value,
+            ${sql.identifier(label)} as label
+          FROM ${sql.identifier(tableName)}
+          ORDER BY ${sql.identifier(label)} ASC
+          LIMIT 1000
+        `;
+      }
     } else {
-      // Otherwise, fetch all records
-      query = sql`
-        SELECT 
-          ${sql.identifier(column)} as value,
-          ${sql.identifier(label)} as label
-        FROM ${sql.identifier(tableName)}
-        WHERE tenant_id = ${tenantId}
-          AND deleted_at IS NULL
-        ORDER BY ${sql.identifier(label)} ASC
-        LIMIT 1000
-      `;
+      // Regular modules have tenant_id and deleted_at
+      if (id) {
+        // If ID is provided, fetch only that specific record
+        query = sql`
+          SELECT 
+            ${sql.identifier(column)} as value,
+            ${sql.identifier(label)} as label
+          FROM ${sql.identifier(tableName)}
+          WHERE tenant_id = ${tenantId}
+            AND deleted_at IS NULL
+            AND ${sql.identifier(column)} = ${id}
+          LIMIT 1
+        `;
+      } else {
+        // Otherwise, fetch all records
+        query = sql`
+          SELECT 
+            ${sql.identifier(column)} as value,
+            ${sql.identifier(label)} as label
+          FROM ${sql.identifier(tableName)}
+          WHERE tenant_id = ${tenantId}
+            AND deleted_at IS NULL
+          ORDER BY ${sql.identifier(label)} ASC
+          LIMIT 1000
+        `;
+      }
     }
 
     const result = await db.execute(query);

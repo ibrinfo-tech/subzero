@@ -12,6 +12,7 @@ import { useProjectLabels } from '../hooks/useProjectLabels';
 import { PROJECT_STATUSES, PROJECT_PRIORITIES } from '../utils/constants';
 import type { CreateProjectInput } from '../types';
 import { useAuthStore } from '@/core/store/authStore';
+import { ReferenceFieldSelect } from '@/core/components/common/ReferenceFieldSelect';
 
 interface ProjectFormProps {
   form: CreateProjectInput;
@@ -401,7 +402,7 @@ export function ProjectForm({ form, onChange }: ProjectFormProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visibleCustomFields.map((field: { id: string; code: string; label: string; fieldType: string; metadata?: { isRequired?: boolean }; description?: string }) => {
+              {visibleCustomFields.map((field: { id: string; code: string; label: string; fieldType: string; metadata?: { isRequired?: boolean; referenceModule?: string; referenceColumn?: string; referenceLabel?: string }; description?: string }) => {
                 const value = form.customFields?.[field.code] ?? '';
                 const isRequired = field.metadata?.isRequired ?? false;
                 const editable = isFieldEditable('projects', field.code);
@@ -416,7 +417,15 @@ export function ProjectForm({ form, onChange }: ProjectFormProps) {
                       )}
                     </Label>
 
-                    {field.fieldType === 'textarea' ? (
+                    {field.fieldType === 'reference' ? (
+                      <ReferenceFieldSelect
+                        field={field as any}
+                        value={value as string}
+                        onChange={(newValue) => updateCustomField(field.code, newValue)}
+                        disabled={!editable}
+                        required={isRequired}
+                      />
+                    ) : field.fieldType === 'textarea' ? (
                       <Textarea
                         value={value as string}
                         onChange={(e) => updateCustomField(field.code, e.target.value)}
