@@ -18,7 +18,7 @@ export function KanbanColumn({
     <Card
       ref={setNodeRef}
       className={cn(
-        "h-full flex flex-col transition-all duration-200 z-50 overflow-hidden",
+        "flex flex-col transition-all duration-200 z-50",
         "border-l-4 shadow-md hover:shadow-lg",
         "bg-card/95 backdrop-blur-sm",
         column.color,
@@ -26,7 +26,7 @@ export function KanbanColumn({
       )}
     >
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border bg-gradient-to-r from-card/80 to-card/40 backdrop-blur-sm flex items-center justify-between">
+      <div className="sticky top-0 z-10 px-4 py-3 border-b border-border bg-gradient-to-r from-card/95 to-card/60 backdrop-blur-md flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className={cn("w-2.5 h-2.5 rounded-full shadow-sm", column.accentColor)} />
           <h3 className="font-semibold text-sm text-card-foreground tracking-tight">
@@ -39,7 +39,7 @@ export function KanbanColumn({
       </div>
 
       {/* Tasks */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+      <div className="flex-1 p-3 space-y-2.5">
         {tasks.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
             <p className="opacity-50">No tasks</p>
