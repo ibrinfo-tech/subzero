@@ -5,7 +5,6 @@ import { getUserTenantId } from '@/core/lib/permissions';
 import { updateTask } from '../../services/taskService';
 import type { UpdateTaskInput } from '../../types';
 import { z } from 'zod';
-import { UpdateTaskInput } from '../../types';
 
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
