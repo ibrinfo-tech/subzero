@@ -405,6 +405,7 @@ CREATE TABLE "event_processing_log" (
 --> statement-breakpoint
 CREATE TABLE "customers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
 	"customer_name" varchar(255) NOT NULL,
 	"email" varchar(255),
 	"phone" varchar(50),
@@ -427,6 +428,7 @@ CREATE TABLE "customers" (
 --> statement-breakpoint
 CREATE TABLE "leads" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid NOT NULL,
 	"lead_name" varchar(255) NOT NULL,
 	"email" varchar(255),
 	"phone" varchar(50),
@@ -445,6 +447,29 @@ CREATE TABLE "leads" (
 	"deleted_at" timestamp
 );
 --> statement-breakpoint
+CREATE TABLE "projects" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"tenant_id" uuid,
+	"name" varchar(255) NOT NULL,
+	"description" text,
+	"status" varchar(50) DEFAULT 'planned' NOT NULL,
+	"priority" varchar(50) DEFAULT 'normal' NOT NULL,
+	"start_date" date,
+	"end_date" date,
+	"owner_id" uuid,
+	"team_member_ids" jsonb DEFAULT '[]'::jsonb,
+	"related_entity_type" varchar(100),
+	"related_entity_id" uuid,
+	"progress" integer DEFAULT 0 NOT NULL,
+	"label_ids" jsonb DEFAULT '[]'::jsonb,
+	"custom_fields" jsonb DEFAULT '{}'::jsonb,
+	"created_by" uuid NOT NULL,
+	"updated_by" uuid,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"deleted_at" timestamp
+);
+--> statement-breakpoint
 CREATE TABLE "tasks" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"tenant_id" uuid,
@@ -454,6 +479,7 @@ CREATE TABLE "tasks" (
 	"priority" varchar(50) DEFAULT 'normal' NOT NULL,
 	"due_date" date,
 	"assigned_to" uuid,
+	"project_id" uuid,
 	"created_by" uuid NOT NULL,
 	"related_entity_type" varchar(100),
 	"related_entity_id" uuid,
@@ -501,14 +527,18 @@ ALTER TABLE "role_module_access" ADD CONSTRAINT "role_module_access_module_id_mo
 ALTER TABLE "role_module_permissions" ADD CONSTRAINT "role_module_permissions_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "role_module_permissions" ADD CONSTRAINT "role_module_permissions_module_id_modules_id_fk" FOREIGN KEY ("module_id") REFERENCES "public"."modules"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "role_module_permissions" ADD CONSTRAINT "role_module_permissions_permission_id_permissions_id_fk" FOREIGN KEY ("permission_id") REFERENCES "public"."permissions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "customers" ADD CONSTRAINT "customers_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customers" ADD CONSTRAINT "customers_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customers" ADD CONSTRAINT "customers_lead_id_leads_id_fk" FOREIGN KEY ("lead_id") REFERENCES "public"."leads"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customers" ADD CONSTRAINT "customers_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customers" ADD CONSTRAINT "customers_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "leads" ADD CONSTRAINT "leads_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "leads" ADD CONSTRAINT "leads_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "leads" ADD CONSTRAINT "leads_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "leads" ADD CONSTRAINT "leads_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_access_tokens_user" ON "access_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_access_tokens_hash" ON "access_tokens" USING btree ("token_hash");--> statement-breakpoint
 CREATE INDEX "idx_audit_logs_user" ON "audit_logs" USING btree ("user_id");--> statement-breakpoint
@@ -545,13 +575,13 @@ CREATE INDEX "idx_roles_tenant" ON "roles" USING btree ("tenant_id");--> stateme
 CREATE INDEX "idx_sessions_user" ON "sessions" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_sessions_expires" ON "sessions" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "idx_sessions_activity" ON "sessions" USING btree ("last_activity");--> statement-breakpoint
-CREATE INDEX "idx_system_logs_tenant" ON "system_logs" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_user" ON "system_logs" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_module" ON "system_logs" USING btree ("module");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_level" ON "system_logs" USING btree ("level");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_created" ON "system_logs" USING btree ("created_at");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_module_level" ON "system_logs" USING btree ("module","level");--> statement-breakpoint
 CREATE INDEX "idx_system_logs_resource" ON "system_logs" USING btree ("resource_type","resource_id");--> statement-breakpoint
+CREATE INDEX "idx_system_logs_tenant" ON "system_logs" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_system_settings_category" ON "system_settings" USING btree ("category");--> statement-breakpoint
 CREATE INDEX "idx_system_settings_autoload" ON "system_settings" USING btree ("autoload");--> statement-breakpoint
 CREATE INDEX "idx_system_settings_category_subcategory" ON "system_settings" USING btree ("category","subcategory");--> statement-breakpoint
@@ -591,19 +621,30 @@ CREATE INDEX "idx_event_outbox_created_at" ON "event_outbox" USING btree ("creat
 CREATE INDEX "idx_event_processing_log_handler_idempotency" ON "event_processing_log" USING btree ("handler_name","idempotency_key");--> statement-breakpoint
 CREATE INDEX "idx_event_processing_log_event_id" ON "event_processing_log" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "idx_event_processing_log_processed_at" ON "event_processing_log" USING btree ("processed_at");--> statement-breakpoint
+CREATE INDEX "idx_customers_tenant" ON "customers" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_customers_owner" ON "customers" USING btree ("owner_id");--> statement-breakpoint
 CREATE INDEX "idx_customers_lead" ON "customers" USING btree ("lead_id");--> statement-breakpoint
 CREATE INDEX "idx_customers_status" ON "customers" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "idx_customers_lifecycle_stage" ON "customers" USING btree ("lifecycle_stage");--> statement-breakpoint
 CREATE INDEX "idx_customers_email" ON "customers" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "idx_customers_deleted_at" ON "customers" USING btree ("deleted_at");--> statement-breakpoint
+CREATE INDEX "idx_leads_tenant" ON "leads" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_leads_owner" ON "leads" USING btree ("owner_id");--> statement-breakpoint
 CREATE INDEX "idx_leads_status" ON "leads" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "idx_leads_source" ON "leads" USING btree ("source");--> statement-breakpoint
 CREATE INDEX "idx_leads_email" ON "leads" USING btree ("email");--> statement-breakpoint
 CREATE INDEX "idx_leads_deleted_at" ON "leads" USING btree ("deleted_at");--> statement-breakpoint
+CREATE INDEX "idx_projects_tenant" ON "projects" USING btree ("tenant_id");--> statement-breakpoint
+CREATE INDEX "idx_projects_owner" ON "projects" USING btree ("owner_id");--> statement-breakpoint
+CREATE INDEX "idx_projects_created_by" ON "projects" USING btree ("created_by");--> statement-breakpoint
+CREATE INDEX "idx_projects_status" ON "projects" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "idx_projects_priority" ON "projects" USING btree ("priority");--> statement-breakpoint
+CREATE INDEX "idx_projects_start_date" ON "projects" USING btree ("start_date");--> statement-breakpoint
+CREATE INDEX "idx_projects_end_date" ON "projects" USING btree ("end_date");--> statement-breakpoint
+CREATE INDEX "idx_projects_related_entity" ON "projects" USING btree ("related_entity_id");--> statement-breakpoint
 CREATE INDEX "idx_tasks_tenant" ON "tasks" USING btree ("tenant_id");--> statement-breakpoint
 CREATE INDEX "idx_tasks_assigned_to" ON "tasks" USING btree ("assigned_to");--> statement-breakpoint
+CREATE INDEX "idx_tasks_project" ON "tasks" USING btree ("project_id");--> statement-breakpoint
 CREATE INDEX "idx_tasks_created_by" ON "tasks" USING btree ("created_by");--> statement-breakpoint
 CREATE INDEX "idx_tasks_status" ON "tasks" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "idx_tasks_priority" ON "tasks" USING btree ("priority");--> statement-breakpoint

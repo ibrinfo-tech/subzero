@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'completed';
+export type TaskStatus = 'todo' | 'in_progress' | 'hold' | 'next_sprint' | 'completed';
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface TaskRecord {
