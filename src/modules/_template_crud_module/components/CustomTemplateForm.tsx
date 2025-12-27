@@ -7,6 +7,7 @@ import { Select } from '@/core/components/ui/select';
 import { useFieldPermissions } from '@/core/hooks/useFieldPermissions';
 import type { CreateCustomTemplateInput } from '../types';
 import { useCustomTemplateCustomFields } from '../hooks/useCustomTemplateCustomFields';
+import { ReferenceFieldSelect } from '@/core/components/common/ReferenceFieldSelect';
 
 interface CustomTemplateFormProps {
   form: CreateCustomTemplateInput;
@@ -153,7 +154,7 @@ export function CustomTemplateForm({ form, onChange }: CustomTemplateFormProps) 
                 const editable = isFieldEditable('template_custom', field.code);
 
                 return (
-                  <div key={field.id}>
+                  <div key={field.id} className={field.fieldType === 'textarea' ? 'md:col-span-2' : ''}>
                     <Label>
                       {field.label}
                       {isRequired && <span className="text-destructive ml-1">*</span>}
@@ -162,12 +163,55 @@ export function CustomTemplateForm({ form, onChange }: CustomTemplateFormProps) 
                       )}
                     </Label>
 
-                    <Input
-                      value={value as string}
-                      onChange={(e) => updateCustomField(field.code, e.target.value)}
-                      disabled={!editable}
-                      required={isRequired}
-                    />
+                    {field.fieldType === 'reference' ? (
+                      <ReferenceFieldSelect
+                        field={field}
+                        value={value as string}
+                        onChange={(newValue) => updateCustomField(field.code, newValue)}
+                        disabled={!editable}
+                        required={isRequired}
+                      />
+                    ) : field.fieldType === 'textarea' ? (
+                      <Textarea
+                        value={value as string}
+                        onChange={(e) => updateCustomField(field.code, e.target.value)}
+                        disabled={!editable}
+                        required={isRequired}
+                        rows={3}
+                      />
+                    ) : field.fieldType === 'select' ? (
+                      <Select
+                        value={value as string}
+                        onChange={(e) => updateCustomField(field.code, e.target.value)}
+                        disabled={!editable}
+                        required={isRequired}
+                        options={field.metadata?.options?.map(opt => ({ value: opt, label: opt })) || []}
+                      />
+                    ) : field.fieldType === 'boolean' ? (
+                      <Select
+                        value={value ? 'true' : 'false'}
+                        onChange={(e) => updateCustomField(field.code, e.target.value === 'true')}
+                        disabled={!editable}
+                        required={isRequired}
+                        options={[
+                          { value: 'true', label: 'Yes' },
+                          { value: 'false', label: 'No' },
+                        ]}
+                      />
+                    ) : (
+                      <Input
+                        type={field.fieldType === 'date' ? 'date' : field.fieldType === 'number' ? 'number' : field.fieldType === 'email' ? 'email' : field.fieldType === 'url' ? 'url' : 'text'}
+                        value={value as string}
+                        onChange={(e) =>
+                          updateCustomField(
+                            field.code,
+                            field.fieldType === 'number' ? (e.target.value ? Number(e.target.value) : '') : e.target.value
+                          )
+                        }
+                        disabled={!editable}
+                        required={isRequired}
+                      />
+                    )}
 
                     {field.description && (
                       <p className="text-xs text-muted-foreground mt-1">

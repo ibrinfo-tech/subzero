@@ -16,6 +16,8 @@ import { useTaskCustomFields } from '../hooks/useTaskCustomFields';
 import type { TaskRecord } from '../types';
 import { TASK_STATUSES, TASK_PRIORITIES } from '../utils/constants';
 import { useAuthStore } from '@/core/store/authStore';
+import { ReferenceFieldCell } from '@/core/components/common/ReferenceFieldCell';
+import React from 'react';
 
 interface TaskTableProps {
   records: TaskRecord[];
@@ -206,10 +208,28 @@ export function TaskTable({
                 )}
                 {visibleCustomFields.map((field) => {
                   const value = record.customFields?.[field.code];
-                  let displayValue: string = '-';
+                  let displayValue: React.ReactNode = '-';
 
                   if (value !== null && value !== undefined) {
-                    displayValue = String(value);
+                    if (field.fieldType === 'reference') {
+                      // For reference fields, show the label instead of ID
+                      displayValue = (
+                        <ReferenceFieldCell
+                          field={field}
+                          referenceId={value as string}
+                        />
+                      );
+                    } else if (field.fieldType === 'boolean') {
+                      displayValue = value ? 'Yes' : 'No';
+                    } else if (field.fieldType === 'date' && value) {
+                      try {
+                        displayValue = new Date(value as string).toLocaleDateString();
+                      } catch {
+                        displayValue = String(value);
+                      }
+                    } else {
+                      displayValue = String(value);
+                    }
                   }
 
                   return <TableCell key={field.id}>{displayValue}</TableCell>;

@@ -721,14 +721,14 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 
 export const tenantsRelations = MULTI_TENANT_ENABLED && tenants
   ? relations(tenants, ({ many }) => ({
-    users: many(users),
-    roles: many(roles),
-    tenantUsers: many(tenantUsers),
-    userRoles: many(userRoles),
-    resourcePermissions: many(resourcePermissions),
-    sessions: many(sessions),
-    notifications: many(notifications),
-    systemLogs: many(systemLogs),
+  users: many(users),
+  roles: many(roles),
+  tenantUsers: many(tenantUsers),
+  userRoles: many(userRoles),
+  resourcePermissions: many(resourcePermissions),
+  sessions: many(sessions),
+  notifications: many(notifications),
+  systemLogs: many(systemLogs),
   }))
   : null as any;
 
@@ -767,10 +767,10 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 export const systemLogsRelations = relations(systemLogs, ({ one }) => ({
   ...(MULTI_TENANT_ENABLED && tenants
     ? {
-      tenant: one(tenants, {
-        fields: [systemLogs.tenantId],
-        references: [tenants.id],
-      }),
+  tenant: one(tenants, {
+    fields: [systemLogs.tenantId],
+    references: [tenants.id],
+  }),
     }
     : {}),
   user: one(users, {

@@ -52,3 +52,5 @@ next-env.d.ts
 
 .kiro/
 .kiro
+
+drizzle/migrations/*
