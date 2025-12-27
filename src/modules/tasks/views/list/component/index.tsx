@@ -166,6 +166,7 @@ export default function TasksListPage() {
       {
         id: "task-1",
         tenantId: null,
+        projectId: null,
         title: "Kanban View Module",
         description: "Implement kanban board view for tasks",
         status: "in_progress",
@@ -184,6 +185,7 @@ export default function TasksListPage() {
       {
         id: "task-2",
         tenantId: null,
+        projectId: null,
         title: "List View Module",
         description: "Implement list view similar to Asana",
         status: "todo",
@@ -202,6 +204,7 @@ export default function TasksListPage() {
       {
         id: "task-3",
         tenantId: null,
+        projectId: null,
         title: "Audit Logs Module",
         description: "Track all system changes",
         status: "completed",
@@ -220,6 +223,7 @@ export default function TasksListPage() {
       {
         id: "task-4",
         tenantId: null,
+        projectId: null,
         title: "multiple module join queries",
         description: "Optimize database queries",
         status: "completed",
@@ -238,6 +242,7 @@ export default function TasksListPage() {
       {
         id: "task-5",
         tenantId: null,
+        projectId: null,
         title: "Reference in custom fields",
         description: "Add reference support to custom fields",
         status: "completed",
@@ -339,6 +344,7 @@ export default function TasksListPage() {
     const newTask: TaskRecord = {
       id: `task-${Date.now()}`,
       tenantId: null,
+      projectId: null,
       title: trimmedTitle,
       description: null,
       status: "todo",
@@ -545,6 +551,7 @@ export default function TasksListPage() {
         const newTask: TaskRecord = {
           id: `task-${Date.now()}`,
           tenantId: null,
+          projectId: null,
           title: trimmedTitle,
           description: form.description || null,
           status: form.status || "todo",

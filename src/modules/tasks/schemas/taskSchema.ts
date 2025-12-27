@@ -16,6 +16,7 @@ const tasksTable = pgTable(
     dueDate: date('due_date'),
     assignedTo: uuid('assigned_to'),
     projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+    sectionId: uuid('section_id'),
     createdBy: uuid('created_by').notNull(),
     relatedEntityType: varchar('related_entity_type', { length: 100 }),
     relatedEntityId: uuid('related_entity_id'),

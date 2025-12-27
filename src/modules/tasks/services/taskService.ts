@@ -98,6 +98,7 @@ export async function listTasks(
   return results.map((task) => ({
     id: task.id,
     tenantId: task.tenantId,
+    sectionId: task.sectionId || '',
     title: task.title,
     description: task.description,
     status: task.status as any,
@@ -137,6 +138,7 @@ export async function getTaskById(
   return {
     id: result.id,
     tenantId: result.tenantId,
+    sectionId: result.sectionId || '',
     title: result.title,
     description: result.description,
     status: result.status as any,
@@ -163,6 +165,7 @@ export async function createTask(params: {
 
   const taskData: any = {
     title: data.title,
+    sectionId: data.sectionId || '',
     description: data.description || null,
     status: data.status || 'todo',
     priority: data.priority || 'normal',
@@ -220,6 +223,7 @@ export async function createTask(params: {
   return {
     id: task.id,
     tenantId: task.tenantId,
+    sectionId: task.sectionId || '',
     title: task.title,
     description: task.description,
     status: task.status as any,
@@ -427,6 +431,7 @@ export async function updateTask(params: {
   return {
     id: updated.id,
     tenantId: updated.tenantId,
+    sectionId: updated.sectionId || '',
     title: updated.title,
     description: updated.description,
     status: updated.status as any,
