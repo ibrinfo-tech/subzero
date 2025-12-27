@@ -562,7 +562,9 @@ export const notifications = (MULTI_TENANT_ENABLED ? notificationsMultiTable : n
 
 export const systemLogs = pgTable('system_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }),
+  ...(MULTI_TENANT_ENABLED
+    ? { tenantId: uuid('tenant_id').references(() => tenantsTable.id, { onDelete: 'cascade' }) }
+    : {}),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
   module: varchar('module', { length: 100 }).notNull(), // Module identifier (e.g., 'users', 'inventory_management')
   level: varchar('level', { length: 20 }).default('info').notNull(), // info, warning, error, debug, success
@@ -577,15 +579,23 @@ export const systemLogs = pgTable('system_logs', {
   statusCode: integer('status_code'), // HTTP status code if applicable
   errorStack: text('error_stack'), // Error stack trace for error logs
   createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  tenantIdx: index('idx_system_logs_tenant').on(table.tenantId),
-  userIdx: index('idx_system_logs_user').on(table.userId),
-  moduleIdx: index('idx_system_logs_module').on(table.module),
-  levelIdx: index('idx_system_logs_level').on(table.level),
-  createdIdx: index('idx_system_logs_created').on(table.createdAt),
-  moduleLevelIdx: index('idx_system_logs_module_level').on(table.module, table.level),
-  resourceIdx: index('idx_system_logs_resource').on(table.resourceType, table.resourceId),
-}));
+} as any, (table: any) => {
+  const indexes: Record<string, any> = {
+    userIdx: index('idx_system_logs_user').on(table.userId),
+    moduleIdx: index('idx_system_logs_module').on(table.module),
+    levelIdx: index('idx_system_logs_level').on(table.level),
+    createdIdx: index('idx_system_logs_created').on(table.createdAt),
+    moduleLevelIdx: index('idx_system_logs_module_level').on(table.module, table.level),
+    resourceIdx: index('idx_system_logs_resource').on(table.resourceType, table.resourceId),
+  };
+
+  // Conditionally add tenant-related indexes
+  if (MULTI_TENANT_ENABLED && 'tenantId' in table) {
+    indexes.tenantIdx = index('idx_system_logs_tenant').on(table.tenantId);
+  }
+
+  return indexes;
+});
 
 // ============================================================================
 // RELATIONS
