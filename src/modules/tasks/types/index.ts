@@ -17,6 +17,7 @@ export interface TaskRecord {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  sectionId: string | null; // REQUIRED for new tasks, nullable for backward compatibility
 }
 
 export interface CreateTaskInput {
@@ -29,6 +30,7 @@ export interface CreateTaskInput {
   relatedEntityType?: string;
   relatedEntityId?: string;
   customFields?: Record<string, unknown>;
+  sectionId: string; // REQUIRED - every task must belong to a section
 }
 
 export interface UpdateTaskInput {
@@ -52,3 +54,10 @@ export interface TaskListFilters {
   overdue?: boolean;
 }
 
+// ---------- Section ----------
+export interface TaskSection {
+  id: string;
+  title: string;
+  order: number;
+  // tasks: TaskRecord[];
+}
