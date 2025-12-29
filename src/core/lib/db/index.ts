@@ -1,29 +1,50 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './baseSchema';
+/**
+ * Database connection using Neon (HTTP-compatible for StackBlitz/WebContainers)
+ * Replaces postgres-js with @neondatabase/serverless
+ */
+
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
+
+// Import all schemas
+import * as baseSchema from './baseSchema';
+import * as permissionSchema from './permissionSchema';
 import * as eventSchema from './eventSchema';
 
-// Get database connection string from environment
-const connectionString = process.env.DATABASE_URL;
+// Combine all schemas
+const schema = {
+  ...baseSchema,
+  ...permissionSchema,
+  ...eventSchema,
+};
 
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is not set');
+// Validate environment variable
+if (!process.env.DATABASE_URL) {
+  throw new Error(
+    'DATABASE_URL environment variable is not set.\n' +
+    'Please add it to your .env.local file.\n' +
+    'Get your connection string from: https://console.neon.tech'
+  );
 }
 
-// Create postgres client with connection pool and timeout configuration
-// This helps prevent connection timeout errors, especially in long-running SSE connections
-const client = postgres(connectionString, {
-  max: 10, // Maximum number of connections in the pool
-  idle_timeout: 20, // Close idle connections after 20 seconds
-  connect_timeout: 10, // Connection timeout in seconds
-  max_lifetime: 60 * 30, // Maximum connection lifetime (30 minutes)
-});
+// Create Neon HTTP client (works in StackBlitz/WebContainers)
+const sql = neon(process.env.DATABASE_URL);
 
-// Create drizzle database instance with all schemas
-// Note: Module schemas (like customers) are imported at request time by handlers, not here
-export const db = drizzle(client, { schema: { ...schema, ...eventSchema } });
+// Initialize Drizzle with Neon and schemas
+export const db = drizzle(sql, { schema });
 
-// Export schema for use in other modules
-export * from './baseSchema';
-export * from './eventSchema';
+// Export schema for type inference
+export { schema };
 
+// Export individual schema modules if needed
+export { baseSchema, permissionSchema, eventSchema };
+
+// Helper function to test connection
+export async function testConnection() {
+  try {
+    const result = await sql`SELECT NOW()`;
+    return { success: true, time: result[0] };
+  } catch (error) {
+    return { success: false, error };
+  }
+}

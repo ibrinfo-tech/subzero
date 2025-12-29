@@ -1,6 +1,6 @@
 import { db } from '@/core/lib/db';
 import { systemLogs, users } from '@/core/lib/db/baseSchema';
-import { eq, and, or, like, gte, lte, desc, sql, count } from 'drizzle-orm';
+import { eq, and, or, like, gte, lte, desc, sql, count, isNull, isNotNull } from 'drizzle-orm';
 import type { LogRecord, LogListFilters, LogStats, LogListResponse } from '../types';
 
 /**
@@ -30,7 +30,7 @@ export async function listLogs(
   if (tenantId) {
     conditions.push(eq(systemLogs.tenantId, tenantId));
   } else {
-    conditions.push(sql`${systemLogs.tenantId} IS NULL`);
+    conditions.push(isNull(systemLogs.tenantId));
   }
 
   if (module) {
@@ -126,7 +126,7 @@ export async function getLogStats(
 
   const tenantCondition = tenantId
     ? eq(systemLogs.tenantId, tenantId)
-    : sql`${systemLogs.tenantId} IS NULL`;
+    : isNull(systemLogs.tenantId);
 
   // Total count
   const totalResult = await db
@@ -220,7 +220,7 @@ export async function getLogStats(
       and(
         tenantCondition,
         gte(systemLogs.createdAt, startDate),
-        sql`${systemLogs.duration} IS NOT NULL`
+        isNotNull(systemLogs.duration)
       )
     );
 
@@ -253,7 +253,7 @@ export async function getAllLogsForExport(
   if (tenantId) {
     conditions.push(eq(systemLogs.tenantId, tenantId));
   } else {
-    conditions.push(sql`${systemLogs.tenantId} IS NULL`);
+    conditions.push(isNull(systemLogs.tenantId));
   }
 
   if (module) {

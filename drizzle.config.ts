@@ -15,4 +15,8 @@ export default {
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },
+  // Verbose logging for debugging
+  verbose: true,
+  // Strict mode for better type safety
+  strict: true,
 } satisfies Config;
