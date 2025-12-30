@@ -37,7 +37,7 @@ export async function POST(
     // Create duplicate with "Copy of" prefix
     const duplicatedTask = await createTask({
       data: {
-        sectionId: originalTask.sectionId || '',
+        sectionId: originalTask.sectionId || null,
         projectId: originalTask.projectId,
         title: `Copy of ${originalTask.title}`,
         description: originalTask.description || undefined,

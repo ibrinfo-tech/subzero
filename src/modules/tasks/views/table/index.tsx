@@ -212,6 +212,7 @@ export default function TasksTablePage() {
       fetchTasks();
       toast.success(editingId ? 'Task updated' : 'Task created');
     } catch (error) {
+      console.log({error})
       console.error('Task save error:', error);
       const message = error instanceof Error ? error.message : 'Failed to save task';
       toast.error(message);
