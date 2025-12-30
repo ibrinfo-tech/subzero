@@ -10,6 +10,53 @@ interface PageProps {
   params: Promise<{ slug: string[] }>;
 }
 
+// Module cache to store dynamically imported components
+const moduleCache = new Map<string, any>();
+
+/**
+ * Dynamically load a module component
+ * Uses a mapping approach to load modules available at build time
+ */
+async function loadModuleComponent(moduleId: string, component: string) {
+  const cacheKey = `${moduleId}:${component}`;
+  
+  if (moduleCache.has(cacheKey)) {
+    return moduleCache.get(cacheKey);
+  }
+
+  // Use a mapping of known modules to their imports
+  // This approach allows Next.js to bundle all modules at build time
+  let ComponentModule;
+  
+  try {
+    switch (moduleId) {
+      case 'customers':
+        ComponentModule = await import('@/modules/customers/routes/index');
+        break;
+      case 'leads':
+        ComponentModule = await import('@/modules/leads/routes/index');
+        break;
+      case 'logs':
+        ComponentModule = await import('@/modules/logs/routes/index');
+        break;
+      case 'projects':
+        ComponentModule = await import('@/modules/projects/routes/index');
+        break;
+      case 'tasks':
+        ComponentModule = await import('@/modules/tasks/routes/index');
+        break;
+      default:
+        return null;
+    }
+    
+    moduleCache.set(cacheKey, ComponentModule);
+    return ComponentModule;
+  } catch (error) {
+    console.error(`[DynamicRoute] Failed to load module ${moduleId}:`, error);
+    return null;
+  }
+}
+
 export default async function DynamicModulePage({ params }: PageProps) {
   const { slug } = await params;
   const routePath = '/' + slug.join('/');
@@ -56,7 +103,7 @@ export default async function DynamicModulePage({ params }: PageProps) {
     notFound();
   }
 
-  // Get the component path
+  // Get the component path (for verification only)
   const componentPath = getModuleRoutePath(moduleId, route.component);
   if (!componentPath || !existsSync(componentPath)) {
     console.error(`Component not found: ${componentPath} for route ${route.path}`);
@@ -64,40 +111,20 @@ export default async function DynamicModulePage({ params }: PageProps) {
   }
 
   try {
-    // Dynamically import the component using path alias
-    // Next.js should resolve @/modules/* at build/runtime
-    const modulePath = `@/modules/${moduleId}/routes/${route.component}`;
+    console.log(`[DynamicRoute] Loading module: ${moduleId}, Component: ${route.component}`);
     
-    console.log(`[DynamicRoute] Attempting to import: ${modulePath}`);
-    console.log(`[DynamicRoute] Component file exists: ${componentPath}`);
-    console.log(`[DynamicRoute] Module ID: ${moduleId}, Component: ${route.component}`);
+    // Dynamically load the component using the mapping approach
+    const ComponentModule = await loadModuleComponent(moduleId, route.component);
     
-    // Use dynamic import with error handling
-    // For Next.js App Router, dynamic imports with path aliases should work
-    let ComponentModule: any;
-    try {
-      // Dynamic import with path alias - Next.js should resolve this at runtime
-      ComponentModule = await import(modulePath);
-    } catch (importError: any) {
-      console.error(`[DynamicRoute] Failed to import module at ${modulePath}:`, importError);
-      console.error(`[DynamicRoute] Error details:`, {
-        message: importError?.message,
-        code: importError?.code,
-        stack: importError?.stack,
-        name: importError?.name,
-      });
-      notFound();
-    }
-
     if (!ComponentModule) {
-      console.error(`[DynamicRoute] Import returned null/undefined for ${modulePath}`);
+      console.error(`[DynamicRoute] Failed to load component for module ${moduleId}`);
       notFound();
     }
 
     const Component = ComponentModule.default;
 
     if (!Component) {
-      console.error(`[DynamicRoute] No default export found in ${modulePath}`);
+      console.error(`[DynamicRoute] No default export found in module ${moduleId}`);
       console.error(`[DynamicRoute] Available exports:`, Object.keys(ComponentModule));
       notFound();
     }

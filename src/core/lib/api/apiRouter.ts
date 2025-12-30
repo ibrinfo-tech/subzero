@@ -7,6 +7,7 @@ import { readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { ModuleApiEndpoint } from '@/core/types/module';
 import { withActivityLogging } from './activityLogger';
+import { loadHandler } from './handlerRegistry';
 
 const MODULES_DIR = join(process.cwd(), 'src', 'modules');
 
@@ -29,8 +30,12 @@ async function getHandler(moduleId: string, handlerName: string, method: string)
   }
 
   try {
-    const modulePath = `@/modules/${moduleId}/api/handlers/${handlerSegments.join('/')}`;
-    const handlerModule = await import(modulePath);
+    // Use handler registry to load the module
+    const handlerModule = await loadHandler(moduleId, handlerName);
+    
+    if (!handlerModule) {
+      return null;
+    }
     
     // Handlers export named functions like GET, POST, etc.
     const handler = handlerModule[method] || handlerModule.default;
