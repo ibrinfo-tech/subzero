@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
       try {
         const task = await createTask({
           data: {
-            sectionId: '',
-            projectId: '',
+            sectionId: null,
+            projectId: null,
             title,
             description: values[descriptionIndex] || undefined,
             status: (values[statusIndex] as any) || 'todo',

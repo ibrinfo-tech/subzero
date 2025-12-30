@@ -3,32 +3,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { moduleRegistry } from '@/core/config/moduleRegistry';
 import { getAuthToken } from '@/core/middleware/auth';
-import { readdirSync, existsSync } from 'fs';
-import { join } from 'path';
 import type { ModuleApiEndpoint } from '@/core/types/module';
 import { withActivityLogging } from './activityLogger';
 import { loadHandler } from './handlerRegistry';
-
-const MODULES_DIR = join(process.cwd(), 'src', 'modules');
 
 /**
  * Get handler function from module
  */
 async function getHandler(moduleId: string, handlerName: string, method: string) {
-  // Support nested handler paths like "entity/create"
-  const handlerSegments = handlerName.split('/').filter(Boolean);
-  const handlerPath = join(
-    MODULES_DIR,
-    moduleId,
-    'api',
-    'handlers',
-    ...handlerSegments
-  ) + '.ts';
-  
-  if (!existsSync(handlerPath)) {
-    return null;
-  }
-
   try {
     // Use handler registry to load the module
     const handlerModule = await loadHandler(moduleId, handlerName);

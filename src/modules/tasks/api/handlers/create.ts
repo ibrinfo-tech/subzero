@@ -14,6 +14,7 @@ const createTaskSchema = z.object({
   dueDate: z.string().optional().nullable(),
   assignedTo: z.string().uuid().optional().nullable(),
   projectId: z.string().uuid().optional().nullable(),
+  sectionId: z.string().uuid().optional().nullable(),
   relatedEntityType: z.string().optional().nullable(),
   relatedEntityId: z.string().uuid().optional().nullable(),
   customFields: z.record(z.any()).optional(),

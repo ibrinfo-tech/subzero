@@ -3,7 +3,7 @@
  * Auto-registers all event handlers from modules on app startup
  */
 
-import { registerEventHandler } from './event-registry';
+import { registerEventHandler, getHandlers } from './event-registry';
 import type { EventHandler, EventOptions } from './event-types';
 
 /**
@@ -24,10 +24,22 @@ export function registerAllEventHandlers(handlers: EventHandlerEntry[]): void {
   console.log(`[Event Bootstrap] Registering ${handlers.length} event handlers...`);
 
   let registeredCount = 0;
+  let skippedCount = 0;
   let errorCount = 0;
 
   for (const { eventName, handler, options } of handlers) {
     try {
+      // Check if handler is already registered by ID
+      const existingHandlers = getHandlers(eventName);
+      const handlerId = options.handlerId;
+      const isAlreadyRegistered = existingHandlers?.some(h => h.id === handlerId);
+      
+      if (isAlreadyRegistered) {
+        skippedCount++;
+        console.log(`[Event Bootstrap] Handler already registered for: ${eventName} (${options.module}) - skipping`);
+        continue;
+      }
+      
       registerEventHandler(eventName, handler, options);
       registeredCount++;
       console.log(`[Event Bootstrap] Registered handler for: ${eventName} (${options.module})`);
@@ -37,7 +49,7 @@ export function registerAllEventHandlers(handlers: EventHandlerEntry[]): void {
     }
   }
 
-  console.log(`[Event Bootstrap] Registration complete: ${registeredCount} succeeded, ${errorCount} failed`);
+  console.log(`[Event Bootstrap] Registration complete: ${registeredCount} registered, ${skippedCount} skipped, ${errorCount} failed`);
 }
 
 /**

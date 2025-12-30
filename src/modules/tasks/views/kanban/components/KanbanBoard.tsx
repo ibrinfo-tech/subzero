@@ -33,7 +33,7 @@ export default function KanbanBoard({ filters }: KanbanBoardProps) {
           setTasks(data?.data);
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch tasks:', err instanceof Error ? err.message : JSON.stringify(err));
       }
     }
     load();
