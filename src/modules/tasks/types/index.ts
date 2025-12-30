@@ -26,13 +26,13 @@ export interface CreateTaskInput {
   description?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  dueDate?: string;
-  assignedTo?: string;
+  dueDate?: string | null;
+  assignedTo?: string | null;
   projectId?: string | null;
-  relatedEntityType?: string;
-  relatedEntityId?: string;
+  sectionId?: string | null;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
   customFields?: Record<string, unknown>;
-  sectionId: string; // REQUIRED - every task must belong to a section
 }
 
 export interface UpdateTaskInput {

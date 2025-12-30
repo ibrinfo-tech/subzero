@@ -44,7 +44,7 @@ export const taskEventHandlers = [
 
         await createTask({
           data: {
-            sectionId: '',
+            sectionId: null,
             title: `Initial task for project: ${name}`,
             description: `This task was automatically created when project "${name}" was created.`,
             status: 'todo',
